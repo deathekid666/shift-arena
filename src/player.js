@@ -101,7 +101,7 @@ export class PlayerController {
     if (targetIsMoving(this.velocity)) {
       const facing = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
       if (Number.isFinite(facing)) {
-        this.group.rotation.y = THREE.MathUtils.dampAngle(this.group.rotation.y, facing, 14, dt);
+        this.group.rotation.y = dampAngle(this.group.rotation.y, facing, 14, dt);
       }
     }
 
@@ -139,4 +139,9 @@ export class PlayerController {
 
 function targetIsMoving(velocity) {
   return Math.hypot(velocity.x, velocity.z) > 0.25;
+}
+
+function dampAngle(current, target, lambda, dt) {
+  const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+  return current + delta * (1 - Math.exp(-lambda * dt));
 }
