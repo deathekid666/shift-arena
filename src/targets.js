@@ -28,13 +28,13 @@ export class TargetRange {
       emissive: 0x000000
     });
 
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.48, 0.92, 8, 16), bodyMaterial);
-    body.position.y = 1.02;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.65, 8, 16), bodyMaterial);
+    body.position.y = 0.82;
     body.castShadow = true;
     group.add(body);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 18, 14), headMaterial);
-    head.position.y = 1.94;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.30, 18, 14), headMaterial);
+    head.position.y = 1.78;
     head.castShadow = true;
     group.add(head);
 
