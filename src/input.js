@@ -5,7 +5,8 @@ const ACTION_CODES = {
   right: ['KeyD', 'ArrowRight'],
   jump: ['Space'],
   sprint: ['ShiftLeft', 'ShiftRight'],
-  crouch: ['ControlLeft', 'ControlRight']
+  crouch: ['ControlLeft', 'ControlRight'],
+  reload: ['KeyR']
 };
 
 export class InputController {
@@ -13,6 +14,8 @@ export class InputController {
     this.canvas = canvas;
     this.keys = new Set();
     this.pressed = new Set();
+    this.mouseButtons = new Set();
+    this.mousePressed = new Set();
     this.pointerLocked = false;
     this.yawDelta = 0;
     this.pitchDelta = 0;
@@ -20,8 +23,12 @@ export class InputController {
 
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('mousedown', this.onMouseDown);
+    window.addEventListener('mouseup', this.onMouseUp);
+    window.addEventListener('blur', this.onBlur);
     document.addEventListener('mousemove', this.onMouseMove);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   }
 
   lockPointer() {
@@ -42,6 +49,16 @@ export class InputController {
     return true;
   }
 
+  mouseDown(button) {
+    return this.mouseButtons.has(button);
+  }
+
+  consumeMouse(button) {
+    if (!this.mousePressed.has(button)) return false;
+    this.mousePressed.delete(button);
+    return true;
+  }
+
   consumeLook() {
     const value = { yaw: this.yawDelta, pitch: this.pitchDelta };
     this.yawDelta = 0;
@@ -58,6 +75,23 @@ export class InputController {
     this.keys.delete(event.code);
   };
 
+  onMouseDown = (event) => {
+    if (!this.pointerLocked) return;
+    if (!this.mouseButtons.has(event.button)) this.mousePressed.add(event.button);
+    this.mouseButtons.add(event.button);
+  };
+
+  onMouseUp = (event) => {
+    this.mouseButtons.delete(event.button);
+  };
+
+  onBlur = () => {
+    this.keys.clear();
+    this.pressed.clear();
+    this.mouseButtons.clear();
+    this.mousePressed.clear();
+  };
+
   onMouseMove = (event) => {
     if (!this.pointerLocked) return;
     this.yawDelta += event.movementX;
@@ -66,5 +100,9 @@ export class InputController {
 
   onPointerLockChange = () => {
     this.pointerLocked = document.pointerLockElement === this.canvas;
+    if (!this.pointerLocked) {
+      this.mouseButtons.clear();
+      this.mousePressed.clear();
+    }
   };
 }

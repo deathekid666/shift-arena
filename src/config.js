@@ -17,11 +17,27 @@ export const GAME_CONFIG = {
   },
   camera: {
     distance: 5.4,
+    adsDistance: 3.15,
     height: 1.6,
     shoulderOffset: 0.75,
+    adsShoulderOffset: 0.92,
+    normalFov: 68,
+    adsFov: 57,
     sensitivity: 0.0024,
     pitchMin: -0.7,
     pitchMax: 1.1,
     collisionPadding: 0.22
+  },
+  tacticalAR: {
+    damage: 27,
+    headshotMultiplier: 1.5,
+    fireRate: 8.5,
+    magazineSize: 30,
+    reloadTime: 1.55,
+    range: 90,
+    hipBloom: 0.012,
+    adsBloom: 0.0032,
+    recoilPitch: 0.010,
+    recoilYaw: 0.0045
   }
 };

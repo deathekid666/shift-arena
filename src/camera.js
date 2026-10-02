@@ -13,17 +13,21 @@ export class ThirdPersonCamera {
     this.target = new THREE.Vector3();
   }
 
-  update(dt) {
+  update(dt, aiming = false) {
     const cfg = GAME_CONFIG.camera;
     const look = this.input.consumeLook();
     this.yaw -= look.yaw * cfg.sensitivity;
     this.pitch -= look.pitch * cfg.sensitivity;
     this.pitch = THREE.MathUtils.clamp(this.pitch, cfg.pitchMin, cfg.pitchMax);
 
+    const targetDistance = aiming ? cfg.adsDistance : cfg.distance;
+    const targetShoulder = aiming ? cfg.adsShoulderOffset : cfg.shoulderOffset;
+    const targetFov = aiming ? cfg.adsFov : cfg.normalFov;
+
     this.target.copy(this.player.group.position).add(new THREE.Vector3(0, cfg.height, 0));
     const rot = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
-    const backward = new THREE.Vector3(0, 0, cfg.distance).applyEuler(rot);
-    const shoulder = new THREE.Vector3(cfg.shoulderOffset, 0, 0)
+    const backward = new THREE.Vector3(0, 0, targetDistance).applyEuler(rot);
+    const shoulder = new THREE.Vector3(targetShoulder, 0, 0)
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
     const desired = this.target.clone().add(backward).add(shoulder);
 
@@ -39,6 +43,14 @@ export class ThirdPersonCamera {
 
     const smooth = 1 - Math.exp(-18 * dt);
     this.camera.position.lerp(desired, smooth);
+    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 13, dt);
+    this.camera.updateProjectionMatrix();
     this.camera.lookAt(this.target);
+  }
+
+  kick(pitchAmount, yawAmount = 0) {
+    const cfg = GAME_CONFIG.camera;
+    this.pitch = THREE.MathUtils.clamp(this.pitch + pitchAmount, cfg.pitchMin, cfg.pitchMax);
+    this.yaw += yawAmount;
   }
 }

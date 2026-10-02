@@ -28,7 +28,7 @@ export class PlayerController {
     world.scene.add(this.group);
   }
 
-  update(dt, cameraYaw) {
+  update(dt, cameraYaw, combatFacing = false) {
     const cfg = GAME_CONFIG.movement;
     const ground = this.world.groundHeightAt(this.group.position.x, this.group.position.z);
     this.grounded = this.group.position.y <= ground + 0.04 && this.velocity.y <= 0;
@@ -98,7 +98,9 @@ export class PlayerController {
       this.velocity.set(0, 0, 0);
     }
 
-    if (targetIsMoving(this.velocity)) {
+    if (combatFacing) {
+      this.group.rotation.y = dampAngle(this.group.rotation.y, cameraYaw, 22, dt);
+    } else if (targetIsMoving(this.velocity)) {
       const facing = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
       if (Number.isFinite(facing)) {
         this.group.rotation.y = dampAngle(this.group.rotation.y, facing, 14, dt);

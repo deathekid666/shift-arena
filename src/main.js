@@ -3,19 +3,29 @@ import { InputController } from './input.js';
 import { TestWorld } from './world.js';
 import { PlayerController } from './player.js';
 import { ThirdPersonCamera } from './camera.js';
+import { TargetRange } from './targets.js';
+import { TacticalAR } from './weapon.js';
 
 const root = document.querySelector('#app');
 root.innerHTML = `
   <div id="hud">
-    <div id="crosshair"></div>
+    <div id="crosshair"><span></span></div>
+    <div id="hit-marker"></div>
+    <div id="damage-pop"></div>
     <div id="stats"></div>
-    <div id="controls">WASD move · Shift sprint · Ctrl crouch/slide · Space jump · Mouse look · Esc unlock</div>
-    <div id="touch-note">Touch device detected. Mobile controls arrive after desktop controller validation.</div>
+    <div id="weapon-hud">
+      <div class="weapon-name">TACTICAL AR</div>
+      <div><span id="ammo">30</span><span class="reserve"> / ∞</span></div>
+      <div id="reload-state"></div>
+    </div>
+    <div id="controls">WASD move · LMB fire · RMB ADS · R reload · Shift sprint · Ctrl crouch/slide · Space jump · Esc unlock</div>
+    <div id="touch-note">Touch device detected. Mobile combat controls will be added in the dedicated mobile-input phase.</div>
     <div id="start">
       <div id="start-card">
-        <h1>SHIFT Arena — Build 001</h1>
-        <p>Movement + third-person camera sandbox. No weapons, bots, accounts or multiplayer yet.</p>
-        <button type="button">ENTER TEST ARENA</button>
+        <div class="build-tag">BUILD 002</div>
+        <h1>SHIFT Arena</h1>
+        <p>Third-person aiming + Tactical AR test range. Targets have separate body and head hit zones.</p>
+        <button type="button">ENTER TEST RANGE</button>
       </div>
     </div>
   </div>`;
@@ -48,6 +58,25 @@ const world = new TestWorld(scene);
 const input = new InputController(renderer.domElement);
 const player = new PlayerController(world, input);
 const thirdCam = new ThirdPersonCamera(camera, player, input, world);
+const targets = new TargetRange(scene);
+
+const crosshair = document.querySelector('#crosshair');
+const hitMarker = document.querySelector('#hit-marker');
+const damagePop = document.querySelector('#damage-pop');
+const ammo = document.querySelector('#ammo');
+const reloadState = document.querySelector('#reload-state');
+
+const weapon = new TacticalAR({
+  scene,
+  camera,
+  cameraRig: thirdCam,
+  player,
+  input,
+  world,
+  targets,
+  onFire: () => pulse(crosshair, 'shot'),
+  onHit: (result) => showHit(result)
+});
 
 const start = document.querySelector('#start');
 const button = start.querySelector('button');
@@ -63,13 +92,42 @@ let fps = 60;
 let frames = 0;
 let fpsTimer = 0;
 
+function showHit(result) {
+  hitMarker.className = result.headshot ? 'show headshot' : 'show';
+  damagePop.textContent = `${result.damage}${result.headshot ? ' HEAD' : ''}${result.eliminated ? ' · DOWN' : ''}`;
+  damagePop.className = result.headshot ? 'show headshot' : 'show';
+
+  clearTimeout(showHit.markerTimer);
+  clearTimeout(showHit.damageTimer);
+  showHit.markerTimer = setTimeout(() => { hitMarker.className = ''; }, 95);
+  showHit.damageTimer = setTimeout(() => { damagePop.className = ''; }, 420);
+}
+
+function pulse(element, className) {
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+  clearTimeout(pulse.timer);
+  pulse.timer = setTimeout(() => element.classList.remove(className), 70);
+}
+
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
-  player.update(dt, thirdCam.yaw);
-  thirdCam.update(dt);
+
+  const combatFacing = input.pointerLocked && (input.mouseDown(2) || input.mouseDown(0));
+  player.update(dt, thirdCam.yaw, combatFacing);
+  thirdCam.update(dt, weapon.aiming);
+  weapon.update(dt);
+  targets.update(dt);
   renderer.render(scene, camera);
+
+  crosshair.classList.toggle('ads', weapon.aiming);
+  ammo.textContent = String(weapon.ammo);
+  reloadState.textContent = weapon.isReloading
+    ? `RELOADING ${Math.round(weapon.reloadProgress * 100)}%`
+    : '';
 
   frames += 1;
   fpsTimer += dt;
@@ -78,7 +136,7 @@ function loop(now) {
     frames = 0;
     fpsTimer = 0;
     const speed = Math.hypot(player.velocity.x, player.velocity.z);
-    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : 'NORMAL'}</b>`;
+    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
   }
 }
 requestAnimationFrame(loop);

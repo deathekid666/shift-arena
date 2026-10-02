@@ -1,19 +1,22 @@
-# SHIFT Arena — Build 001
+# SHIFT Arena — Build 002
 
-Browser-first third-person controller sandbox.
+Browser-first third-person shooter prototype.
 
 ## Current scope
-- Third-person movement
-- Mouse camera
-- Sprint
-- Jump
-- Crouch
-- Slide
-- Collision test arena
-- Camera collision
+- Third-person movement from Build 001
+- Mouse camera with wall collision
+- Sprint, jump, crouch and slide
+- Right-shoulder ADS camera
+- Tactical AR test weapon
+- Automatic fire
+- 30-round magazine
+- Manual and automatic reload
+- Recoil and hip/ADS bloom
+- Crosshair-aligned camera ray + muzzle obstruction ray
+- Body and head hit zones
+- Stationary target dummies
+- Hit markers, damage numbers and ammo HUD
 - FPS / state debug HUD
-
-No weapons, bots, accounts, Neon, multiplayer, or final kitchen art yet.
 
 ## Controls
 - WASD: move
@@ -21,6 +24,9 @@ No weapons, bots, accounts, Neon, multiplayer, or final kitchen art yet.
 - Shift: sprint
 - Ctrl: crouch / slide
 - Space: jump
+- Left mouse: fire
+- Right mouse: ADS
+- R: reload
 - Esc: release pointer
 
-Build 001 is intentionally static so it can deploy directly to Vercel without a local build step.
+Movement and sensitivity values remain configurable defaults. A player settings page will expose tuning later.

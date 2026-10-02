@@ -9,16 +9,186 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { background: #0b1420; }
 canvas { display: block; width: 100%; height: 100%; outline: none; }
 #hud { position: fixed; inset: 0; pointer-events: none; }
-#crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); opacity: .9; }
-#crosshair::before, #crosshair::after { content: ""; position: absolute; background: rgba(255,255,255,.95); border-radius: 2px; }
-#crosshair::before { width: 18px; height: 2px; left: 0; top: 8px; }
-#crosshair::after { width: 2px; height: 18px; left: 8px; top: 0; }
-#stats { position: absolute; top: 14px; left: 14px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; background: rgba(7,12,20,.62); backdrop-filter: blur(10px); font-size: 12px; line-height: 1.45; min-width: 156px; }
-#controls { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 10px 14px; border-radius: 999px; background: rgba(7,12,20,.72); border: 1px solid rgba(255,255,255,.12); font-size: 12px; white-space: nowrap; }
-#start { pointer-events: auto; position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at center, rgba(13,23,36,.35), rgba(4,8,14,.86)); }
-#start-card { width: min(420px, calc(100vw - 32px)); padding: 22px; border-radius: 20px; background: rgba(10,18,29,.94); border: 1px solid rgba(255,255,255,.14); text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,.34); }
-#start-card h1 { margin: 0 0 8px; font-size: 24px; }
+
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  transition: transform 90ms ease;
+}
+#crosshair::before, #crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(255,255,255,.96);
+  border-radius: 2px;
+  box-shadow: 0 0 4px rgba(0,0,0,.35);
+}
+#crosshair::before { width: 20px; height: 2px; left: 2px; top: 11px; }
+#crosshair::after { width: 2px; height: 20px; left: 11px; top: 2px; }
+#crosshair span {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  left: 10px;
+  top: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+#crosshair.ads { transform: translate(-50%, -50%) scale(.78); }
+#crosshair.shot { transform: translate(-50%, -50%) scale(1.24); }
+#crosshair.ads.shot { transform: translate(-50%, -50%) scale(.92); }
+
+#hit-marker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  opacity: 0;
+}
+#hit-marker::before, #hit-marker::after {
+  content: "";
+  position: absolute;
+  inset: 2px 14px;
+  background: #fff;
+  border-radius: 2px;
+}
+#hit-marker::after { transform: rotate(90deg); }
+#hit-marker.show { opacity: 1; }
+#hit-marker.headshot::before, #hit-marker.headshot::after { background: #ffb04b; }
+
+#damage-pop {
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 42px);
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  opacity: 0;
+  text-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+#damage-pop.show { animation: damagePop .42s ease-out both; }
+#damage-pop.headshot { color: #ffb04b; }
+@keyframes damagePop {
+  0% { opacity: 0; transform: translate(-50%, 7px) scale(.9); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -12px) scale(1.05); }
+}
+
+#stats {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  background: rgba(7,12,20,.62);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  line-height: 1.45;
+  min-width: 156px;
+}
+#weapon-hud {
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+  min-width: 170px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(7,12,20,.72);
+  border: 1px solid rgba(255,255,255,.13);
+  text-align: right;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+}
+.weapon-name {
+  margin-bottom: 6px;
+  color: #a9c7df;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.reserve { color: #8fa5b7; font-size: 15px; }
+#reload-state {
+  min-height: 12px;
+  margin-top: 7px;
+  color: #ffcd78;
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+#controls {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(7,12,20,.72);
+  border: 1px solid rgba(255,255,255,.12);
+  font-size: 12px;
+  white-space: nowrap;
+}
+#start {
+  pointer-events: auto;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at center, rgba(13,23,36,.35), rgba(4,8,14,.86));
+}
+#start-card {
+  width: min(430px, calc(100vw - 32px));
+  padding: 24px;
+  border-radius: 20px;
+  background: rgba(10,18,29,.95);
+  border: 1px solid rgba(255,255,255,.14);
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0,0,0,.34);
+}
+.build-tag {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(58,143,216,.16);
+  border: 1px solid rgba(100,178,241,.28);
+  color: #8dc9f8;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+#start-card h1 { margin: 0 0 8px; font-size: 28px; }
 #start-card p { margin: 0 0 16px; color: #b8c7d9; font-size: 14px; line-height: 1.5; }
-#start-card button { width: 100%; min-height: 48px; border: 0; border-radius: 12px; font: inherit; font-weight: 800; cursor: pointer; background: #f3f7fb; color: #0b1420; }
-#touch-note { display: none; position: absolute; inset: auto 14px 14px 14px; padding: 12px; border-radius: 12px; background: rgba(7,12,20,.75); border: 1px solid rgba(255,255,255,.14); text-align: center; font-size: 12px; }
-@media (pointer: coarse) { #controls { display:none; } #touch-note { display:block; } }
+#start-card button {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  background: #f3f7fb;
+  color: #0b1420;
+}
+#touch-note {
+  display: none;
+  position: absolute;
+  inset: auto 14px 14px 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(7,12,20,.75);
+  border: 1px solid rgba(255,255,255,.14);
+  text-align: center;
+  font-size: 12px;
+}
+@media (pointer: coarse) {
+  #controls, #weapon-hud { display:none; }
+  #touch-note { display:block; }
+}
