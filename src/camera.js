@@ -1,0 +1,44 @@
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import { GAME_CONFIG } from './config.js';
+
+export class ThirdPersonCamera {
+  constructor(camera, player, input, world) {
+    this.camera = camera;
+    this.player = player;
+    this.input = input;
+    this.world = world;
+    this.yaw = 0;
+    this.pitch = 0.18;
+    this.raycaster = new THREE.Raycaster();
+    this.target = new THREE.Vector3();
+  }
+
+  update(dt) {
+    const cfg = GAME_CONFIG.camera;
+    const look = this.input.consumeLook();
+    this.yaw -= look.yaw * cfg.sensitivity;
+    this.pitch -= look.pitch * cfg.sensitivity;
+    this.pitch = THREE.MathUtils.clamp(this.pitch, cfg.pitchMin, cfg.pitchMax);
+
+    this.target.copy(this.player.group.position).add(new THREE.Vector3(0, cfg.height, 0));
+    const rot = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
+    const backward = new THREE.Vector3(0, 0, cfg.distance).applyEuler(rot);
+    const shoulder = new THREE.Vector3(cfg.shoulderOffset, 0, 0)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
+    const desired = this.target.clone().add(backward).add(shoulder);
+
+    const direction = desired.clone().sub(this.target);
+    const maxDist = direction.length();
+    direction.normalize();
+    this.raycaster.set(this.target, direction);
+    this.raycaster.far = maxDist;
+    const hits = this.raycaster.intersectObjects(this.world.cameraObstacles, false);
+    if (hits.length) {
+      desired.copy(this.target).add(direction.multiplyScalar(Math.max(0.65, hits[0].distance - cfg.collisionPadding)));
+    }
+
+    const smooth = 1 - Math.exp(-18 * dt);
+    this.camera.position.lerp(desired, smooth);
+    this.camera.lookAt(this.target);
+  }
+}
