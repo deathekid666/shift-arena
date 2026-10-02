@@ -1,0 +1,24 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f7fbff;
+  background: #0b1420;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: #0b1420; }
+canvas { display: block; width: 100%; height: 100%; outline: none; }
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); opacity: .9; }
+#crosshair::before, #crosshair::after { content: ""; position: absolute; background: rgba(255,255,255,.95); border-radius: 2px; }
+#crosshair::before { width: 18px; height: 2px; left: 0; top: 8px; }
+#crosshair::after { width: 2px; height: 18px; left: 8px; top: 0; }
+#stats { position: absolute; top: 14px; left: 14px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; background: rgba(7,12,20,.62); backdrop-filter: blur(10px); font-size: 12px; line-height: 1.45; min-width: 156px; }
+#controls { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 10px 14px; border-radius: 999px; background: rgba(7,12,20,.72); border: 1px solid rgba(255,255,255,.12); font-size: 12px; white-space: nowrap; }
+#start { pointer-events: auto; position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at center, rgba(13,23,36,.35), rgba(4,8,14,.86)); }
+#start-card { width: min(420px, calc(100vw - 32px)); padding: 22px; border-radius: 20px; background: rgba(10,18,29,.94); border: 1px solid rgba(255,255,255,.14); text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,.34); }
+#start-card h1 { margin: 0 0 8px; font-size: 24px; }
+#start-card p { margin: 0 0 16px; color: #b8c7d9; font-size: 14px; line-height: 1.5; }
+#start-card button { width: 100%; min-height: 48px; border: 0; border-radius: 12px; font: inherit; font-weight: 800; cursor: pointer; background: #f3f7fb; color: #0b1420; }
+#touch-note { display: none; position: absolute; inset: auto 14px 14px 14px; padding: 12px; border-radius: 12px; background: rgba(7,12,20,.75); border: 1px solid rgba(255,255,255,.14); text-align: center; font-size: 12px; }
+@media (pointer: coarse) { #controls { display:none; } #touch-note { display:block; } }
