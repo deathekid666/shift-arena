@@ -24,8 +24,20 @@ export class PlayerController {
     );
     visor.position.set(0, 1.28, -0.37);
     this.group.add(visor);
-    this.group.position.set(0, 0, 12);
+    this.resetAt(world.spawnPoint);
     world.scene.add(this.group);
+  }
+
+  resetAt(position) {
+    this.group.position.copy(position);
+    this.group.visible = true;
+    this.velocity.set(0, 0, 0);
+    this.grounded = true;
+    this.crouching = false;
+    this.sliding = false;
+    this.slideTimer = 0;
+    this.body.scale.set(1, 1, 1);
+    this.body.position.y = GAME_CONFIG.movement.standingHeight / 2;
   }
 
   update(dt, cameraYaw, combatFacing = false) {
@@ -86,9 +98,9 @@ export class PlayerController {
     this.moveHorizontal(displacement.x, 0);
     this.moveHorizontal(0, displacement.z);
     this.moveVertical(displacement.y);
+
     if (this.group.position.y < -15) {
-      this.group.position.set(0, 0, 12);
-      this.velocity.set(0, 0, 0);
+      this.resetAt(this.world.spawnPoint);
     }
 
     if (combatFacing) {

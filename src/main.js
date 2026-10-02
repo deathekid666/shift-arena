@@ -5,6 +5,7 @@ import { PlayerController } from './player.js';
 import { ThirdPersonCamera } from './camera.js';
 import { TargetRange } from './targets.js';
 import { TacticalAR } from './weapon.js';
+import { PlayerHealth } from './health.js';
 
 const root = document.querySelector('#app');
 root.innerHTML = `
@@ -12,6 +13,30 @@ root.innerHTML = `
     <div id="crosshair"><span></span></div>
     <div id="hit-marker"></div>
     <div id="damage-pop"></div>
+    <div id="player-damage-vignette"></div>
+    <div id="damage-direction">▲</div>
+    <div id="shield-break">SHIELD BROKEN</div>
+
+    <div id="player-status">
+      <div class="status-row shield-row">
+        <span>SHIELD</span><b id="shield-value">100</b>
+      </div>
+      <div class="status-bar shield-bar"><i id="shield-fill"></i></div>
+      <div class="status-row health-row">
+        <span>HP</span><b id="health-value">100</b>
+      </div>
+      <div class="status-bar health-bar"><i id="health-fill"></i></div>
+    </div>
+
+    <div id="elimination">
+      <strong>ELIMINATED</strong>
+      <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
+    </div>
+
+    <div id="damage-test-hint">
+      BUILD 003 TEST · <b>ORANGE</b> PAD = 30 DMG · <b>RED</b> PAD = 80 DMG
+    </div>
+
     <div id="stats"></div>
     <div id="weapon-hud">
       <div class="weapon-name">TACTICAL AR</div>
@@ -22,10 +47,10 @@ root.innerHTML = `
     <div id="touch-note">Touch device detected. Mobile combat controls will be added in the dedicated mobile-input phase.</div>
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 002</div>
+        <div class="build-tag">BUILD 003</div>
         <h1>SHIFT Arena</h1>
-        <p>Third-person aiming + Tactical AR test range. Targets have separate body and head hit zones.</p>
-        <button type="button">ENTER TEST RANGE</button>
+        <p>Health + shield lifecycle test. Use the orange and red floor pads near spawn to validate damage, shield break, elimination and respawn.</p>
+        <button type="button">ENTER COMBAT TEST</button>
       </div>
     </div>
   </div>`;
@@ -65,6 +90,15 @@ const hitMarker = document.querySelector('#hit-marker');
 const damagePop = document.querySelector('#damage-pop');
 const ammo = document.querySelector('#ammo');
 const reloadState = document.querySelector('#reload-state');
+const healthValue = document.querySelector('#health-value');
+const shieldValue = document.querySelector('#shield-value');
+const healthFill = document.querySelector('#health-fill');
+const shieldFill = document.querySelector('#shield-fill');
+const damageVignette = document.querySelector('#player-damage-vignette');
+const damageDirection = document.querySelector('#damage-direction');
+const shieldBreak = document.querySelector('#shield-break');
+const elimination = document.querySelector('#elimination');
+const respawnCountdown = document.querySelector('#respawn-countdown');
 
 const weapon = new TacticalAR({
   scene,
@@ -76,6 +110,25 @@ const weapon = new TacticalAR({
   targets,
   onFire: () => pulse(crosshair, 'shot'),
   onHit: (result) => showHit(result)
+});
+
+const health = new PlayerHealth({
+  player,
+  world,
+  cameraRig: thirdCam,
+  onChange: updateHealthHud,
+  onDamage: showPlayerDamage,
+  onShieldBreak: showShieldBreak,
+  onEliminated: () => {
+    elimination.classList.add('show');
+    crosshair.classList.add('disabled');
+    weapon.reset();
+  },
+  onRespawn: () => {
+    elimination.classList.remove('show');
+    crosshair.classList.remove('disabled');
+    weapon.reset();
+  }
 });
 
 const start = document.querySelector('#start');
@@ -91,6 +144,43 @@ let last = performance.now();
 let fps = 60;
 let frames = 0;
 let fpsTimer = 0;
+
+function updateHealthHud(state) {
+  if (!healthValue) return;
+  healthValue.textContent = String(Math.round(state.health));
+  shieldValue.textContent = String(Math.round(state.shield));
+  healthFill.style.width = `${Math.max(0, state.health / state.maxHealth) * 100}%`;
+  shieldFill.style.width = `${Math.max(0, state.shield / state.maxShield) * 100}%`;
+}
+
+function showPlayerDamage(result) {
+  damageVignette.classList.remove('show', 'shield-only');
+  void damageVignette.offsetWidth;
+  damageVignette.classList.add('show');
+  if (result.healthDamage === 0) damageVignette.classList.add('shield-only');
+
+  damageDirection.style.transform = `translate(-50%, -50%) rotate(${result.direction}deg)`;
+  damageDirection.classList.remove('show');
+  void damageDirection.offsetWidth;
+  damageDirection.classList.add('show');
+
+  clearTimeout(showPlayerDamage.vignetteTimer);
+  clearTimeout(showPlayerDamage.directionTimer);
+  showPlayerDamage.vignetteTimer = setTimeout(() => {
+    damageVignette.classList.remove('show', 'shield-only');
+  }, 190);
+  showPlayerDamage.directionTimer = setTimeout(() => {
+    damageDirection.classList.remove('show');
+  }, 280);
+}
+
+function showShieldBreak() {
+  shieldBreak.classList.remove('show');
+  void shieldBreak.offsetWidth;
+  shieldBreak.classList.add('show');
+  clearTimeout(showShieldBreak.timer);
+  showShieldBreak.timer = setTimeout(() => shieldBreak.classList.remove('show'), 650);
+}
 
 function showHit(result) {
   hitMarker.className = result.headshot ? 'show headshot' : 'show';
@@ -116,18 +206,26 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
 
-  const combatFacing = input.pointerLocked && (input.mouseDown(2) || input.mouseDown(0));
-  player.update(dt, thirdCam.yaw, combatFacing);
-  thirdCam.update(dt, weapon.aiming);
-  weapon.update(dt);
+  if (health.alive) {
+    const combatFacing = input.pointerLocked && (input.mouseDown(2) || input.mouseDown(0));
+    player.update(dt, thirdCam.yaw, combatFacing);
+    thirdCam.update(dt, weapon.aiming);
+    weapon.update(dt);
+  }
+
+  health.update(dt);
   targets.update(dt);
   renderer.render(scene, camera);
 
-  crosshair.classList.toggle('ads', weapon.aiming);
+  crosshair.classList.toggle('ads', health.alive && weapon.aiming);
   ammo.textContent = String(weapon.ammo);
-  reloadState.textContent = weapon.isReloading
+  reloadState.textContent = health.alive && weapon.isReloading
     ? `RELOADING ${Math.round(weapon.reloadProgress * 100)}%`
     : '';
+
+  if (!health.alive) {
+    respawnCountdown.textContent = health.respawnTimer.toFixed(1);
+  }
 
   frames += 1;
   fpsTimer += dt;
@@ -136,7 +234,7 @@ function loop(now) {
     frames = 0;
     fpsTimer = 0;
     const speed = Math.hypot(player.velocity.x, player.velocity.z);
-    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
+    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${!health.alive ? 'ELIMINATED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
   }
 }
 requestAnimationFrame(loop);

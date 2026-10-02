@@ -6,6 +6,8 @@ export class TestWorld {
     this.colliders = [];
     this.ramps = [];
     this.cameraObstacles = [];
+    this.damageZones = [];
+    this.spawnPoint = new THREE.Vector3(0, 0, 12);
     this.build();
   }
 
@@ -25,6 +27,30 @@ export class TestWorld {
     return mesh;
   }
 
+  addDamageZone(x, z, w, d, damage, color) {
+    const material = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.4,
+      metalness: 0.08,
+      emissive: color,
+      emissiveIntensity: 0.26
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), material);
+    mesh.position.set(x, 0.04, z);
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+
+    this.damageZones.push({
+      mesh,
+      damage,
+      minX: x - w / 2,
+      maxX: x + w / 2,
+      minZ: z - d / 2,
+      maxZ: z + d / 2,
+      source: new THREE.Vector3(x, 0, z)
+    });
+  }
+
   build() {
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), this.material(0x27455b));
     ground.rotation.x = -Math.PI / 2;
@@ -38,6 +64,10 @@ export class TestWorld {
     this.addBox(2.5, 0, 7, 5, 2.4, 2, 0x5c7180);
     this.addBox(-2, 0, 3, 2, 0.65, 2, 0xa9b7c2);
     this.addBox(12, 0, -8, 8, 5, 1.3, 0x3e5567);
+
+    // Build 003 controlled damage validation pads.
+    this.addDamageZone(-4.2, 10.0, 2.4, 2.4, 30, 0xf0a13a);
+    this.addDamageZone(4.2, 10.0, 2.4, 2.4, 80, 0xd94a4a);
 
     const rampW = 4;
     const rampD = 8;

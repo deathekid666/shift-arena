@@ -39,5 +39,10 @@ export const GAME_CONFIG = {
     adsBloom: 0.0032,
     recoilPitch: 0.010,
     recoilYaw: 0.0045
+  },
+  playerCombat: {
+    maxHealth: 100,
+    maxShield: 100,
+    respawnDelay: 2.5
   }
 };

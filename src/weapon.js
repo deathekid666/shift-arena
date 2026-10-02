@@ -85,6 +85,15 @@ export class TacticalAR {
     return 1 - Math.max(0, this.reloadTimer) / this.cfg.reloadTime;
   }
 
+  reset() {
+    this.ammo = this.cfg.magazineSize;
+    this.fireCooldown = 0;
+    this.reloadTimer = 0;
+    this.flashTimer = 0;
+    this.isReloading = false;
+    this.muzzleFlash.visible = false;
+  }
+
   update(dt) {
     this.fireCooldown = Math.max(0, this.fireCooldown - dt);
 
