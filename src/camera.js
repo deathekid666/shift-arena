@@ -45,7 +45,14 @@ export class ThirdPersonCamera {
     this.camera.position.lerp(desired, smooth);
     this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 13, dt);
     this.camera.updateProjectionMatrix();
-    this.camera.lookAt(this.target);
+
+    // The orbit pivot positions the camera around the player, but it must not
+    // look back at that pivot. The screen center/crosshair should point into
+    // the world along the player's camera yaw/pitch.
+    this.camera.rotation.order = 'YXZ';
+    this.camera.rotation.x = this.pitch;
+    this.camera.rotation.y = this.yaw;
+    this.camera.rotation.z = 0;
   }
 
   kick(pitchAmount, yawAmount = 0) {
