@@ -30,10 +30,10 @@ export class PlayerController {
 
   update(dt, cameraYaw, combatFacing = false) {
     const cfg = GAME_CONFIG.movement;
-    const ground = this.world.groundHeightAt(this.group.position.x, this.group.position.z);
-    this.grounded = this.group.position.y <= ground + 0.04 && this.velocity.y <= 0;
+    const supportY = this.supportHeightAt(this.group.position.x, this.group.position.z);
+    this.grounded = supportY !== null && this.group.position.y <= supportY + 0.04 && this.velocity.y <= 0;
     if (this.grounded) {
-      this.group.position.y = ground;
+      this.group.position.y = supportY;
       this.velocity.y = 0;
     }
 
@@ -85,14 +85,7 @@ export class PlayerController {
     const displacement = this.velocity.clone().multiplyScalar(dt);
     this.moveHorizontal(displacement.x, 0);
     this.moveHorizontal(0, displacement.z);
-    this.group.position.y += displacement.y;
-
-    const newGround = this.world.groundHeightAt(this.group.position.x, this.group.position.z);
-    if (this.group.position.y < newGround) {
-      this.group.position.y = newGround;
-      this.velocity.y = 0;
-      this.grounded = true;
-    }
+    this.moveVertical(displacement.y);
     if (this.group.position.y < -15) {
       this.group.position.set(0, 0, 12);
       this.velocity.set(0, 0, 0);
@@ -110,6 +103,96 @@ export class PlayerController {
     const height = this.crouching ? cfg.crouchHeight : cfg.standingHeight;
     this.body.scale.y = THREE.MathUtils.damp(this.body.scale.y, height / cfg.standingHeight, 18, dt);
     this.body.position.y = height / 2;
+  }
+
+  supportHeightAt(x, z) {
+    const cfg = GAME_CONFIG.movement;
+    let supportY = this.world.groundHeightAt(x, z);
+    let found = true;
+
+    for (const c of this.world.colliders) {
+      const b = c.box;
+      const overlapsXZ =
+        x + cfg.radius > b.min.x &&
+        x - cfg.radius < b.max.x &&
+        z + cfg.radius > b.min.z &&
+        z - cfg.radius < b.max.z;
+
+      if (!overlapsXZ) continue;
+
+      const top = b.max.y;
+      if (top <= this.group.position.y + 0.06 && top > supportY) {
+        supportY = top;
+      }
+    }
+
+    if (supportY > this.group.position.y + 0.06) found = false;
+    return found ? supportY : null;
+  }
+
+  moveVertical(dy) {
+    const cfg = GAME_CONFIG.movement;
+    const height = this.crouching ? cfg.crouchHeight : cfg.standingHeight;
+    const x = this.group.position.x;
+    const z = this.group.position.z;
+    const oldY = this.group.position.y;
+    const newY = oldY + dy;
+
+    if (dy <= 0) {
+      let landingY = this.world.groundHeightAt(x, z);
+
+      for (const c of this.world.colliders) {
+        const b = c.box;
+        const overlapsXZ =
+          x + cfg.radius > b.min.x &&
+          x - cfg.radius < b.max.x &&
+          z + cfg.radius > b.min.z &&
+          z - cfg.radius < b.max.z;
+
+        if (!overlapsXZ) continue;
+
+        const top = b.max.y;
+        const crossedTop = oldY >= top - 0.04 && newY <= top;
+        if (crossedTop) landingY = Math.max(landingY, top);
+      }
+
+      if (newY <= landingY) {
+        this.group.position.y = landingY;
+        this.velocity.y = 0;
+        this.grounded = true;
+        return;
+      }
+
+      this.group.position.y = newY;
+      this.grounded = false;
+      return;
+    }
+
+    const oldHead = oldY + height;
+    const newHead = newY + height;
+
+    for (const c of this.world.colliders) {
+      const b = c.box;
+      const overlapsXZ =
+        x + cfg.radius > b.min.x &&
+        x - cfg.radius < b.max.x &&
+        z + cfg.radius > b.min.z &&
+        z - cfg.radius < b.max.z;
+
+      if (!overlapsXZ) continue;
+
+      const underside = b.min.y;
+      const crossedUnderside = oldHead <= underside + 0.04 && newHead >= underside;
+      if (crossedUnderside) {
+        this.group.position.y = underside - height - 0.001;
+        this.velocity.y = 0;
+        this.grounded = false;
+        return;
+      }
+    }
+
+    this.group.position.y = newY;
+    this.grounded = false;
   }
 
   moveHorizontal(dx, dz) {
