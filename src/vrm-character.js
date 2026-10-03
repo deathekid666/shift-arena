@@ -4,6 +4,7 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { createVrmLocomotionController } from './vrm-locomotion.js';
 import { createFangPoseLayer } from './fang-pose.js';
 import { createCrouchPoseLayer } from './crouch-pose.js';
+import { createSlidePoseLayer } from './slide-pose.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -289,6 +290,7 @@ function buildCharacterInterface({
     authoredLocomotionReady: null,
     update(dt, state = {}) {
       this.fangPoseLayer?.restore();
+      this.slidePoseLayer?.restore();
       this.crouchPoseLayer?.restore();
 
       this.authoredLocomotion?.update(dt, state);
@@ -304,6 +306,9 @@ function buildCharacterInterface({
         },
         dt
       );
+
+      this.slidePoseLayer ??= createSlidePoseLayer(this);
+      this.slidePoseLayer.apply(state, dt);
 
       vrm?.update?.(dt);
     },
@@ -969,15 +974,7 @@ function updateLocomotionLayer(character, dt, state) {
   }
 
   if (stateName === 'SLIDE') {
-    hipDrop = 0.19;
-    dampBoneEuler(bones.leftUpperLeg, baseRotations, -0.82, -0.08, -0.05, 18, dt);
-    dampBoneEuler(bones.leftLowerLeg, baseRotations, 1.10, 0, 0.04, 18, dt);
-    dampBoneEuler(bones.leftFoot, baseRotations, -0.24, 0, 0, 18, dt);
-    dampBoneEuler(bones.rightUpperLeg, baseRotations, 0.24, 0.08, 0.08, 18, dt);
-    dampBoneEuler(bones.rightLowerLeg, baseRotations, 0.30, 0, -0.04, 18, dt);
-    dampBoneEuler(bones.rightFoot, baseRotations, 0.12, 0, 0, 18, dt);
-    dampBoneEuler(bones.hips, baseRotations, 0.18, 0, localStrafe * -0.06, 16, dt);
-    dampBoneEuler(bones.spine, baseRotations, -0.12, 0, 0, 14, dt);
+    // Actual lower-body skid pose is applied after locomotion by slide-pose.js.
   } else if (stateName === 'JUMP' || stateName === 'FALL') {
     const rising = stateName === 'JUMP';
     dampBoneEuler(

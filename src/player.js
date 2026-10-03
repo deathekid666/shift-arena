@@ -13,6 +13,7 @@ export class PlayerController {
     this.crouchVisual = 0;
     this.sliding = false;
     this.slideTimer = 0;
+    this.slideDirection = new THREE.Vector3(0, 0, -1);
     this.localMotion = new THREE.Vector3();
 
     // The gameplay capsule remains implicit in movement/collision values.
@@ -57,6 +58,7 @@ export class PlayerController {
     this.crouchVisual = 0;
     this.sliding = false;
     this.slideTimer = 0;
+    this.slideDirection.set(0, 0, -1);
     this.body.scale.set(1, 1, 1);
     this.body.rotation.set(0, 0, 0);
     this.body.position.y = GAME_CONFIG.movement.standingHeight / 2;
@@ -80,18 +82,22 @@ export class PlayerController {
     move.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
 
     const crouchDown = this.input.down('crouch');
-    if (crouchDown && !this.crouching && this.grounded && this.horizontalSpeed() > cfg.walkSpeed * 1.05) {
-      this.sliding = true;
-      this.slideTimer = cfg.slideDuration;
-      if (move.lengthSq() > 0) {
-        this.velocity.x = move.x * cfg.slideInitialSpeed;
-        this.velocity.z = move.z * cfg.slideInitialSpeed;
-      }
+    const crouchPressed = this.input.consume('crouch');
+    const sprintPressed = this.input.consume('sprint');
+    const jumpPressed = this.input.consume('jump');
+
+    if (
+      crouchPressed &&
+      !this.sliding &&
+      this.grounded &&
+      this.horizontalSpeed() >= cfg.slideMinStartSpeed
+    ) {
+      this.beginSlide(move);
     }
+
     this.crouching = crouchDown;
 
-    // Visual crouch transitions independently from the gameplay collider so the
-    // body eases into/out of the squat rather than snapping between poses.
+    // Visual crouch remains separate from slide; the slide gets its own pose layer.
     const crouchTarget = this.crouching && !this.sliding ? 1 : 0;
     this.crouchVisual = THREE.MathUtils.damp(
       this.crouchVisual,
@@ -104,15 +110,23 @@ export class PlayerController {
     }
 
     if (this.sliding) {
-      this.slideTimer -= dt;
-      const hs = this.horizontalSpeed();
-      const next = Math.max(0, hs - cfg.slideFriction * dt);
-      if (hs > 0) {
-        const ratio = next / hs;
-        this.velocity.x *= ratio;
-        this.velocity.z *= ratio;
+      this.updateSlide(dt, move);
+
+      // Fortnite-style early cancels. Jump keeps the existing jump impulse;
+      // sprint simply exits the skid and returns control to normal movement.
+      if (jumpPressed && this.grounded) {
+        this.sliding = false;
+        this.velocity.y = cfg.jumpVelocity;
+        this.grounded = false;
+      } else if (sprintPressed) {
+        this.sliding = false;
+      } else if (
+        this.slideTimer <= 0 ||
+        !crouchDown ||
+        this.horizontalSpeed() < cfg.crouchSpeed
+      ) {
+        this.sliding = false;
       }
-      if (this.slideTimer <= 0 || !crouchDown || next < cfg.crouchSpeed) this.sliding = false;
     } else {
       const targetSpeed = this.crouching
         ? cfg.crouchSpeed
@@ -125,7 +139,7 @@ export class PlayerController {
       this.velocity.z = THREE.MathUtils.damp(this.velocity.z, target.z, accel, dt);
     }
 
-    if (this.input.consume('jump') && this.grounded && !this.sliding) {
+    if (jumpPressed && this.grounded && !this.sliding) {
       this.velocity.y = cfg.jumpVelocity;
       this.grounded = false;
     }
@@ -200,6 +214,9 @@ export class PlayerController {
       verticalSpeed: this.velocity.y,
       sprinting: this.input.down('sprint') && !this.crouching && !this.sliding,
       sliding: this.sliding,
+      slideProgress: this.sliding
+        ? 1 - THREE.MathUtils.clamp(this.slideTimer / cfg.slideDuration, 0, 1)
+        : 0,
       combat: this.weaponVisualActive && combatFacing,
       aiming: this.weaponVisualActive && this.weaponAiming,
       aimPitch: this.aimPitch,
@@ -264,6 +281,105 @@ export class PlayerController {
       usingVrm: Boolean(this.vrmCharacter),
       error: this.characterLoadError ? String(this.characterLoadError) : null
     };
+  }
+
+  beginSlide(move) {
+    const cfg = GAME_CONFIG.movement;
+    this.sliding = true;
+    this.slideTimer = cfg.slideDuration;
+
+    const hs = this.horizontalSpeed();
+
+    if (hs > 0.05) {
+      this.slideDirection.set(this.velocity.x, 0, this.velocity.z).normalize();
+    } else if (move.lengthSq() > 0.001) {
+      this.slideDirection.copy(move).normalize();
+    } else {
+      this.slideDirection.set(0, 0, -1)
+        .applyAxisAngle(Y_AXIS, this.group.rotation.y);
+    }
+
+    // Preserve existing momentum and add only the minimum Fortnite-style entry push.
+    const startSpeed = Math.min(
+      cfg.slideMaxSpeed,
+      Math.max(hs, cfg.slideInitialSpeed)
+    );
+
+    this.velocity.x = this.slideDirection.x * startSpeed;
+    this.velocity.z = this.slideDirection.z * startSpeed;
+  }
+
+  updateSlide(dt, move) {
+    const cfg = GAME_CONFIG.movement;
+    this.slideTimer -= dt;
+
+    let speed = this.horizontalSpeed();
+    if (speed < 0.001) return;
+
+    this.slideDirection
+      .set(this.velocity.x, 0, this.velocity.z)
+      .normalize();
+
+    // Limited air-like steering. Sliding keeps momentum instead of snapping to WASD.
+    if (move.lengthSq() > 0.001) {
+      const desired = move.clone().normalize();
+      const steer = 1 - Math.exp(-cfg.slideSteering * dt);
+      this.slideDirection.lerp(desired, steer).normalize();
+    }
+
+    const rampSurface = this.world.rampSurfaceAt(
+      this.group.position.x,
+      this.group.position.z,
+      GAME_CONFIG.movement.radius * 0.25
+    );
+
+    if (rampSurface) {
+      const r = rampSurface.ramp;
+      const run = r.axis === 'z'
+        ? new THREE.Vector3(0, 0, r.direction)
+        : new THREE.Vector3(r.direction, 0, 0);
+
+      // Ramp rises along +run, therefore downhill is the opposite direction.
+      const downhill = run.multiplyScalar(-1);
+      const slopeStrength = THREE.MathUtils.clamp(
+        (r.topY - r.baseY) /
+          Math.max(0.001, r.axis === 'z' ? r.maxZ - r.minZ : r.maxX - r.minX),
+        0,
+        1
+      );
+
+      const alongDownhill = this.slideDirection.dot(downhill);
+
+      if (alongDownhill > 0) {
+        speed +=
+          cfg.slideDownhillAcceleration *
+          slopeStrength *
+          alongDownhill *
+          dt;
+      } else if (alongDownhill < 0) {
+        speed +=
+          cfg.slideUphillBrake *
+          slopeStrength *
+          alongDownhill *
+          dt;
+      }
+    }
+
+    // On flat ground Fortnite's slide settles toward normal run speed instead of
+    // decaying all the way to a slow crouch immediately.
+    if (speed > cfg.slideFlatTargetSpeed) {
+      speed = Math.max(
+        cfg.slideFlatTargetSpeed,
+        speed - cfg.slideFriction * dt
+      );
+    } else {
+      speed = Math.max(0, speed - cfg.slideFriction * 0.22 * dt);
+    }
+
+    speed = THREE.MathUtils.clamp(speed, 0, cfg.slideMaxSpeed);
+
+    this.velocity.x = this.slideDirection.x * speed;
+    this.velocity.z = this.slideDirection.z * speed;
   }
 
   supportHeightAt(x, z) {

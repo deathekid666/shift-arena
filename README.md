@@ -306,3 +306,28 @@ Browser-first third-person shooter prototype.
 - Crouch walking uses short world-space foot target offsets/lifts while preserving the squat.
 - The crouch pose is applied after the locomotion mixer/updatePose and before VRM propagation, preventing authored locomotion from erasing the bend.
 - Existing slide/jump/Tin Fang/weapon IK systems remain unchanged.
+
+
+## Build 010.8 — Fortnite-style slide
+- Reworked slide after checking Epic's Fortnite movement documentation and a GitHub UE5 physics-slide implementation.
+- Fortnite behavior mirrored structurally:
+  - hold crouch while running/sprinting to enter slide
+  - weapon use remains available
+  - flat-ground slide settles toward normal run speed
+  - downhill ramps accelerate the slide according to slope direction/strength
+  - uphill travel brakes harder
+  - jump can cancel directly into the existing jump impulse
+  - pressing sprint again cancels the slide early
+- Slide entry now preserves current horizontal momentum instead of blindly replacing it with a fixed direction/speed.
+- Added limited steering while sliding; WASD bends the momentum direction gradually instead of snapping the player.
+- Added dedicated tunables: minimum entry speed, flat target speed, max slide speed, steering, downhill acceleration and uphill braking.
+- Slide duration increased to 1.35 s for a readable skid while still decaying naturally on flat ground.
+- Added src/slide-pose.js:
+  - low pelvis/backward skid posture
+  - one leg extended forward
+  - opposite leg tucked with stronger knee bend
+  - torso counter-lean
+  - world-space leg IK rather than rig-axis Euler guesses
+  - smooth enter/exit blend
+- Slide pose only owns lower body, leaving gun/Fang upper-body aiming and firing free.
+- Existing crouch IK, gun IK, Tin Fang mechanics, jump velocity and collision systems are preserved.
