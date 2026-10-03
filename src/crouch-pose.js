@@ -72,7 +72,7 @@ export function createCrouchPoseLayer(character) {
     const authoredCrouch =
       character.authoredLocomotion?.ready &&
       character.authoredLocomotion?.active &&
-      (authoredState === 'CROUCH' || authoredState === 'CROUCH_WALK');
+      blend > 0.025;
 
     const speed = Math.max(0, state.speed ?? 0);
     const moving = speed > 0.32;
@@ -83,7 +83,7 @@ export function createCrouchPoseLayer(character) {
 
     // Keep a slightly wider athletic base. For authored crouch this is subtle:
     // the animation already owns the actual step path.
-    const stance = (authoredCrouch ? 0.018 : 0.035) * blend;
+    const stance = authoredCrouch ? 0.018 : 0.035;
     tmp.leftFoot.addScaledVector(tmp.right, -stance);
     tmp.rightFoot.addScaledVector(tmp.right, stance);
 
@@ -94,8 +94,8 @@ export function createCrouchPoseLayer(character) {
     // procedural stepping on top of a real animation.
     if (!authoredCrouch && moving) {
       const speed01 = THREE.MathUtils.clamp(speed / 2.8, 0, 1);
-      const stride = THREE.MathUtils.lerp(0.10, 0.16, speed01) * blend;
-      const lift = THREE.MathUtils.lerp(0.030, 0.055, speed01) * blend;
+      const stride = THREE.MathUtils.lerp(0.10, 0.16, speed01);
+      const lift = THREE.MathUtils.lerp(0.030, 0.055, speed01);
       const s = Math.sin(phase);
       const c = Math.cos(phase);
 
@@ -107,7 +107,7 @@ export function createCrouchPoseLayer(character) {
       tmp.leftFoot.y += Math.max(0, -c) * lift;
       tmp.rightFoot.y += Math.max(0, c) * lift;
 
-      const strafeStep = localStrafe * 0.045 * blend;
+      const strafeStep = localStrafe * 0.045;
       tmp.leftFoot.addScaledVector(
         tmp.right,
         strafeStep - localStrafe * 0.018 * s
@@ -128,21 +128,21 @@ export function createCrouchPoseLayer(character) {
     const extraDrop = authoredCrouch ? 0.205 : 0.305;
     const forwardShift = authoredCrouch ? 0.035 : 0.065;
 
-    b.hips.position.y -= extraDrop * blend;
-    b.hips.position.z += forwardShift * blend;
+    b.hips.position.y -= extraDrop;
+    b.hips.position.z += forwardShift;
 
     // Subtle weight transfer only; the authored clip already contains its own.
     if (moving && !authoredCrouch) {
       b.hips.position.y +=
-        Math.abs(Math.sin(phase * 2)) * 0.012 * blend;
-      b.hips.position.x += Math.sin(phase) * 0.016 * blend;
+        Math.abs(Math.sin(phase * 2)) * 0.012;
+      b.hips.position.x += Math.sin(phase) * 0.016;
     }
 
     // Add an athletic forward hinge on top of the animated pose.
     rotateLocal(
       b.hips,
       underlyingQ.get(b.hips),
-      authoredCrouch ? -0.075 * blend : -0.10 * blend,
+      authoredCrouch ? -0.075 : -0.10,
       0,
       0
     );
@@ -151,9 +151,9 @@ export function createCrouchPoseLayer(character) {
       rotateLocal(
         b.spine,
         underlyingQ.get(b.spine),
-        authoredCrouch ? 0.115 * blend : 0.18 * blend,
+        authoredCrouch ? 0.115 : 0.18,
         0,
-        -localStrafe * 0.015 * blend
+        -localStrafe * 0.015
       );
     }
 
@@ -161,9 +161,9 @@ export function createCrouchPoseLayer(character) {
       rotateLocal(
         b.chest,
         underlyingQ.get(b.chest),
-        authoredCrouch ? 0.045 * blend : 0.07 * blend,
+        authoredCrouch ? 0.045 : 0.07,
         0,
-        -localStrafe * 0.010 * blend
+        -localStrafe * 0.010
       );
     }
 

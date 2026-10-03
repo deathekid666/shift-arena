@@ -328,74 +328,13 @@ export async function createVrmLocomotionController(character, vrm) {
 
       this.active = true;
 
-      // Input state owns crouch mode immediately. crouchBlend is only a
-      // short visual smoothing value and must never keep the FSM stuck crouched
-      // after Ctrl is released.
-      const crouching = Boolean(state.crouching);
-
-      if (crouching) {
-        if (!this.wasCrouching) {
-          this.wasCrouching = true;
-
-          if (moving) {
-            const crouchDuration = Math.max(
-              0.001,
-              crouchMove.getClip().duration
-            );
-            const normalizedPhase =
-              ((this.phase / (Math.PI * 2)) % 1 + 1) % 1;
-            crouchMove.time = normalizedPhase * crouchDuration;
-          }
-        }
-
-        applyWeights(
-          moving ? { crouchMove: 1 } : { crouchIdle: 1 },
-          dt,
-          state.combat ? 30 : 22
-        );
-
-        const backwards = (state.localZ ?? 0) > 0.08;
-        const crouchScale = THREE.MathUtils.clamp(
-          speed / 2.8,
-          0.82,
-          1.30
-        );
-
-        crouchMove.setEffectiveTimeScale(
-          backwards ? -crouchScale : crouchScale
-        );
-
-        if (moving) {
-          const duration = Math.max(
-            0.001,
-            crouchMove.getClip().duration
-          );
-          const normalized =
-            ((crouchMove.time / duration) % 1 + 1) % 1;
-          this.phase = normalized * Math.PI * 2;
-        }
-
-        this.state = moving ? 'CROUCH_WALK' : 'CROUCH';
-        this.mixer.update(dt);
-        return;
-      }
-
-      if (this.wasCrouching) {
-        // Continue the same foot cycle when standing back up. This prevents
-        // crouch-walk -> jog from popping to an unrelated leg pose.
-        this.wasCrouching = false;
-
-        if (moving) {
-          const normalizedPhase =
-            ((this.phase / (Math.PI * 2)) % 1 + 1) % 1;
-          move.time =
-            normalizedPhase *
-            Math.max(0.001, move.getClip().duration);
-          sprint.time =
-            normalizedPhase *
-            Math.max(0.001, sprint.getClip().duration);
-        }
-      }
+      // Gameplay can react immediately to Ctrl, but animation transitions use
+      // one continuous blend so the body never snaps between unrelated poses.
+      const crouchBlend = THREE.MathUtils.clamp(
+        state.crouchBlend ?? (state.crouching ? 1 : 0),
+        0,
+        1
+      );
 
       const sprintBlend = moving
         ? THREE.MathUtils.clamp(
@@ -408,23 +347,15 @@ export async function createVrmLocomotionController(character, vrm) {
           )
         : 0;
 
-      const intents = !moving
-        ? { idle: 1 }
-        : sprintBlend > 0.001
-          ? { move: 1 - sprintBlend, sprint: sprintBlend }
-          : { move: 1 };
-
-      applyWeights(
-        intents,
-        dt,
-        state.combat ? 24 : 17
-      );
-
+      const standingBlend = 1 - crouchBlend;
       const backwards = (state.localZ ?? 0) > 0.10;
+
       const moveScale =
         THREE.MathUtils.clamp(speed / 3.55, 0.90, 1.62);
       const sprintScale =
         THREE.MathUtils.clamp(speed / 6.05, 0.92, 1.55);
+      const crouchScale =
+        THREE.MathUtils.clamp(speed / 2.8, 0.82, 1.30);
 
       move.setEffectiveTimeScale(
         backwards ? -moveScale : moveScale
@@ -432,36 +363,77 @@ export async function createVrmLocomotionController(character, vrm) {
       sprint.setEffectiveTimeScale(
         backwards ? -sprintScale : sprintScale
       );
+      crouchMove.setEffectiveTimeScale(
+        backwards ? -crouchScale : crouchScale
+      );
 
-      const dominant = sprint.weight > move.weight ? sprint : move;
-      const follower = dominant === sprint ? move : sprint;
+      let intents;
 
-      if (moving) {
-        const dominantDuration = Math.max(
+      if (!moving) {
+        intents = {
+          idle: standingBlend,
+          crouchIdle: crouchBlend
+        };
+      } else {
+        intents = {
+          move: standingBlend * (1 - sprintBlend),
+          sprint: standingBlend * sprintBlend,
+          crouchMove: crouchBlend
+        };
+
+        // Keep jog/sprint/crouch-walk on one shared foot phase. This is what
+        // makes repeated crouch-peeking look like one continuous movement
+        // instead of restarting the legs every time Ctrl changes.
+        const standingAction =
+          sprintBlend > 0.5 ? sprint : move;
+        const phaseSource =
+          crouchBlend >= 0.5 ? crouchMove : standingAction;
+
+        const sourceDuration = Math.max(
           0.001,
-          dominant.getClip().duration
-        );
-        const followerDuration = Math.max(
-          0.001,
-          follower.getClip().duration
+          phaseSource.getClip().duration
         );
         const normalized =
-          ((dominant.time / dominantDuration) % 1 + 1) % 1;
+          ((phaseSource.time / sourceDuration) % 1 + 1) % 1;
 
-        if (Math.min(move.weight, sprint.weight) > 0.04) {
-          follower.time = normalized * followerDuration;
-        }
+        const syncAction = (action) => {
+          if (action === phaseSource) return;
+          action.time =
+            normalized *
+            Math.max(0.001, action.getClip().duration);
+        };
+
+        syncAction(move);
+        syncAction(sprint);
+        syncAction(crouchMove);
 
         this.phase = normalized * Math.PI * 2;
       }
 
-      this.state = !moving
-        ? 'IDLE'
-        : (state.braking && speed > 4.8)
-          ? 'BRAKE'
-          : sprintBlend > 0.58
-            ? 'SPRINT'
-            : 'JOG';
+      // Targets already move smoothly through crouchBlend, so this high
+      // response only makes the mixer follow that curve rather than adding a
+      // second sluggish ease on top.
+      applyWeights(
+        intents,
+        dt,
+        state.combat ? 34 : 28
+      );
+
+      if (crouchBlend > 0.72) {
+        this.state = moving ? 'CROUCH_WALK' : 'CROUCH';
+      } else if (crouchBlend > 0.06) {
+        this.state = moving ? 'CROUCH_BLEND_MOVE' : 'CROUCH_BLEND';
+      } else {
+        this.state = !moving
+          ? 'IDLE'
+          : (state.braking && speed > 4.8)
+            ? 'BRAKE'
+            : sprintBlend > 0.58
+              ? 'SPRINT'
+              : 'JOG';
+      }
+
+      this.wasCrouching = crouchBlend > 0.5;
       this.mixer.update(dt);
     },
 
