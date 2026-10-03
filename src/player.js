@@ -87,22 +87,19 @@ export class PlayerController {
 
     const crouchDown = this.input.down('crouch');
     const crouchPressed = this.input.consume('crouch');
-    const sprintPressed = this.input.consume('sprint');
+    this.input.consume('sprint');
     const jumpPressed = this.input.consume('jump');
     const sprintDown = this.input.down('sprint');
 
     const movingIntent = move.lengthSq() > 0.01;
-    const horizontalSpeed = this.horizontalSpeed();
 
-    // Fortnite-style crouch/slide arbitration:
-    //
-    // 1) Sliding has priority over crouching.
-    // 2) The decision is NOT limited to the Ctrl keydown frame.
-    //    If Ctrl is already held and Shift becomes active a frame later,
-    //    the crouch upgrades into a slide automatically.
-    // 3) Normal running momentum can also start a slide without tactical sprint.
-    // 4) One continuous Ctrl hold may trigger only one slide. Releasing Ctrl
-    //    re-arms the next slide, which prevents automatic slide loops.
+    // Single unambiguous control rule:
+    // - Ctrl without sprint = CROUCH.
+    // - Shift + movement + Ctrl = SLIDE.
+    // - If Ctrl is already held, pressing Shift while moving upgrades crouch
+    //   into slide on the next frame.
+    // - One continuous Ctrl hold can trigger only one slide; releasing Ctrl
+    //   re-arms the next slide.
     if (!crouchDown) {
       this.slideConsumedForCrouchHold = false;
     }
@@ -112,40 +109,23 @@ export class PlayerController {
       sprintDown &&
       movingIntent;
 
-    const runSlideEligible =
-      crouchDown &&
-      movingIntent &&
-      horizontalSpeed >= cfg.slideMinStartSpeed;
-
-    let startedSlide = false;
-
     if (
       !this.sliding &&
       !this.slideConsumedForCrouchHold &&
       this.grounded &&
-      (sprintSlideEligible || runSlideEligible)
+      sprintSlideEligible
     ) {
       this.beginSlide(move);
       this.slideConsumedForCrouchHold = true;
-      startedSlide = true;
     }
 
     if (this.sliding) {
       this.updateSlide(dt, move);
 
-      // Fortnite allows jump to cancel a slide and starting a NEW sprint
-      // during a slide to cancel it. A Shift press used to ENTER the slide is
-      // ignored for this frame so it cannot instantly cancel itself.
       if (jumpPressed && this.grounded) {
         this.sliding = false;
         this.velocity.y = cfg.jumpVelocity;
         this.grounded = false;
-      } else if (
-        sprintPressed &&
-        !startedSlide &&
-        this.slideElapsed >= cfg.slideSprintCancelGrace
-      ) {
-        this.sliding = false;
       } else if (
         this.slideTimer <= 0 ||
         !crouchDown ||
