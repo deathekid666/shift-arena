@@ -277,3 +277,19 @@ Browser-first third-person shooter prototype.
 - Sustained automatic fire gradually introduces a light smoke puff instead of smoke on every single shot.
 - Muzzle FX remain attached to the existing runtime muzzle anchor, so they follow all current weapon/IK poses.
 - Architecture was informed by Epic-style separation of camera shake/recoil from animation/VFX and by the open-source mshaheerz/fpp-tpp-shooter-starter separation of weapon stats, shooter logic, muzzle anchor, camera recoil and muzzle FX.
+
+
+## Build 010.7B — real smooth crouch
+- Reworked crouch after reviewing Epic locomotion/blend-space guidance and the open-source mshaheerz third-person shooter crouch system.
+- Crouch is now treated as its own locomotion layer rather than a shallow bent-leg pose.
+- Added an independent visual crouch blend so the rig eases into and out of crouch even though gameplay movement/collider state changes immediately.
+- Authored standing locomotion remains disabled until the visual crouch blend is nearly back to zero, preventing the mixer from snapping the skeleton upright on key release.
+- Pelvis now drops about 0.34 m at full crouch instead of only 0.15 m.
+- Hips hinge and shift slightly backward while the spine/chest lean forward to keep the center of mass over the feet.
+- Upper legs fold much deeper, knees flex past 1.2 rad, and ankles counter-rotate so the boots read as planted rather than dangling.
+- Added slight leg abduction for a wider, more believable crouch base.
+- Crouch-walk uses a dedicated short-stride cadence instead of reusing standing locomotion.
+- Crouch strafing subtly biases thighs/hips while preserving the squat silhouette.
+- Standing transition is intentionally slower than crouch entry, avoiding a robotic pop-up.
+- Slide remains its own pose and is not overwritten by the crouch layer.
+- No jump, landing, climbing, Tin Fang, gun IK, or weapon-feedback mechanics were modified.

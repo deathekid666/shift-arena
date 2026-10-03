@@ -10,6 +10,7 @@ export class PlayerController {
     this.velocity = new THREE.Vector3();
     this.grounded = true;
     this.crouching = false;
+    this.crouchVisual = 0;
     this.sliding = false;
     this.slideTimer = 0;
     this.localMotion = new THREE.Vector3();
@@ -53,6 +54,7 @@ export class PlayerController {
     this.velocity.set(0, 0, 0);
     this.grounded = true;
     this.crouching = false;
+    this.crouchVisual = 0;
     this.sliding = false;
     this.slideTimer = 0;
     this.body.scale.set(1, 1, 1);
@@ -87,6 +89,19 @@ export class PlayerController {
       }
     }
     this.crouching = crouchDown;
+
+    // Visual crouch transitions independently from the gameplay collider so the
+    // body eases into/out of the squat rather than snapping between poses.
+    const crouchTarget = this.crouching && !this.sliding ? 1 : 0;
+    this.crouchVisual = THREE.MathUtils.damp(
+      this.crouchVisual,
+      crouchTarget,
+      crouchTarget > this.crouchVisual ? 11.5 : 8.5,
+      dt
+    );
+    if (Math.abs(this.crouchVisual - crouchTarget) < 0.002) {
+      this.crouchVisual = crouchTarget;
+    }
 
     if (this.sliding) {
       this.slideTimer -= dt;
@@ -190,6 +205,7 @@ export class PlayerController {
       aimPitch: this.aimPitch,
       aimYawOffset: this.aimYawOffset,
       crouching: this.crouching,
+      crouchBlend: this.crouchVisual,
       grounded: this.grounded,
       rightArmOverride: this.fangArmOverride,
       fangAnimation: this.fangAnimation

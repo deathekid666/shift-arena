@@ -86,7 +86,8 @@ export async function createVrmLocomotionController(character, vrm) {
       if (
         state.grounded === false ||
         state.sliding ||
-        state.crouching
+        state.crouching ||
+        (state.crouchBlend ?? 0) > 0.025
       ) {
         this.active = false;
         this.state = 'PROCEDURAL';
