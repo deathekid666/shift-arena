@@ -1,5 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG } from './config.js';
+import { createJumpState, requestJump, steerInAir, integrateJump } from './jump-motion.js';
 import { buildRoachScoutCharacter, updateRoachScoutCharacter } from './character.js';
 
 export class PlayerController {
@@ -56,6 +57,7 @@ export class PlayerController {
     this.group.position.copy(position);
     this.group.visible = true;
     this.velocity.set(0, 0, 0);
+    this.jump = createJumpState();
     this.grounded = true;
     this.crouching = false;
     this.crouchVisual = 0;
@@ -74,9 +76,15 @@ export class PlayerController {
 
   update(dt, cameraYaw, combatFacing = false, aimPitch = 0, weaponAiming = false) {
     const cfg = GAME_CONFIG.movement;
+    const wasGrounded = this.grounded;
+    this.jump.landingTime += dt;
     const supportY = this.supportHeightAt(this.group.position.x, this.group.position.z);
     this.grounded = supportY !== null && this.group.position.y <= supportY + 0.04 && this.velocity.y <= 0;
     if (this.grounded) {
+      if (!wasGrounded) {
+        this.jump.landingTime = 0;
+        this.jump.landingImpact = THREE.MathUtils.clamp(-this.velocity.y / 10, 0, 1);
+      }
       this.group.position.y = supportY;
       this.velocity.y = 0;
     }
@@ -87,6 +95,9 @@ export class PlayerController {
     if (move.lengthSq() > 1) move.normalize();
     move.applyAxisAngle(Y_AXIS, cameraYaw);
     const movingIntent = move.lengthSq() > 0.01;
+    if (this.grounded || wasGrounded) {
+      this.jump.airSpeed = Math.max(cfg.walkSpeed, this.horizontalSpeed());
+    }
 
     const crouchDown = this.input.down('crouch');
     const crouchPressed = this.input.consume('crouch');
@@ -143,8 +154,7 @@ export class PlayerController {
       // sprint simply exits the skid and returns control to normal movement.
       if (jumpPressed && this.grounded) {
         this.sliding = false;
-        this.velocity.y = cfg.jumpVelocity;
-        this.grounded = false;
+        // The common jump path below consumes this press exactly once.
       } else if (sprintPressed && !startedSlide) {
         this.sliding = false;
       } else if (
@@ -224,25 +234,30 @@ export class PlayerController {
         );
       }
 
-      this.velocity.x = THREE.MathUtils.damp(
-        this.velocity.x,
-        target.x,
-        accel,
-        dt
-      );
-      this.velocity.z = THREE.MathUtils.damp(
-        this.velocity.z,
-        target.z,
-        accel,
-        dt
-      );
+      if (!this.grounded) {
+        steerInAir(this.velocity, move, this.jump.airSpeed || cfg.walkSpeed, dt, cfg.airAcceleration);
+      } else {
+        this.velocity.x = THREE.MathUtils.damp(
+          this.velocity.x,
+          target.x,
+          accel,
+          dt
+        );
+        this.velocity.z = THREE.MathUtils.damp(
+          this.velocity.z,
+          target.z,
+          accel,
+          dt
+        );
+      }
     }
 
-    if (jumpPressed && this.grounded && !this.sliding) {
-      this.velocity.y = cfg.jumpVelocity;
+    if (requestJump(this.jump, jumpPressed, this.grounded, this.sliding, dt, cfg)) {
+      const sprintJump = sprintRequested && this.horizontalSpeed() > cfg.walkSpeed;
+      this.jump.airSpeed = Math.max(cfg.walkSpeed, this.horizontalSpeed());
+      this.velocity.y = cfg.jumpVelocity * (sprintJump ? cfg.sprintJumpMultiplier : 1);
       this.grounded = false;
     }
-    if (!this.grounded) this.velocity.y -= cfg.gravity * dt;
 
     const sprintBlendTarget =
       sprintRequested && this.grounded
@@ -265,7 +280,25 @@ export class PlayerController {
     const displacement = this.velocity.clone().multiplyScalar(dt);
     this.moveHorizontal(displacement.x, 0);
     this.moveHorizontal(0, displacement.z);
-    this.moveVertical(displacement.y, Math.hypot(displacement.x, displacement.z));
+    if (this.grounded) {
+      // Preserve the established grounded ramp/slide path exactly.
+      this.moveVertical(displacement.y, Math.hypot(displacement.x, displacement.z));
+      this.jump.airTime = 0;
+    } else {
+      const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
+      const step = dt / steps;
+      for (let i = 0; i < steps && !this.grounded; i++) {
+        const vertical = integrateJump(this.velocity.y, step, cfg);
+        this.velocity.y = vertical.velocity;
+        this.jump.airTime += step;
+        this.moveVertical(vertical.displacement);
+        if (this.grounded) {
+          this.jump.landingTime = 0;
+          this.jump.landingImpact = THREE.MathUtils.clamp(-vertical.velocity / 10, 0, 1);
+          this.jump.airTime = 0;
+        }
+      }
+    }
 
     if (this.group.position.y < -15) {
       this.resetAt(this.world.spawnPoint);
@@ -385,6 +418,9 @@ export class PlayerController {
       localX: this.localMotion.x,
       localZ: this.localMotion.z,
       verticalSpeed: this.velocity.y,
+      airTime: this.jump.airTime,
+      landingTime: this.jump.landingTime,
+      landingImpact: this.jump.landingImpact,
       sprinting: sprintRequested,
       sprintBlend: this.sprintBlend,
       braking: this.braking,

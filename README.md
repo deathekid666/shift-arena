@@ -356,3 +356,14 @@ Browser-first third-person shooter prototype.
 - Crouch stride increased from 0.055 m to 0.125 m and step lift from 0.020 m to 0.052 m.
 - Added alternating foot lift/plant timing, lateral weight transfer and pelvis step bob/sway so crouch movement visibly reads as walking rather than gliding.
 - Existing crouch depth, planted-foot IK, slide physics, gun IK, Tin Fang, and jump systems remain intact.
+
+
+## Build 010.14 — responsive jump on the 010.13 baseline
+- Original Fortnite-inspired tuning, not an extraction of Fortnite code or assets: 10 m/s takeoff, 31.25 m/s² ascent gravity, 40 m/s² descent gravity, and a 28 m/s fall cap.
+- Approximately 1.60 m standing apex after 0.32 s; sprinting adds a modest 5% vertical impulse. Air steering preserves released takeoff momentum and cannot add sprint speed by toggling sprint in the air.
+- 120 ms input buffering and 85 ms ledge grace, consumed once per jump; holding Space does not automatically repeat jumps.
+- Lower-body takeoff/tuck/extension and impact-weighted landing compression; crouch and slide retain their own pose layers.
+- Based on 12c5756 (010.13). Existing grounded sprint/crouch/slide behavior is preserved, including slide jump-cancel, alongside damage, reticles, junk weapons and the left-hip knife holster.
+- Research: [Epic movement controls](https://dev.epicgames.com/documentation/fortnite/using-player-movement-devices?lang=en-US) and [public third-person motor](https://github.com/modcommunity/dot-player-controller/blob/main/addons/dot_player_controller/tp/core/dot_tps_motor.gd). Public documentation describes controls, not exact Battle Royale tuning values.
+- Run the dependency-free motion checks with `node --test tests/jump-motion.test.mjs`.
+- Local browser verification covered 15–144 FPS simulations, ceiling/ramp collisions, buffered/ledge jumps, airborne Fang use, and a direct grounded-controller comparison with 010.13 (zero position/velocity/blend difference in the exercised sprint/slide/crouch sequence).

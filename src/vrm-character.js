@@ -5,6 +5,7 @@ import { createVrmLocomotionController } from './vrm-locomotion.js';
 import { createFangPoseLayer } from './fang-pose.js';
 import { createCrouchPoseLayer } from './crouch-pose.js';
 import { createSlidePoseLayer } from './slide-pose.js';
+import { createJumpPoseLayer } from './jump-pose.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -304,6 +305,7 @@ function buildCharacterInterface({
     authoredLocomotionReady: null,
     update(dt, state = {}) {
       this.fangPoseLayer?.restore();
+      this.jumpPoseLayer?.restore();
       this.slidePoseLayer?.restore();
       this.crouchPoseLayer?.restore();
 
@@ -327,6 +329,9 @@ function buildCharacterInterface({
         this.slidePoseLayer ??= createSlidePoseLayer(this);
         this.slidePoseLayer.apply(state, dt);
       }
+
+      this.jumpPoseLayer ??= createJumpPoseLayer(this);
+      this.jumpPoseLayer.apply(state, dt);
 
       vrm?.update?.(dt);
     },
