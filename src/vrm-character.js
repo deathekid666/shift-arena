@@ -265,8 +265,8 @@ function buildCharacterInterface({
   const holsterSocket = new THREE.Object3D();
   holsterSocket.name = 'holsterSocket';
   if (bones.hips) {
-    holsterSocket.position.set(0.145, -0.035, -0.095);
-    holsterSocket.rotation.set(0.06, -0.34, -0.34);
+    holsterSocket.position.set(0.120, -0.025, -0.112);
+    holsterSocket.rotation.set(0.02, -0.46, -0.42);
     bones.hips.add(holsterSocket);
   } else {
     holsterSocket.position.set(0.16, -0.12, -0.055);
