@@ -4,7 +4,7 @@ import { TestWorld } from './world.js';
 import { PlayerController } from './player.js';
 import { ThirdPersonCamera } from './camera.js';
 import { TargetRange } from './targets.js';
-import { TacticalAR } from './weapon.js';
+import { WeaponSystem } from './weapon.js';
 import { PlayerHealth } from './health.js';
 import { CombatBot } from './bot.js';
 
@@ -35,7 +35,7 @@ root.innerHTML = `
     </div>
 
     <div id="damage-test-hint">
-      BUILD 005 · GIANT KITCHEN GRAYBOX · FLOOR + HIGH ROUTES
+      BUILD 006 · 7-WEAPON BALANCE TEST · KEYS <b>1–7</b>
     </div>
 
     <div id="bot-debug">
@@ -43,19 +43,34 @@ root.innerHTML = `
     </div>
 
     <div id="stats"></div>
+
+    <div id="weapon-bar">
+      <div class="weapon-slot active" data-slot="1"><b>1</b><span>TAC AR</span></div>
+      <div class="weapon-slot" data-slot="2"><b>2</b><span>MECH AR</span></div>
+      <div class="weapon-slot" data-slot="3"><b>3</b><span>TAC SG</span></div>
+      <div class="weapon-slot" data-slot="4"><b>4</b><span>PUMP</span></div>
+      <div class="weapon-slot" data-slot="5"><b>5</b><span>SNIPER</span></div>
+      <div class="weapon-slot" data-slot="6"><b>6</b><span>COMPACT</span></div>
+      <div class="weapon-slot" data-slot="7"><b>7</b><span>LONG SMG</span></div>
+    </div>
+
     <div id="weapon-hud">
-      <div class="weapon-name">TACTICAL AR</div>
-      <div><span id="ammo">30</span><span class="reserve"> / ∞</span></div>
+      <div id="weapon-name" class="weapon-name">TACTICAL AR</div>
+      <div id="weapon-role" class="weapon-role">FAST CLOSE–MID</div>
+      <div><span id="ammo">30</span><span id="mag-size" class="reserve"> / 30</span></div>
+      <div id="weapon-statline">DMG 22 · 7.0 RPS</div>
       <div id="reload-state"></div>
     </div>
-    <div id="controls">WASD move · LMB fire · RMB ADS · R reload · Shift sprint · Ctrl crouch/slide · Space jump · Esc unlock</div>
+
+    <div id="controls">1–7 weapons · WASD move · LMB fire · RMB ADS · R reload · Shift sprint · Ctrl crouch/slide · Space jump</div>
     <div id="touch-note">Touch device detected. Mobile combat controls will be added in the dedicated mobile-input phase.</div>
+
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 005</div>
+        <div class="build-tag">BUILD 006</div>
         <h1>SHIFT Arena</h1>
-        <p>First real map graybox: fight through a giant kitchen with floor lanes, island high ground, a spoon bridge, under-table flanks, a sink tunnel, stove counter and fridge landmark.</p>
-        <button type="button">ENTER KITCHEN</button>
+        <p>Seven-weapon balance test in the giant kitchen. Switch with keys 1–7 and compare damage, fire rate, recoil, range, magazine size and ADS behavior.</p>
+        <button type="button">ENTER WEAPON TEST</button>
       </div>
     </div>
   </div>`;
@@ -64,7 +79,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9ec8e3);
 scene.fog = new THREE.Fog(0x9ec8e3, 38, 78);
 
-const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.05, 140);
+const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.05, 180);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.setSize(innerWidth, innerHeight);
@@ -94,6 +109,10 @@ const crosshair = document.querySelector('#crosshair');
 const hitMarker = document.querySelector('#hit-marker');
 const damagePop = document.querySelector('#damage-pop');
 const ammo = document.querySelector('#ammo');
+const magSize = document.querySelector('#mag-size');
+const weaponName = document.querySelector('#weapon-name');
+const weaponRole = document.querySelector('#weapon-role');
+const weaponStatline = document.querySelector('#weapon-statline');
 const reloadState = document.querySelector('#reload-state');
 const healthValue = document.querySelector('#health-value');
 const shieldValue = document.querySelector('#shield-value');
@@ -106,6 +125,7 @@ const elimination = document.querySelector('#elimination');
 const respawnCountdown = document.querySelector('#respawn-countdown');
 const botState = document.querySelector('#bot-state');
 const botHealth = document.querySelector('#bot-health');
+const weaponSlots = [...document.querySelectorAll('.weapon-slot')];
 
 let weapon = null;
 let bot = null;
@@ -137,7 +157,7 @@ bot = new CombatBot({
   targets
 });
 
-weapon = new TacticalAR({
+weapon = new WeaponSystem({
   scene,
   camera,
   cameraRig: thirdCam,
@@ -146,7 +166,8 @@ weapon = new TacticalAR({
   world,
   targets,
   onFire: () => pulse(crosshair, 'shot'),
-  onHit: (result) => showHit(result)
+  onHit: (result) => showHit(result),
+  onSwitch: updateWeaponHud
 });
 
 const start = document.querySelector('#start');
@@ -162,6 +183,17 @@ let last = performance.now();
 let fps = 60;
 let frames = 0;
 let fpsTimer = 0;
+
+function updateWeaponHud(info) {
+  if (!weaponName) return;
+  weaponName.textContent = info.name;
+  weaponRole.textContent = info.role;
+  weaponStatline.textContent = `DMG ${info.damage} · ${info.fireRate.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')} RPS`;
+  magSize.textContent = ` / ${info.magazineSize}`;
+  weaponSlots.forEach((slot) => {
+    slot.classList.toggle('active', Number(slot.dataset.slot) === info.slot);
+  });
+}
 
 function updateHealthHud(state) {
   if (!healthValue) return;
@@ -202,7 +234,7 @@ function showShieldBreak() {
 
 function showHit(result) {
   hitMarker.className = result.headshot ? 'show headshot' : 'show';
-  damagePop.textContent = `${result.damage}${result.headshot ? ' HEAD' : ''}${result.eliminated ? ' · DOWN' : ''}`;
+  damagePop.textContent = `${Math.round(result.damage)}${result.headshot ? ' HEAD' : ''}${result.eliminated ? ' · DOWN' : ''}`;
   damagePop.className = result.headshot ? 'show headshot' : 'show';
 
   clearTimeout(showHit.markerTimer);
@@ -227,8 +259,8 @@ function loop(now) {
   if (health.alive) {
     const combatFacing = input.pointerLocked && (input.mouseDown(2) || input.mouseDown(0));
     player.update(dt, thirdCam.yaw, combatFacing);
-    thirdCam.update(dt, weapon.aiming);
     weapon.update(dt);
+    thirdCam.update(dt, weapon.aiming, weapon.adsFov);
   }
 
   health.update(dt);
@@ -245,9 +277,7 @@ function loop(now) {
   botState.textContent = bot.state;
   botHealth.textContent = String(Math.round(bot.health));
 
-  if (!health.alive) {
-    respawnCountdown.textContent = health.respawnTimer.toFixed(1);
-  }
+  if (!health.alive) respawnCountdown.textContent = health.respawnTimer.toFixed(1);
 
   frames += 1;
   fpsTimer += dt;

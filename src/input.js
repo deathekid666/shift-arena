@@ -6,7 +6,14 @@ const ACTION_CODES = {
   jump: ['Space'],
   sprint: ['ShiftLeft', 'ShiftRight'],
   crouch: ['ControlLeft', 'ControlRight'],
-  reload: ['KeyR']
+  reload: ['KeyR'],
+  slot1: ['Digit1'],
+  slot2: ['Digit2'],
+  slot3: ['Digit3'],
+  slot4: ['Digit4'],
+  slot5: ['Digit5'],
+  slot6: ['Digit6'],
+  slot7: ['Digit7']
 };
 
 export class InputController {
@@ -38,11 +45,13 @@ export class InputController {
   }
 
   down(action) {
-    return ACTION_CODES[action].some((code) => this.keys.has(code));
+    const codes = ACTION_CODES[action];
+    return codes ? codes.some((code) => this.keys.has(code)) : false;
   }
 
   consume(action) {
     const codes = ACTION_CODES[action];
+    if (!codes) return false;
     const code = codes.find((candidate) => this.pressed.has(candidate));
     if (!code) return false;
     codes.forEach((candidate) => this.pressed.delete(candidate));

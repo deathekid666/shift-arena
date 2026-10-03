@@ -350,3 +350,83 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
   #controls, #weapon-hud, #player-status, #damage-test-hint, #bot-debug { display:none; }
   #touch-note { display:block; }
 }
+
+
+/* Build 006 weapon loadout */
+#weapon-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 62px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 5px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(7,12,20,.72);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(10px);
+}
+.weapon-slot {
+  width: 72px;
+  min-height: 42px;
+  padding: 5px 6px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.035);
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 3px;
+  color: #9cabb8;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.weapon-slot b {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  color: #dfe8ef;
+  background: rgba(255,255,255,.08);
+  font-size: 9px;
+}
+.weapon-slot span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.weapon-slot.active {
+  color: #fff;
+  border-color: rgba(128,199,255,.65);
+  background: rgba(58,143,216,.22);
+  box-shadow: inset 0 0 0 1px rgba(128,199,255,.12);
+}
+.weapon-slot.active b {
+  background: #e9f5ff;
+  color: #102232;
+}
+.weapon-role {
+  margin: -2px 0 7px;
+  color: #718aa0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+#weapon-statline {
+  margin-top: 6px;
+  color: #92a9bb;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+@media (max-width: 1050px) {
+  #weapon-bar { gap: 3px; }
+  .weapon-slot { width: 58px; }
+  .weapon-slot span { font-size: 7px; }
+}
+@media (pointer: coarse) {
+  #weapon-bar { display:none; }
+}

@@ -13,7 +13,7 @@ export class ThirdPersonCamera {
     this.target = new THREE.Vector3();
   }
 
-  update(dt, aiming = false) {
+  update(dt, aiming = false, weaponAdsFov = null) {
     const cfg = GAME_CONFIG.camera;
     const look = this.input.consumeLook();
     this.yaw -= look.yaw * cfg.sensitivity;
@@ -22,7 +22,7 @@ export class ThirdPersonCamera {
 
     const targetDistance = aiming ? cfg.adsDistance : cfg.distance;
     const targetShoulder = aiming ? cfg.adsShoulderOffset : cfg.shoulderOffset;
-    const targetFov = aiming ? cfg.adsFov : cfg.normalFov;
+    const targetFov = aiming ? (weaponAdsFov ?? cfg.adsFov) : cfg.normalFov;
 
     this.target.copy(this.player.group.position).add(new THREE.Vector3(0, cfg.height, 0));
     const rot = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
@@ -46,9 +46,6 @@ export class ThirdPersonCamera {
     this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 13, dt);
     this.camera.updateProjectionMatrix();
 
-    // The orbit pivot positions the camera around the player, but it must not
-    // look back at that pivot. The screen center/crosshair should point into
-    // the world along the player's camera yaw/pitch.
     this.camera.rotation.order = 'YXZ';
     this.camera.rotation.x = this.pitch;
     this.camera.rotation.y = this.yaw;
