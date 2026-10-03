@@ -1391,14 +1391,20 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       dt
     );
 
+    character.root.updateWorldMatrix(true, true);
+  }
+
+  if (
+    gripPose.rightHandOrient &&
+    bones.rightHand
+  ) {
     alignWeaponHandToSocket(
       character,
       bones.rightHand,
       gripPose.weaponQuaternion,
-      30,
+      gripPose.rightHandIK ? 30 : 24,
       dt
     );
-
     character.root.updateWorldMatrix(true, true);
   }
 
