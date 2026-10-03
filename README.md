@@ -69,3 +69,19 @@ Browser-first third-person shooter prototype.
 - Holding V past the prime threshold enters charge; releasing V throws immediately.
 - Fang recovery now uses horizontal proximity plus vertical tolerance instead of strict 3D distance.
 - Recovery radius increased to 1.15 with 1.65 vertical tolerance so stuck Fang pickups work on floors, walls and target bodies.
+
+
+## Build 008.2 — Tin Fang aim/physics polish
+- Hold V now enters a dedicated over-the-shoulder Fang aim pose with a visible throwing arm.
+- Camera tightens to a dedicated Fang aiming FOV/distance/shoulder position.
+- Camera-center ray determines the intended target point first.
+- The actual launch velocity is solved ballistically from the character's hand to that crosshair target.
+- The trajectory preview uses the same gravity/speed solution as the real projectile.
+- Release has a staged animation: coil, torso/arm drive, exact launch frame, then follow-through.
+- Fang sticks to moving target hit meshes and follows them while they remain alive.
+- If an embedded target dies, the Fang detaches and falls instead of disappearing.
+- Embedded or settled Fang has its own shootable hitbox.
+- Shooting the Fang knocks it loose.
+- Knocked-loose Fang spins under gravity, collides with the kitchen, bounces, settles, then becomes recoverable.
+- HUD has states for AIMING, RELEASE, FALLING and DROPPED.
+- Fang lifecycle reset on elimination/respawn was corrected.

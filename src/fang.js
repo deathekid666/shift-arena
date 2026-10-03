@@ -20,43 +20,45 @@ export class TinFangSystem {
     this.holdTime = 0;
     this.actionTime = 0;
     this.actionDuration = 0;
+    this.releaseCharge = 0;
+    this.releaseAimPoint = null;
+    this.releaseLaunched = false;
     this.projectile = null;
     this.stuckPosition = null;
+
     this.raycaster = new THREE.Raycaster();
+    this.center = new THREE.Vector2(0, 0);
     this.tmpA = new THREE.Vector3();
     this.tmpB = new THREE.Vector3();
-    this.tmpC = new THREE.Vector3();
 
-    this.handRig = new THREE.Group();
-    this.handRig.position.set(0.54, 0.86, 0.22);
-    this.handRig.visible = false;
-    this.player.group.add(this.handRig);
+    this.shotProxy = {
+      alive: true,
+      takeWeaponDamage: () => {
+        this.dislodgeFromShot();
+        return null;
+      }
+    };
 
-    this.handFang = buildFangModel();
-    this.handRig.add(this.handFang);
-
-    this.sheath = buildSheath();
-    this.sheath.position.set(0.49, 0.67, 0.18);
-    this.sheath.rotation.set(-0.15, 0.05, 0.42);
-    this.player.group.add(this.sheath);
-
-    this.slashArc = buildSlashArc();
-    this.slashArc.visible = false;
-    this.player.group.add(this.slashArc);
-
+    this.buildPlayerVisuals();
+    this.buildTrajectory();
     this.emitState();
   }
 
   get blocksWeapons() {
-    return ['PRIMING', 'CHARGING', 'SLASH', 'CLAW'].includes(this.state);
+    return ['PRIMING', 'AIMING', 'RELEASE', 'SLASH', 'CLAW'].includes(this.state);
+  }
+
+  get aiming() {
+    return ['PRIMING', 'AIMING', 'RELEASE'].includes(this.state);
   }
 
   get hasFang() {
-    return !['THROWN', 'STUCK', 'LOST'].includes(this.state);
+    return !this.projectile && this.state !== 'LOST';
   }
 
   get chargeRatio() {
-    if (this.state !== 'CHARGING') return 0;
+    if (this.state !== 'AIMING' && this.state !== 'RELEASE') return 0;
+    if (this.state === 'RELEASE') return this.releaseCharge;
     return THREE.MathUtils.clamp(
       (this.holdTime - this.cfg.primeThreshold) /
       Math.max(0.001, this.cfg.fullChargeTime - this.cfg.primeThreshold),
@@ -65,84 +67,148 @@ export class TinFangSystem {
     );
   }
 
+  buildPlayerVisuals() {
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0xf6b84a,
+      roughness: 0.58
+    });
+    const handMat = new THREE.MeshStandardMaterial({
+      color: 0xd99a37,
+      roughness: 0.62
+    });
+
+    this.armRig = new THREE.Group();
+    this.armRig.position.set(0.39, 1.38, -0.02);
+    this.armRig.visible = false;
+    this.player.group.add(this.armRig);
+
+    this.upperArm = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.095, 0.115, 0.48, 9),
+      bodyMat
+    );
+    this.upperArm.position.y = -0.24;
+    this.upperArm.castShadow = true;
+    this.armRig.add(this.upperArm);
+
+    this.elbow = new THREE.Group();
+    this.elbow.position.y = -0.48;
+    this.armRig.add(this.elbow);
+
+    this.forearm = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.10, 0.42, 9),
+      bodyMat
+    );
+    this.forearm.position.y = -0.21;
+    this.forearm.castShadow = true;
+    this.elbow.add(this.forearm);
+
+    this.hand = new THREE.Mesh(
+      new THREE.SphereGeometry(0.115, 10, 8),
+      handMat
+    );
+    this.hand.position.y = -0.43;
+    this.hand.castShadow = true;
+    this.elbow.add(this.hand);
+
+    this.handRoot = new THREE.Group();
+    this.handRoot.position.y = -0.43;
+    this.elbow.add(this.handRoot);
+
+    this.handFang = buildFangModel();
+    this.handFang.scale.setScalar(0.72);
+    this.handFang.position.set(0, -0.02, -0.15);
+    this.handFang.rotation.set(0.12, 0, 0.08);
+    this.handRoot.add(this.handFang);
+
+    this.sheath = buildSheath();
+    this.sheath.position.set(0.50, 0.67, 0.18);
+    this.sheath.rotation.set(-0.15, 0.05, 0.42);
+    this.player.group.add(this.sheath);
+
+    this.slashArc = buildSlashArc();
+    this.slashArc.visible = false;
+    this.player.group.add(this.slashArc);
+  }
+
+  buildTrajectory() {
+    this.trajectoryGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(), new THREE.Vector3()
+    ]);
+    this.trajectoryMaterial = new THREE.LineBasicMaterial({
+      color: 0xffc77d,
+      transparent: true,
+      opacity: 0.68,
+      depthWrite: false
+    });
+    this.trajectoryLine = new THREE.Line(this.trajectoryGeometry, this.trajectoryMaterial);
+    this.trajectoryLine.visible = false;
+    this.trajectoryLine.renderOrder = 8;
+    this.scene.add(this.trajectoryLine);
+  }
+
   reset() {
     this.removeProjectile();
     this.state = 'READY';
     this.holdTime = 0;
     this.actionTime = 0;
+    this.releaseAimPoint = null;
+    this.releaseLaunched = false;
     this.stuckPosition = null;
-    this.handRig.visible = false;
+    this.armRig.visible = false;
+    this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
+    this.trajectoryLine.visible = false;
+    this.resetBodyPose();
     this.emitState();
   }
 
   update(dt, canUse = true) {
+    this.updateProjectile(dt);
+
     if (!canUse) {
-      if (this.state === 'PRIMING' || this.state === 'CHARGING' || this.state === 'SLASH' || this.state === 'CLAW') {
+      if (['PRIMING', 'AIMING', 'SLASH', 'CLAW'].includes(this.state)) {
         this.cancelHandAction();
       }
-      this.updateProjectile(dt);
+      this.trajectoryLine.visible = false;
       this.emitState();
       return;
     }
 
-    this.updateProjectile(dt);
-
-    if (this.state === 'STUCK' && this.stuckPosition) {
-      const playerPos = this.player.group.position;
-      const horizontalDistance = Math.hypot(
-        playerPos.x - this.stuckPosition.x,
-        playerPos.z - this.stuckPosition.z
-      );
-      const verticalDistance = Math.abs(
-        (playerPos.y + 0.9) - this.stuckPosition.y
-      );
-
-      if (
-        horizontalDistance <= this.cfg.recoveryRadius &&
-        verticalDistance <= this.cfg.recoveryVerticalTolerance
-      ) {
-        this.recover();
-      }
-    }
+    this.tryRecover();
 
     if (this.state === 'READY' && this.input.consume('melee')) {
       this.beginPrime();
-    } else if ((this.state === 'THROWN' || this.state === 'STUCK' || this.state === 'LOST') && this.input.consume('melee')) {
+    } else if (
+      ['THROWN', 'STUCK', 'FALLING', 'DROPPED', 'LOST'].includes(this.state) &&
+      this.input.consume('melee')
+    ) {
       this.beginClaw();
     }
 
-    if (this.state === 'PRIMING' || this.state === 'CHARGING') {
-      // Holding is based on the actual current key state every frame.
-      // This is intentionally not dependent on a separate keyup/release event.
+    if (this.state === 'PRIMING' || this.state === 'AIMING') {
       const stillHolding = this.input.down('melee');
 
       if (stillHolding) {
         this.holdTime += dt;
-
         if (this.state === 'PRIMING' && this.holdTime >= this.cfg.primeThreshold) {
-          this.state = 'CHARGING';
+          this.state = 'AIMING';
           this.audio?.playFang?.('charge');
         }
       } else {
-        if (this.holdTime >= this.cfg.primeThreshold) {
-          if (this.state !== 'CHARGING') this.state = 'CHARGING';
-          this.throwFang();
-        } else {
-          this.beginSlash();
-        }
+        if (this.holdTime >= this.cfg.primeThreshold) this.beginRelease();
+        else this.beginSlash();
       }
 
-      // Drain the old release queue only as housekeeping; it no longer controls behavior.
       this.input.consumeReleased('melee');
     } else {
       this.input.consumeReleased('melee');
     }
 
+    if (this.state === 'PRIMING' || this.state === 'AIMING') this.updateAimPose(dt);
+    if (this.state === 'RELEASE') this.updateRelease(dt);
     if (this.state === 'SLASH') this.updateSlash(dt);
     if (this.state === 'CLAW') this.updateClaw(dt);
-    if (this.state === 'PRIMING' || this.state === 'CHARGING') this.updatePrimePose(dt);
 
     this.emitState();
   }
@@ -151,43 +217,151 @@ export class TinFangSystem {
     this.state = 'PRIMING';
     this.holdTime = 0;
     this.actionTime = 0;
-    this.handRig.visible = true;
+    this.armRig.visible = true;
+    this.handFang.visible = true;
     this.sheath.visible = false;
-    this.handRig.position.set(0.50, 0.72, 0.22);
-    this.handRig.rotation.set(0.45, -0.25, 0.45);
+    this.trajectoryLine.visible = false;
+    this.setArmPose({
+      shoulder: [0.18, -0.12, -0.18],
+      elbow: [0.20, 0, 0.25],
+      hand: [0.15, 0, 0.15]
+    }, 1);
     this.audio?.playFang?.('draw');
   }
 
-  updatePrimePose(dt) {
-    const charging = this.state === 'CHARGING';
-    const charge = charging ? this.chargeRatio : THREE.MathUtils.clamp(this.holdTime / this.cfg.primeThreshold, 0, 1);
-    const pulse = charging ? Math.sin(performance.now() * 0.014) * 0.035 * (0.35 + charge) : 0;
+  updateAimPose(dt) {
+    const aiming = this.state === 'AIMING';
+    const charge = aiming ? this.chargeRatio : THREE.MathUtils.clamp(this.holdTime / this.cfg.primeThreshold, 0, 1);
+    const breath = aiming ? Math.sin(performance.now() * 0.006) * 0.035 : 0;
 
-    const targetX = charging ? 0.44 : 0.52;
-    const targetY = charging ? 1.48 + pulse : 1.10;
-    const targetZ = charging ? 0.18 : -0.05;
-    this.handRig.position.x = THREE.MathUtils.damp(this.handRig.position.x, targetX, 18, dt);
-    this.handRig.position.y = THREE.MathUtils.damp(this.handRig.position.y, targetY, 18, dt);
-    this.handRig.position.z = THREE.MathUtils.damp(this.handRig.position.z, targetZ, 18, dt);
+    const target = aiming
+      ? {
+          shoulder: [-1.58 + breath, -0.18, -0.48],
+          elbow: [1.48 - breath * 0.5, 0.10, 0.30],
+          hand: [-0.42, 0.10, 0.42]
+        }
+      : {
+          shoulder: [-0.72, -0.10, -0.28],
+          elbow: [0.78, 0.02, 0.20],
+          hand: [-0.18, 0.04, 0.24]
+        };
 
-    const targetRotX = charging ? -1.02 : -0.35;
-    const targetRotY = charging ? -0.18 : 0.20;
-    const targetRotZ = charging ? 0.56 + pulse * 2 : 0.35;
-    this.handRig.rotation.x = THREE.MathUtils.damp(this.handRig.rotation.x, targetRotX, 16, dt);
-    this.handRig.rotation.y = THREE.MathUtils.damp(this.handRig.rotation.y, targetRotY, 16, dt);
-    this.handRig.rotation.z = THREE.MathUtils.damp(this.handRig.rotation.z, targetRotZ, 16, dt);
+    this.dampArmPose(target, aiming ? 16 : 20, dt);
 
-    const glow = charging ? 0.12 + charge * 0.45 : 0.04;
-    setFangGlow(this.handFang, glow);
+    this.player.body.rotation.z = THREE.MathUtils.damp(
+      this.player.body.rotation.z,
+      aiming ? -0.065 : -0.025,
+      14,
+      dt
+    );
+    this.player.body.rotation.y = THREE.MathUtils.damp(
+      this.player.body.rotation.y,
+      aiming ? 0.10 : 0.03,
+      14,
+      dt
+    );
+
+    setFangGlow(this.handFang, aiming ? 0.10 + charge * 0.42 : 0.03);
+
+    if (aiming) this.updateTrajectoryPreview();
+    else this.trajectoryLine.visible = false;
+  }
+
+  beginRelease() {
+    this.releaseCharge = THREE.MathUtils.clamp(
+      (this.holdTime - this.cfg.primeThreshold) /
+      Math.max(0.001, this.cfg.fullChargeTime - this.cfg.primeThreshold),
+      0,
+      1
+    );
+    this.releaseAimPoint = this.computeAimPoint();
+    this.releaseLaunched = false;
+    this.actionTime = 0;
+    this.actionDuration = this.cfg.releaseDuration;
+    this.state = 'RELEASE';
+    this.trajectoryLine.visible = true;
+  }
+
+  updateRelease(dt) {
+    this.actionTime += dt;
+    const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
+
+    if (t < 0.24) {
+      const k = easeInOut(t / 0.24);
+      this.setArmPose({
+        shoulder: [
+          THREE.MathUtils.lerp(-1.58, -1.92, k),
+          THREE.MathUtils.lerp(-0.18, -0.24, k),
+          THREE.MathUtils.lerp(-0.48, -0.58, k)
+        ],
+        elbow: [
+          THREE.MathUtils.lerp(1.48, 1.62, k),
+          0.08,
+          THREE.MathUtils.lerp(0.30, 0.38, k)
+        ],
+        hand: [-0.48, 0.10, 0.50]
+      }, 1);
+      this.player.body.rotation.z = THREE.MathUtils.lerp(-0.065, -0.10, k);
+    } else if (t < 0.68) {
+      const k = easeInOut((t - 0.24) / 0.44);
+      this.setArmPose({
+        shoulder: [
+          THREE.MathUtils.lerp(-1.92, 0.34, k),
+          THREE.MathUtils.lerp(-0.24, 0.10, k),
+          THREE.MathUtils.lerp(-0.58, 0.24, k)
+        ],
+        elbow: [
+          THREE.MathUtils.lerp(1.62, -0.55, k),
+          THREE.MathUtils.lerp(0.08, -0.06, k),
+          THREE.MathUtils.lerp(0.38, -0.18, k)
+        ],
+        hand: [
+          THREE.MathUtils.lerp(-0.48, 0.22, k),
+          0,
+          THREE.MathUtils.lerp(0.50, -0.18, k)
+        ]
+      }, 1);
+
+      this.player.body.rotation.z = THREE.MathUtils.lerp(-0.10, 0.055, k);
+      this.player.body.rotation.y = THREE.MathUtils.lerp(0.10, -0.08, k);
+    } else {
+      const k = easeOut((t - 0.68) / 0.32);
+      this.setArmPose({
+        shoulder: [THREE.MathUtils.lerp(0.34, 0.72, k), 0.12, 0.18],
+        elbow: [THREE.MathUtils.lerp(-0.55, -0.78, k), -0.08, -0.20],
+        hand: [0.26, 0, -0.22]
+      }, 1);
+      this.player.body.rotation.z = THREE.MathUtils.lerp(0.055, 0, k);
+      this.player.body.rotation.y = THREE.MathUtils.lerp(-0.08, 0, k);
+    }
+
+    if (!this.releaseLaunched && t >= this.cfg.releaseMoment) {
+      this.releaseLaunched = true;
+      this.launchFang(this.releaseCharge, this.releaseAimPoint);
+      this.handFang.visible = false;
+      this.trajectoryLine.visible = false;
+    } else if (!this.releaseLaunched) {
+      this.updateTrajectoryPreview(this.releaseAimPoint, this.releaseCharge);
+    }
+
+    if (t >= 1) {
+      this.armRig.visible = false;
+      this.handFang.visible = true;
+      this.resetBodyPose();
+      this.state = this.stateFromProjectile();
+    }
   }
 
   beginSlash() {
     this.state = 'SLASH';
     this.actionTime = 0;
-    this.actionDuration = 0.36;
-    this.handRig.visible = true;
+    this.actionDuration = 0.38;
+    this.armRig.visible = true;
+    this.handFang.visible = true;
+    this.sheath.visible = false;
     this.slashArc.visible = true;
     this.slashArc.material.opacity = 0;
+    this.trajectoryLine.visible = false;
     this.audio?.playFang?.('slash');
     this.slashDidHit = false;
   }
@@ -196,49 +370,41 @@ export class TinFangSystem {
     this.actionTime += dt;
     const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
 
-    if (t < 0.18) {
-      const k = easeOut(t / 0.18);
-      this.handRig.position.set(
-        THREE.MathUtils.lerp(0.52, 0.68, k),
-        THREE.MathUtils.lerp(0.92, 1.28, k),
-        THREE.MathUtils.lerp(0.12, 0.20, k)
-      );
-      this.handRig.rotation.set(
-        THREE.MathUtils.lerp(-0.2, -0.9, k),
-        THREE.MathUtils.lerp(0.15, -0.55, k),
-        THREE.MathUtils.lerp(0.3, 0.95, k)
-      );
-    } else if (t < 0.66) {
-      const k = easeInOut((t - 0.18) / 0.48);
-      this.handRig.position.set(
-        THREE.MathUtils.lerp(0.68, -0.62, k),
-        THREE.MathUtils.lerp(1.28, 1.02, k),
-        THREE.MathUtils.lerp(0.20, -0.70, k)
-      );
-      this.handRig.rotation.set(
-        THREE.MathUtils.lerp(-0.9, 0.35, k),
-        THREE.MathUtils.lerp(-0.55, 0.82, k),
-        THREE.MathUtils.lerp(0.95, -0.75, k)
-      );
+    if (t < 0.20) {
+      const k = easeOut(t / 0.20);
+      this.setArmPose({
+        shoulder: [THREE.MathUtils.lerp(-0.35, -1.10, k), -0.12, THREE.MathUtils.lerp(-0.15, -0.62, k)],
+        elbow: [THREE.MathUtils.lerp(0.55, 1.30, k), 0.06, 0.26],
+        hand: [-0.25, 0, 0.35]
+      }, 1);
+    } else if (t < 0.68) {
+      const k = easeInOut((t - 0.20) / 0.48);
+      this.setArmPose({
+        shoulder: [THREE.MathUtils.lerp(-1.10, 0.72, k), THREE.MathUtils.lerp(-0.12, 0.28, k), THREE.MathUtils.lerp(-0.62, 0.52, k)],
+        elbow: [THREE.MathUtils.lerp(1.30, -0.62, k), THREE.MathUtils.lerp(0.06, -0.10, k), THREE.MathUtils.lerp(0.26, -0.32, k)],
+        hand: [THREE.MathUtils.lerp(-0.25, 0.38, k), 0, THREE.MathUtils.lerp(0.35, -0.30, k)]
+      }, 1);
 
       const swing = Math.sin(k * Math.PI);
       this.slashArc.visible = true;
-      this.slashArc.position.set(0, 1.05, -0.5);
-      this.slashArc.rotation.set(Math.PI / 2, 0, THREE.MathUtils.lerp(-1.15, 0.85, k));
-      this.slashArc.scale.setScalar(0.9 + swing * 0.18);
+      this.slashArc.position.set(0, 1.06, -0.50);
+      this.slashArc.rotation.set(Math.PI / 2, 0, THREE.MathUtils.lerp(-1.25, 0.95, k));
+      this.slashArc.scale.setScalar(0.92 + swing * 0.20);
       this.slashArc.material.opacity = swing * 0.62;
 
-      if (!this.slashDidHit && k >= 0.36) {
+      if (!this.slashDidHit && k >= 0.34) {
         this.slashDidHit = true;
         this.performMeleeHit(this.cfg.meleeDamage, false);
       }
     } else {
-      const k = easeInOut((t - 0.66) / 0.34);
-      this.handRig.position.lerp(new THREE.Vector3(0.50, 0.72, 0.22), k);
-      this.handRig.rotation.x = THREE.MathUtils.lerp(this.handRig.rotation.x, 0.45, k);
-      this.handRig.rotation.y = THREE.MathUtils.lerp(this.handRig.rotation.y, -0.25, k);
-      this.handRig.rotation.z = THREE.MathUtils.lerp(this.handRig.rotation.z, 0.45, k);
-      this.slashArc.material.opacity = Math.max(0, this.slashArc.material.opacity - dt * 5);
+      const k = easeOut((t - 0.68) / 0.32);
+      this.dampArmPose({
+        shoulder: [0.05, 0, 0],
+        elbow: [0.10, 0, 0],
+        hand: [0, 0, 0]
+      }, 18, dt);
+      this.slashArc.material.opacity *= 1 - Math.min(1, dt * 9);
+      this.player.body.rotation.z = THREE.MathUtils.lerp(this.player.body.rotation.z, 0, k);
     }
 
     if (t >= 1) this.finishHandAction();
@@ -247,8 +413,9 @@ export class TinFangSystem {
   beginClaw() {
     this.state = 'CLAW';
     this.actionTime = 0;
-    this.actionDuration = 0.28;
+    this.actionDuration = 0.30;
     this.clawDidHit = false;
+    this.armRig.visible = false;
     this.slashArc.visible = true;
     this.slashArc.material.opacity = 0;
     this.audio?.playFang?.('claw');
@@ -257,21 +424,22 @@ export class TinFangSystem {
   updateClaw(dt) {
     this.actionTime += dt;
     const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
+    const k = easeInOut(t);
     const swing = Math.sin(t * Math.PI);
-    this.slashArc.visible = true;
-    this.slashArc.position.set(0, 1.02, -0.48);
-    this.slashArc.rotation.set(Math.PI / 2, 0, THREE.MathUtils.lerp(-0.75, 0.75, easeInOut(t)));
-    this.slashArc.scale.setScalar(0.72 + swing * 0.12);
-    this.slashArc.material.opacity = swing * 0.42;
 
-    if (!this.clawDidHit && t >= 0.36) {
+    this.slashArc.position.set(0, 1.02, -0.46);
+    this.slashArc.rotation.set(Math.PI / 2, 0, THREE.MathUtils.lerp(-0.82, 0.82, k));
+    this.slashArc.scale.setScalar(0.72 + swing * 0.13);
+    this.slashArc.material.opacity = swing * 0.44;
+
+    if (!this.clawDidHit && t >= 0.35) {
       this.clawDidHit = true;
       this.performMeleeHit(this.cfg.clawDamage, true);
     }
 
     if (t >= 1) {
       this.slashArc.visible = false;
-      this.state = this.stuckPosition ? 'STUCK' : (this.projectile ? 'THROWN' : 'LOST');
+      this.state = this.stateFromProjectile();
     }
   }
 
@@ -286,7 +454,8 @@ export class TinFangSystem {
     let bestScore = Infinity;
 
     for (const mesh of this.targets.hitMeshes) {
-      if (mesh.userData.disabled) continue;
+      if (mesh.userData.disabled || mesh.userData.combatTarget === this.shotProxy) continue;
+
       mesh.getWorldPosition(this.tmpA);
       const to = this.tmpA.clone().sub(origin);
       const distance = to.length();
@@ -295,9 +464,9 @@ export class TinFangSystem {
       const flat = new THREE.Vector3(to.x, 0, to.z);
       if (flat.lengthSq() < 0.001) continue;
       flat.normalize();
+
       const facing = forward.dot(flat);
       if (facing < 0.42) continue;
-
       if (!this.hasClearMeleeLine(origin, this.tmpA, distance)) continue;
 
       const score = distance - facing * 0.55;
@@ -323,67 +492,158 @@ export class TinFangSystem {
     this.raycaster.set(origin, direction);
     this.raycaster.near = 0.03;
     this.raycaster.far = Math.max(0.03, targetDistance - 0.08);
+
     const hit = this.raycaster.intersectObjects(this.world.cameraObstacles, false)
       .find((entry) => !entry.object.userData.disabled);
+
     return !hit;
   }
 
-  throwFang() {
-    const charge = this.chargeRatio;
-    const speed = THREE.MathUtils.lerp(this.cfg.minThrowSpeed, this.cfg.maxThrowSpeed, charge);
+  computeAimPoint() {
+    this.raycaster.setFromCamera(this.center, this.camera);
+    this.raycaster.near = 0;
+    this.raycaster.far = this.cfg.aimRange;
 
+    const objects = [...this.targets.hitMeshes, ...this.world.cameraObstacles]
+      .filter((object) => !object.userData.disabled && object.userData.combatTarget !== this.shotProxy);
+
+    const hit = this.raycaster.intersectObjects(objects, false)[0];
+    return hit
+      ? hit.point.clone()
+      : this.raycaster.ray.origin.clone().addScaledVector(this.raycaster.ray.direction, this.cfg.aimRange);
+  }
+
+  currentHandWorldPosition() {
     const origin = new THREE.Vector3();
     this.handFang.getWorldPosition(origin);
+    return origin;
+  }
 
-    const direction = new THREE.Vector3();
-    this.camera.getWorldDirection(direction);
-    direction.normalize();
+  updateTrajectoryPreview(forcedAimPoint = null, forcedCharge = null) {
+    if (!this.armRig.visible || !this.handFang.visible) {
+      this.trajectoryLine.visible = false;
+      return;
+    }
+
+    const origin = this.currentHandWorldPosition();
+    const aimPoint = forcedAimPoint?.clone() ?? this.computeAimPoint();
+    const charge = forcedCharge ?? this.chargeRatio;
+    const speed = THREE.MathUtils.lerp(this.cfg.minThrowSpeed, this.cfg.maxThrowSpeed, charge);
+    const velocity = solveBallisticVelocity(
+      origin,
+      aimPoint,
+      speed,
+      this.cfg.projectileGravity
+    );
+
+    const points = [origin.clone()];
+    let previous = origin.clone();
+    const maxTime = Math.min(2.1, Math.max(0.45, origin.distanceTo(aimPoint) / Math.max(1, speed) * 1.45));
+
+    for (let i = 1; i <= 24; i++) {
+      const t = maxTime * (i / 24);
+      const point = origin.clone()
+        .addScaledVector(velocity, t)
+        .add(new THREE.Vector3(0, -0.5 * this.cfg.projectileGravity * t * t, 0));
+
+      const delta = point.clone().sub(previous);
+      const distance = delta.length();
+
+      if (distance > 0.0001) {
+        this.raycaster.set(previous, delta.clone().normalize());
+        this.raycaster.near = 0;
+        this.raycaster.far = distance;
+
+        const objects = [...this.targets.hitMeshes, ...this.world.cameraObstacles]
+          .filter((object) => !object.userData.disabled && object.userData.combatTarget !== this.shotProxy);
+
+        const hit = this.raycaster.intersectObjects(objects, false)[0];
+        if (hit) {
+          points.push(hit.point.clone());
+          break;
+        }
+      }
+
+      points.push(point);
+      previous = point;
+    }
+
+    this.trajectoryGeometry.setFromPoints(points);
+    this.trajectoryLine.visible = true;
+  }
+
+  launchFang(charge, aimPoint) {
+    const origin = this.currentHandWorldPosition();
+    const speed = THREE.MathUtils.lerp(this.cfg.minThrowSpeed, this.cfg.maxThrowSpeed, charge);
+    const velocity = solveBallisticVelocity(
+      origin,
+      aimPoint ?? this.computeAimPoint(),
+      speed,
+      this.cfg.projectileGravity
+    );
 
     const model = buildFangModel();
     model.position.copy(origin);
     this.scene.add(model);
-    orientAlongDirection(model, direction);
+    orientAlongDirection(model, velocity.clone().normalize());
 
-    const trailGeometry = new THREE.BufferGeometry().setFromPoints([
-      origin.clone(), origin.clone(), origin.clone(), origin.clone(), origin.clone(), origin.clone()
-    ]);
+    const hitbox = model.userData.hitbox;
+    hitbox.userData.combatTarget = this.shotProxy;
+    hitbox.userData.hitZone = 'prop';
+    hitbox.userData.disabled = true;
+
+    const trailGeometry = new THREE.BufferGeometry().setFromPoints(
+      Array.from({ length: 7 }, () => origin.clone())
+    );
     const trailMaterial = new THREE.LineBasicMaterial({
       color: 0xffc77d,
       transparent: true,
-      opacity: 0.58
+      opacity: 0.60
     });
     const trail = new THREE.Line(trailGeometry, trailMaterial);
     this.scene.add(trail);
 
     this.projectile = {
       model,
+      hitbox,
+      spinRoot: model.userData.spinRoot,
+      velocity,
+      mode: 'flying',
+      age: 0,
+      spin: 0,
+      bounces: 0,
+      stuckTarget: null,
+      stuckObject: null,
+      stuckNormal: new THREE.Vector3(0, 1, 0),
       trail,
       trailGeometry,
       trailMaterial,
-      trailPoints: Array.from({ length: 6 }, () => origin.clone()),
-      velocity: direction.multiplyScalar(speed),
-      age: 0,
-      spin: 0
+      trailPoints: Array.from({ length: 7 }, () => origin.clone())
     };
 
-    this.state = 'THROWN';
     this.stuckPosition = null;
-    this.handRig.visible = false;
-    this.sheath.visible = true;
-    setFangGlow(this.handFang, 0);
     this.audio?.playFang?.('throw');
     this.onToast?.('TIN FANG THROWN');
   }
 
   updateProjectile(dt) {
-    if (!this.projectile || this.state !== 'THROWN') {
-      if (this.state === 'STUCK' && this.projectile?.model) {
-        const pulse = 1 + Math.sin(performance.now() * 0.008) * 0.025;
-        this.projectile.model.scale.setScalar(pulse);
-      }
-      return;
+    const p = this.projectile;
+    if (!p) return;
+
+    if (p.mode === 'flying') {
+      this.updateFlyingProjectile(dt);
+    } else if (p.mode === 'stuck' || p.mode === 'settled') {
+      this.updateStuckProjectile();
+    } else if (p.mode === 'falling') {
+      this.updateFallingProjectile(dt);
     }
 
+    if (!['RELEASE', 'CLAW'].includes(this.state)) {
+      this.state = this.stateFromProjectile();
+    }
+  }
+
+  updateFlyingProjectile(dt) {
     const p = this.projectile;
     p.age += dt;
 
@@ -397,14 +657,15 @@ export class TinFangSystem {
       const direction = delta.clone().normalize();
       this.raycaster.set(oldPos, direction);
       this.raycaster.near = 0;
-      this.raycaster.far = distance + 0.04;
+      this.raycaster.far = distance + 0.05;
 
-      const objects = [...this.targets.hitMeshes, ...this.world.cameraObstacles];
-      const hit = this.raycaster.intersectObjects(objects, false)
-        .find((entry) => !entry.object.userData.disabled);
+      const objects = [...this.targets.hitMeshes, ...this.world.cameraObstacles]
+        .filter((object) => !object.userData.disabled && object.userData.combatTarget !== this.shotProxy);
+
+      const hit = this.raycaster.intersectObjects(objects, false)[0];
 
       if (hit) {
-        p.model.position.copy(hit.point);
+        p.model.position.copy(hit.point).addScaledVector(direction, -0.035);
         orientAlongDirection(p.model, direction);
         this.stickProjectile(hit, direction);
         return;
@@ -412,13 +673,10 @@ export class TinFangSystem {
     }
 
     p.model.position.copy(newPos);
-    p.spin += dt * 23;
+    p.spin += dt * 25;
     orientAlongDirection(p.model, p.velocity.clone().normalize());
-    p.model.children[0].rotation.z = p.spin;
-
-    p.trailPoints.pop();
-    p.trailPoints.unshift(newPos.clone());
-    p.trailGeometry.setFromPoints(p.trailPoints);
+    p.spinRoot.rotation.z = p.spin;
+    this.updateTrail(newPos);
 
     if (
       p.age >= this.cfg.projectileLifetime ||
@@ -431,35 +689,230 @@ export class TinFangSystem {
     }
   }
 
-  stickProjectile(hit, direction) {
+  stickProjectile(hit, incomingDirection) {
     const p = this.projectile;
     if (!p) return;
 
+    this.removeTrail();
     p.velocity.set(0, 0, 0);
-    p.model.position.copy(hit.point).addScaledVector(direction, 0.03);
-    p.model.scale.setScalar(1);
-    this.stuckPosition = p.model.position.clone();
+    p.mode = 'stuck';
+    p.stuckNormal.copy(worldHitNormal(hit, incomingDirection));
+    this.stuckPosition = hit.point.clone();
 
-    this.scene.remove(p.trail);
-    p.trailGeometry.dispose();
-    p.trailMaterial.dispose();
-    p.trail = null;
-
-    if (hit.object.userData.combatTarget) {
+    const target = hit.object.userData.combatTarget;
+    if (target && target !== this.shotProxy) {
       const result = this.targets.applyTinFangDamage(hit.object, this.cfg.throwBodyDamage);
+
       if (result) {
         result.tinFang = true;
         this.onHit?.(result);
         this.audio?.playFang?.(result.headshot ? 'head' : 'hit');
+
         if (result.headshot) this.onToast?.('TIN FANG HEADSHOT · ELIMINATED');
         else if (result.eliminated) this.onToast?.('TIN FANG · ELIMINATED');
         else this.onToast?.(`TIN FANG HIT · ${result.damage}`);
+
+        if (!result.eliminated && target.alive !== false) {
+          p.stuckTarget = target;
+          p.stuckObject = hit.object;
+          hit.object.updateWorldMatrix(true, false);
+          hit.object.attach(p.model);
+        } else {
+          this.startFalling(
+            p.stuckNormal.clone().multiplyScalar(1.8).add(new THREE.Vector3(0, 1.6, 0))
+          );
+          return;
+        }
       }
     } else {
       this.audio?.playFang?.('hit');
     }
 
-    this.state = 'STUCK';
+    this.registerShootable();
+    this.updateStuckProjectile();
+  }
+
+  updateStuckProjectile() {
+    const p = this.projectile;
+    if (!p) return;
+
+    if (p.stuckTarget && p.stuckTarget.alive === false) {
+      this.startFalling(
+        p.stuckNormal.clone().multiplyScalar(1.5).add(new THREE.Vector3(0, 1.4, 0))
+      );
+      return;
+    }
+
+    p.model.getWorldPosition(this.tmpA);
+    this.stuckPosition = this.tmpA.clone();
+
+    const pulse = 0.03 + (Math.sin(performance.now() * 0.007) + 1) * 0.015;
+    setFangGlow(p.model, pulse);
+  }
+
+  dislodgeFromShot() {
+    const p = this.projectile;
+    if (!p || !['stuck', 'settled'].includes(p.mode)) return;
+
+    const shotDirection = new THREE.Vector3();
+    this.camera.getWorldDirection(shotDirection);
+    const impulse = p.stuckNormal.clone().multiplyScalar(2.7)
+      .addScaledVector(shotDirection, 1.1)
+      .add(new THREE.Vector3(0, 1.7, 0));
+
+    this.startFalling(impulse);
+    this.audio?.playFang?.('hit');
+    this.onToast?.('TIN FANG KNOCKED LOOSE');
+  }
+
+  startFalling(initialVelocity) {
+    const p = this.projectile;
+    if (!p) return;
+
+    this.unregisterShootable();
+
+    p.model.updateWorldMatrix(true, false);
+    this.scene.attach(p.model);
+
+    p.mode = 'falling';
+    p.velocity.copy(initialVelocity);
+    p.bounces = 0;
+    p.stuckTarget = null;
+    p.stuckObject = null;
+    this.stuckPosition = null;
+
+    if (this.state !== 'RELEASE' && this.state !== 'CLAW') this.state = 'FALLING';
+  }
+
+  updateFallingProjectile(dt) {
+    const p = this.projectile;
+    const oldPos = p.model.position.clone();
+
+    p.velocity.y -= this.cfg.fallGravity * dt;
+    const newPos = oldPos.clone().addScaledVector(p.velocity, dt);
+    const delta = newPos.clone().sub(oldPos);
+    const distance = delta.length();
+
+    if (distance > 0.0001) {
+      this.raycaster.set(oldPos, delta.clone().normalize());
+      this.raycaster.near = 0;
+      this.raycaster.far = distance + 0.04;
+
+      const hit = this.raycaster.intersectObjects(this.world.cameraObstacles, false)[0];
+      if (hit) {
+        const normal = worldHitNormal(hit, delta.clone().normalize());
+        p.model.position.copy(hit.point).addScaledVector(normal, 0.045);
+
+        const normalSpeed = p.velocity.dot(normal);
+        const normalComponent = normal.clone().multiplyScalar(normalSpeed);
+        const tangent = p.velocity.clone().sub(normalComponent).multiplyScalar(0.68);
+
+        p.velocity.copy(tangent).addScaledVector(
+          normal,
+          -normalSpeed * this.cfg.bounceRestitution
+        );
+
+        p.bounces += 1;
+        p.spin *= 0.74;
+        this.audio?.playFang?.('hit');
+
+        if (p.bounces >= 3 || p.velocity.length() < 1.0) {
+          this.settleProjectile(normal);
+          return;
+        }
+      } else {
+        p.model.position.copy(newPos);
+      }
+    }
+
+    p.spin += dt * (12 + p.velocity.length() * 1.8);
+    p.spinRoot.rotation.z = p.spin;
+
+    const direction = p.velocity.lengthSq() > 0.001
+      ? p.velocity.clone().normalize()
+      : new THREE.Vector3(0, -1, 0);
+    orientAlongDirection(p.model, direction);
+
+    if (
+      Math.abs(p.model.position.x) > 42 ||
+      Math.abs(p.model.position.z) > 38 ||
+      p.model.position.y < -2
+    ) {
+      this.loseFang();
+    }
+  }
+
+  settleProjectile(normal) {
+    const p = this.projectile;
+    if (!p) return;
+
+    p.mode = 'settled';
+    p.velocity.set(0, 0, 0);
+    p.stuckNormal.copy(normal);
+    p.stuckTarget = null;
+    p.stuckObject = null;
+    p.model.rotation.x += 0.35;
+    this.registerShootable();
+    this.updateStuckProjectile();
+
+    if (this.state !== 'RELEASE' && this.state !== 'CLAW') this.state = 'DROPPED';
+  }
+
+  registerShootable() {
+    const p = this.projectile;
+    if (!p?.hitbox) return;
+    p.hitbox.userData.disabled = false;
+    this.targets.registerHitMeshes([p.hitbox]);
+  }
+
+  unregisterShootable() {
+    const p = this.projectile;
+    if (!p?.hitbox) return;
+    p.hitbox.userData.disabled = true;
+    this.targets.unregisterHitMeshes([p.hitbox]);
+  }
+
+  updateTrail(position) {
+    const p = this.projectile;
+    if (!p?.trail) return;
+
+    p.trailPoints.pop();
+    p.trailPoints.unshift(position.clone());
+    p.trailGeometry.setFromPoints(p.trailPoints);
+  }
+
+  removeTrail() {
+    const p = this.projectile;
+    if (!p?.trail) return;
+
+    this.scene.remove(p.trail);
+    p.trailGeometry.dispose();
+    p.trailMaterial.dispose();
+    p.trail = null;
+  }
+
+  tryRecover() {
+    const p = this.projectile;
+    if (!p || !['stuck', 'settled'].includes(p.mode)) return;
+
+    p.model.getWorldPosition(this.tmpA);
+    this.stuckPosition = this.tmpA.clone();
+
+    const playerPos = this.player.group.position;
+    const horizontalDistance = Math.hypot(
+      playerPos.x - this.stuckPosition.x,
+      playerPos.z - this.stuckPosition.z
+    );
+    const verticalDistance = Math.abs(
+      (playerPos.y + 0.9) - this.stuckPosition.y
+    );
+
+    if (
+      horizontalDistance <= this.cfg.recoveryRadius &&
+      verticalDistance <= this.cfg.recoveryVerticalTolerance
+    ) {
+      this.recover();
+    }
   }
 
   recover() {
@@ -467,7 +920,9 @@ export class TinFangSystem {
     this.stuckPosition = null;
     this.state = 'READY';
     this.sheath.visible = true;
-    this.handRig.visible = false;
+    this.armRig.visible = false;
+    this.handFang.visible = true;
+    this.resetBodyPose();
     this.audio?.playFang?.('recover');
     this.onToast?.('TIN FANG RECOVERED');
   }
@@ -476,53 +931,117 @@ export class TinFangSystem {
     this.removeProjectile();
     this.stuckPosition = null;
     this.state = 'LOST';
+    this.sheath.visible = true;
+    this.armRig.visible = false;
+    this.handFang.visible = true;
+    this.resetBodyPose();
     this.onToast?.('TIN FANG LOST · RETURNS ON RESPAWN');
   }
 
   removeProjectile() {
-    if (!this.projectile) return;
-    if (this.projectile.model) {
-      this.scene.remove(this.projectile.model);
-      disposeGroup(this.projectile.model);
+    const p = this.projectile;
+    if (!p) return;
+
+    this.unregisterShootable();
+    this.removeTrail();
+
+    if (p.model) {
+      p.model.updateWorldMatrix(true, false);
+      this.scene.attach(p.model);
+      this.scene.remove(p.model);
+      disposeGroup(p.model);
     }
-    if (this.projectile.trail) {
-      this.scene.remove(this.projectile.trail);
-      this.projectile.trailGeometry?.dispose();
-      this.projectile.trailMaterial?.dispose();
-    }
+
     this.projectile = null;
   }
 
   finishHandAction() {
-    this.handRig.visible = false;
+    this.armRig.visible = false;
+    this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
+    this.trajectoryLine.visible = false;
     setFangGlow(this.handFang, 0);
+    this.resetBodyPose();
     this.state = 'READY';
     this.holdTime = 0;
   }
 
   cancelHandAction() {
     const wasClaw = this.state === 'CLAW';
-    this.handRig.visible = false;
+    this.armRig.visible = false;
+    this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
+    this.trajectoryLine.visible = false;
     setFangGlow(this.handFang, 0);
-    this.state = wasClaw
-      ? (this.stuckPosition ? 'STUCK' : this.projectile ? 'THROWN' : 'LOST')
-      : 'READY';
+    this.resetBodyPose();
+
+    this.state = wasClaw ? this.stateFromProjectile() : 'READY';
     this.holdTime = 0;
+  }
+
+  stateFromProjectile() {
+    if (!this.projectile) return this.state === 'LOST' ? 'LOST' : 'READY';
+
+    if (this.projectile.mode === 'flying') return 'THROWN';
+    if (this.projectile.mode === 'stuck') return 'STUCK';
+    if (this.projectile.mode === 'falling') return 'FALLING';
+    if (this.projectile.mode === 'settled') return 'DROPPED';
+    return 'THROWN';
+  }
+
+  setArmPose(pose, blend = 1) {
+    this.armRig.rotation.set(
+      pose.shoulder[0] * blend,
+      pose.shoulder[1] * blend,
+      pose.shoulder[2] * blend
+    );
+    this.elbow.rotation.set(
+      pose.elbow[0] * blend,
+      pose.elbow[1] * blend,
+      pose.elbow[2] * blend
+    );
+    this.handRoot.rotation.set(
+      pose.hand[0] * blend,
+      pose.hand[1] * blend,
+      pose.hand[2] * blend
+    );
+  }
+
+  dampArmPose(pose, lambda, dt) {
+    this.armRig.rotation.x = THREE.MathUtils.damp(this.armRig.rotation.x, pose.shoulder[0], lambda, dt);
+    this.armRig.rotation.y = THREE.MathUtils.damp(this.armRig.rotation.y, pose.shoulder[1], lambda, dt);
+    this.armRig.rotation.z = THREE.MathUtils.damp(this.armRig.rotation.z, pose.shoulder[2], lambda, dt);
+
+    this.elbow.rotation.x = THREE.MathUtils.damp(this.elbow.rotation.x, pose.elbow[0], lambda, dt);
+    this.elbow.rotation.y = THREE.MathUtils.damp(this.elbow.rotation.y, pose.elbow[1], lambda, dt);
+    this.elbow.rotation.z = THREE.MathUtils.damp(this.elbow.rotation.z, pose.elbow[2], lambda, dt);
+
+    this.handRoot.rotation.x = THREE.MathUtils.damp(this.handRoot.rotation.x, pose.hand[0], lambda, dt);
+    this.handRoot.rotation.y = THREE.MathUtils.damp(this.handRoot.rotation.y, pose.hand[1], lambda, dt);
+    this.handRoot.rotation.z = THREE.MathUtils.damp(this.handRoot.rotation.z, pose.hand[2], lambda, dt);
+  }
+
+  resetBodyPose() {
+    this.player.body.rotation.x = 0;
+    this.player.body.rotation.y = 0;
+    this.player.body.rotation.z = 0;
   }
 
   emitState() {
     let distance = null;
     let bearing = 0;
 
-    if (this.stuckPosition) {
+    if (this.projectile && ['stuck', 'settled'].includes(this.projectile.mode)) {
+      this.projectile.model.getWorldPosition(this.tmpA);
+      this.stuckPosition = this.tmpA.clone();
+
       distance = Math.hypot(
         this.player.group.position.x - this.stuckPosition.x,
         this.player.group.position.z - this.stuckPosition.z
       );
+
       const dx = this.stuckPosition.x - this.player.group.position.x;
       const dz = this.stuckPosition.z - this.player.group.position.z;
       const worldAngle = Math.atan2(dx, -dz);
@@ -535,6 +1054,7 @@ export class TinFangSystem {
       charge: this.chargeRatio,
       hasFang: this.hasFang,
       blocksWeapons: this.blocksWeapons,
+      aiming: this.aiming,
       distance,
       bearing
     });
@@ -548,19 +1068,19 @@ function buildFangModel() {
 
   const bladeMat = new THREE.MeshStandardMaterial({
     color: 0xdce8ee,
-    roughness: 0.3,
-    metalness: 0.7,
+    roughness: 0.28,
+    metalness: 0.72,
     emissive: 0x000000
   });
   const edgeMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
-    roughness: 0.2,
-    metalness: 0.8,
+    roughness: 0.20,
+    metalness: 0.82,
     emissive: 0x000000
   });
   const wrapMat = new THREE.MeshStandardMaterial({
     color: 0x6f4028,
-    roughness: 0.85,
+    roughness: 0.86,
     metalness: 0.02
   });
 
@@ -572,7 +1092,13 @@ function buildFangModel() {
   bladeShape.closePath();
 
   const blade = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(bladeShape, { depth: 0.035, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.01, bevelSegments: 1 }),
+    new THREE.ExtrudeGeometry(bladeShape, {
+      depth: 0.035,
+      bevelEnabled: true,
+      bevelSize: 0.012,
+      bevelThickness: 0.01,
+      bevelSegments: 1
+    }),
     bladeMat
   );
   blade.rotation.x = Math.PI / 2;
@@ -597,24 +1123,47 @@ function buildFangModel() {
   guard.castShadow = true;
   spinRoot.add(guard);
 
+  const hitbox = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 8, 6),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    })
+  );
+  hitbox.position.z = 0.02;
+  hitbox.userData.disabled = true;
+  spinRoot.add(hitbox);
+
+  group.userData.hitbox = hitbox;
+  group.userData.spinRoot = spinRoot;
   group.scale.setScalar(0.78);
   return group;
 }
 
 function buildSheath() {
   const group = new THREE.Group();
+
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(0.16, 0.42, 0.10),
-    new THREE.MeshStandardMaterial({ color: 0x382b24, roughness: 0.88 })
+    new THREE.MeshStandardMaterial({
+      color: 0x382b24,
+      roughness: 0.88
+    })
   );
   body.castShadow = true;
   group.add(body);
+
   const wrap = new THREE.Mesh(
     new THREE.BoxGeometry(0.20, 0.075, 0.12),
-    new THREE.MeshStandardMaterial({ color: 0xb47b4b, roughness: 0.75 })
+    new THREE.MeshStandardMaterial({
+      color: 0xb47b4b,
+      roughness: 0.75
+    })
   );
   wrap.position.y = 0.08;
   group.add(wrap);
+
   return group;
 }
 
@@ -630,17 +1179,53 @@ function buildSlashArc() {
   return new THREE.Mesh(geometry, material);
 }
 
+function solveBallisticVelocity(origin, target, speed, gravity) {
+  const delta = target.clone().sub(origin);
+  const horizontal = new THREE.Vector3(delta.x, 0, delta.z);
+  const x = horizontal.length();
+  const y = delta.y;
+
+  if (x < 0.08) return delta.normalize().multiplyScalar(speed);
+
+  const v2 = speed * speed;
+  const discriminant = v2 * v2 - gravity * (gravity * x * x + 2 * y * v2);
+
+  if (discriminant >= 0) {
+    const tanTheta = (v2 - Math.sqrt(discriminant)) / (gravity * x);
+    const cosTheta = 1 / Math.sqrt(1 + tanTheta * tanTheta);
+    const sinTheta = tanTheta * cosTheta;
+    return horizontal.normalize().multiplyScalar(speed * cosTheta)
+      .add(new THREE.Vector3(0, speed * sinTheta, 0));
+  }
+
+  const direct = delta.normalize().multiplyScalar(speed);
+  const travelTime = Math.max(0.08, delta.length() / Math.max(1, speed));
+  direct.y += 0.5 * gravity * travelTime;
+  return direct;
+}
+
+function worldHitNormal(hit, fallbackDirection) {
+  if (hit.face?.normal) {
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+    return hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
+  }
+  return fallbackDirection.clone().multiplyScalar(-1).normalize();
+}
+
 function setFangGlow(group, strength) {
   group.traverse((child) => {
     if (!child.material?.emissive) return;
-    child.material.emissive.setRGB(strength * 0.9, strength * 0.38, strength * 0.08);
+    child.material.emissive.setRGB(
+      strength * 0.90,
+      strength * 0.38,
+      strength * 0.08
+    );
   });
 }
 
 function orientAlongDirection(object, direction) {
   const dir = direction.clone().normalize();
-  const from = new THREE.Vector3(0, 0, -1);
-  object.quaternion.setFromUnitVectors(from, dir);
+  object.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
 }
 
 function disposeGroup(group) {

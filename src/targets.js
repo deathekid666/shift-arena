@@ -76,6 +76,11 @@ export class TargetRange {
     }
   }
 
+  unregisterHitMeshes(meshes) {
+    const remove = new Set(meshes);
+    this.hitMeshes = this.hitMeshes.filter((mesh) => !remove.has(mesh));
+  }
+
   applyTinFangDamage(mesh, bodyDamage) {
     const target = mesh.userData.combatTarget;
     if (!target) return null;

@@ -59,7 +59,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 008 · TIN FANG · MELEE + CHARGED THROW + RECOVERY</div>
+    <div id="damage-test-hint">BUILD 008.2 · TIN FANG AIMING · PHYSICAL STICK / FALL / BOUNCE</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -103,14 +103,14 @@ root.innerHTML = `
     </div>
 
     <div id="reload-state"></div>
-    <div id="controls">Wheel / 1 / 2 guns · V tap melee · hold V + release throw · 3 armor · E swap · B bot · LMB fire · RMB ADS</div>
+    <div id="controls">Wheel / 1 / 2 guns · V tap melee · hold V aim / release throw · shoot stuck Fang loose · 3 armor · E swap · B bot</div>
     <div id="touch-note">Touch controls will be added in the dedicated mobile-input phase.</div>
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 008</div>
+        <div class="build-tag">BUILD 008.2</div>
         <h1>SHIFT Arena</h1>
-        <p>Tin Fang combat is live. Tap V for a fast melee slash; hold V to draw and charge, then release to throw. Body throws deal 90 damage and a thrown headshot is an instant elimination. Recover the Fang by physically reaching it.</p>
+        <p>Tin Fang aiming is now crosshair-correct and animated. Hold V to enter an over-shoulder throwing pose with a real ballistic trajectory, then release for a timed arm snap and follow-through. Embedded Fangs can be shot loose, fall, bounce and be recovered.</p>
         <label class="bot-toggle">
           <span class="bot-toggle-copy">
             <strong>COMBAT BOT</strong>
@@ -211,13 +211,13 @@ const health = new PlayerHealth({
     weapon?.reset();
     armor?.reset();
     fang?.reset();
-    fang?.reset();
   },
   onRespawn: () => {
     elimination.classList.remove('show');
     crosshair.classList.remove('disabled');
     weapon?.reset();
     armor?.reset();
+    fang?.reset();
   }
 });
 
@@ -322,10 +322,13 @@ function updateFangHud(state) {
   const labels = {
     READY: 'FANG READY',
     PRIMING: 'DRAWING',
-    CHARGING: 'THROW CHARGING',
+    AIMING: 'FANG AIM',
+    RELEASE: 'THROW',
     SLASH: 'MELEE',
     THROWN: 'FANG THROWN',
-    STUCK: 'RECOVER FANG',
+    STUCK: 'FANG EMBEDDED',
+    FALLING: 'FANG FALLING',
+    DROPPED: 'PICK UP FANG',
     LOST: 'FANG LOST',
     CLAW: 'CLAW'
   };
@@ -333,12 +336,16 @@ function updateFangHud(state) {
   fangState.textContent = labels[state.state] ?? state.state;
   fangState.classList.toggle('missing', !state.hasFang);
 
-  const charging = state.state === 'CHARGING';
-  fangCharge.classList.toggle('show', charging);
+  const aiming = state.state === 'AIMING' || state.state === 'RELEASE';
+  fangCharge.classList.toggle('show', aiming);
   fangChargeFill.style.width = `${Math.max(0, Math.min(1, state.charge)) * 100}%`;
-  crosshair.classList.toggle('fang-charging', charging);
+  crosshair.classList.toggle('fang-charging', aiming);
+  crosshair.classList.toggle('fang-aiming', aiming);
 
-  const showMarker = state.state === 'STUCK' && Number.isFinite(state.distance);
+  const showMarker =
+    (state.state === 'STUCK' || state.state === 'DROPPED') &&
+    Number.isFinite(state.distance);
+
   fangMarker.classList.toggle('show', showMarker);
   if (showMarker) {
     fangMarkerArrow.style.transform = `rotate(${state.bearing}deg)`;
@@ -446,12 +453,13 @@ function loop(now) {
     player.update(dt, thirdCam.yaw, combatFacing);
     weapon.updateSelection();
 
+    const fangAiming = fang.aiming;
     thirdCam.update(dt, {
-      aiming: weapon.aiming,
-      adsFov: weapon.adsFov,
-      adsDistance: weapon.adsDistance,
-      adsShoulderOffset: weapon.adsShoulderOffset,
-      scoped: weapon.scoped
+      aiming: fangAiming || weapon.aiming,
+      adsFov: fangAiming ? fang.cfg.aimFov : weapon.adsFov,
+      adsDistance: fangAiming ? fang.cfg.aimDistance : weapon.adsDistance,
+      adsShoulderOffset: fangAiming ? fang.cfg.aimShoulderOffset : weapon.adsShoulderOffset,
+      scoped: !fangAiming && weapon.scoped
     });
 
     fang.update(dt, !armor.using);
@@ -474,10 +482,11 @@ function loop(now) {
   player.group.visible = health.alive && !weapon.scoped;
   renderer.render(scene, camera);
 
-  const scoped = health.alive && weapon.scoped;
+  const fangAiming = health.alive && fang.aiming;
+  const scoped = health.alive && !fangAiming && weapon.scoped;
   crosshair.dataset.type = weapon.reticleType;
   crosshair.style.setProperty('--gap', `${weapon.crosshairGap.toFixed(1)}px`);
-  crosshair.classList.toggle('ads', health.alive && weapon.aiming);
+  crosshair.classList.toggle('ads', health.alive && (weapon.aiming || fangAiming));
   crosshair.classList.toggle('scoped-hidden', scoped);
   scopeOverlay.classList.toggle('show', scoped);
   scopeOverlay.classList.toggle('unstable', scoped && weapon.scopeUnstable);
@@ -486,9 +495,11 @@ function loop(now) {
     ? `RELOADING · ${Math.round(weapon.reloadProgress * 100)}%`
     : armor?.using
       ? `APPLYING SHELL ARMOR · ${Math.round(armor.progress * 100)}%`
-      : fang?.state === 'CHARGING'
-        ? `TIN FANG THROW · ${Math.round(fang.chargeRatio * 100)}%`
-        : '';
+      : fang?.state === 'AIMING'
+        ? `TIN FANG AIM · ${Math.round(fang.chargeRatio * 100)}%`
+        : fang?.state === 'RELEASE'
+          ? 'TIN FANG THROW'
+          : '';
 
   botState.textContent = bot.enabled ? bot.state : 'OFF';
   botHealth.textContent = bot.enabled ? String(Math.round(bot.health)) : '—';

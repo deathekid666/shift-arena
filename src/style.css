@@ -1213,3 +1213,42 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
     display: none;
   }
 }
+
+
+/* Build 008.2 — dedicated Tin Fang aim presentation */
+#crosshair.fang-aiming {
+  --gap: 10px !important;
+}
+#crosshair.fang-aiming .arm {
+  width: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255,214,159,.96);
+  box-shadow: 0 0 9px rgba(255,176,86,.38);
+}
+#crosshair.fang-aiming .arm.top,
+#crosshair.fang-aiming .arm.bottom {
+  width: 2px;
+  height: 10px;
+}
+#crosshair.fang-aiming .reticle-ring {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(255,211,154,.58);
+  border-radius: 50%;
+}
+#crosshair.fang-aiming .reticle-dot {
+  width: 4px;
+  height: 4px;
+  background: #ffe0b2;
+  box-shadow: 0 0 12px rgba(255,178,91,.72);
+}
+
+#fang-charge.show span::before {
+  content: "AIM · ";
+  color: #ffe1b6;
+}
+.fang-action b:not(.missing) {
+  text-shadow: 0 0 8px rgba(224,153,75,.18);
+}
