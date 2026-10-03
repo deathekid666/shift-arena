@@ -27,7 +27,7 @@ export const GAME_CONFIG = {
   },
   weapons: {
     tacticalAR: {
-      slot: 1, name: 'TACTICAL AR', role: 'FAST CLOSE–MID', automatic: true,
+      slot: 1, name: 'TACTICAL AR', role: 'FAST CLOSE–MID', automatic: true, ammoType: 'medium',
       damage: 22, headshotMultiplier: 1.5, fireRate: 7, magazineSize: 30, reloadTime: 2.2,
       range: 90, falloffStart: 30, falloffEnd: 70, minDamageMultiplier: 0.65,
       hipBloom: 0.010, adsBloom: 0.0028, bloomPerShot: 0.0020, bloomDecay: 5.8,
@@ -40,7 +40,7 @@ export const GAME_CONFIG = {
       sound: { pitch: 145, duration: 0.075, noise: 0.55, gain: 0.20 }
     },
     mechanicalAR: {
-      slot: 2, name: 'MECHANICAL AR', role: 'STABLE MID–FAR', automatic: true,
+      slot: 2, name: 'MECHANICAL AR', role: 'STABLE MID–FAR', automatic: true, ammoType: 'medium',
       damage: 30, headshotMultiplier: 1.5, fireRate: 5.8, magazineSize: 20, reloadTime: 2.2,
       range: 105, falloffStart: 40, falloffEnd: 88, minDamageMultiplier: 0.72,
       hipBloom: 0.012, adsBloom: 0.0017, bloomPerShot: 0.0014, bloomDecay: 6.3,
@@ -53,7 +53,7 @@ export const GAME_CONFIG = {
       sound: { pitch: 118, duration: 0.095, noise: 0.48, gain: 0.23 }
     },
     tacticalShotgun: {
-      slot: 3, name: 'TACTICAL SHOTGUN', role: 'FAST CLOSE BURST', automatic: false,
+      slot: 3, name: 'TACTICAL SHOTGUN', role: 'FAST CLOSE BURST', automatic: false, ammoType: 'shells',
       damage: 80, headshotMultiplier: 1.5, fireRate: 1.5, magazineSize: 8, reloadTime: 5.7,
       range: 24, falloffStart: 7, falloffEnd: 18, minDamageMultiplier: 0.22,
       hipBloom: 0.082, adsBloom: 0.058, bloomPerShot: 0.012, bloomDecay: 3.7,
@@ -66,7 +66,7 @@ export const GAME_CONFIG = {
       sound: { pitch: 82, duration: 0.16, noise: 0.88, gain: 0.31 }
     },
     pumpShotgun: {
-      slot: 4, name: 'PUMP SHOTGUN', role: 'HEAVY CLOSE BURST', automatic: false,
+      slot: 4, name: 'PUMP SHOTGUN', role: 'HEAVY CLOSE BURST', automatic: false, ammoType: 'shells',
       damage: 100, headshotMultiplier: 1.5, fireRate: 0.7, magazineSize: 5, reloadTime: 4.4,
       range: 22, falloffStart: 6, falloffEnd: 16, minDamageMultiplier: 0.18,
       hipBloom: 0.068, adsBloom: 0.046, bloomPerShot: 0.010, bloomDecay: 3.0,
@@ -79,7 +79,7 @@ export const GAME_CONFIG = {
       sound: { pitch: 64, duration: 0.22, noise: 1.0, gain: 0.36 }
     },
     marksmanSniper: {
-      slot: 5, name: 'MARKSMAN SNIPER', role: '2-SHOT LONG RANGE', automatic: false,
+      slot: 5, name: 'MARKSMAN SNIPER', role: '2-SHOT LONG RANGE', automatic: false, ammoType: 'heavy',
       damage: 110, headshotMultiplier: 2, fireRate: 0.75, magazineSize: 2, reloadTime: 3.0,
       range: 160, falloffStart: 105, falloffEnd: 155, minDamageMultiplier: 0.90,
       hipBloom: 0.115, adsBloom: 0.00035, bloomPerShot: 0.004, bloomDecay: 2.8,
@@ -92,7 +92,7 @@ export const GAME_CONFIG = {
       sound: { pitch: 52, duration: 0.24, noise: 0.78, gain: 0.37 }
     },
     compactSMG: {
-      slot: 6, name: 'COMPACT SMG', role: 'VERY FAST CLOSE', automatic: true,
+      slot: 6, name: 'COMPACT SMG', role: 'VERY FAST CLOSE', automatic: true, ammoType: 'light',
       damage: 17, headshotMultiplier: 1.5, fireRate: 12, magazineSize: 30, reloadTime: 2.5,
       range: 60, falloffStart: 16, falloffEnd: 40, minDamageMultiplier: 0.42,
       hipBloom: 0.019, adsBloom: 0.0075, bloomPerShot: 0.0036, bloomDecay: 7.8,
@@ -105,7 +105,7 @@ export const GAME_CONFIG = {
       sound: { pitch: 205, duration: 0.045, noise: 0.42, gain: 0.15 }
     },
     longSMG: {
-      slot: 7, name: 'LONG SMG', role: 'PRECISE CLOSE–MID', automatic: true,
+      slot: 7, name: 'LONG SMG', role: 'PRECISE CLOSE–MID', automatic: true, ammoType: 'light',
       damage: 17, headshotMultiplier: 1.5, fireRate: 10.3, magazineSize: 21, reloadTime: 2.05,
       range: 78, falloffStart: 26, falloffEnd: 58, minDamageMultiplier: 0.62,
       hipBloom: 0.012, adsBloom: 0.0035, bloomPerShot: 0.0022, bloomDecay: 7.0,

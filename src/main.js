@@ -7,6 +7,8 @@ import { TargetRange } from './targets.js';
 import { WeaponSystem } from './weapon.js';
 import { PlayerHealth } from './health.js';
 import { CombatBot } from './bot.js';
+import { ShellArmorSystem } from './loadout.js';
+import { PickupSystem } from './pickups.js';
 
 const root = document.querySelector('#app');
 root.innerHTML = `
@@ -28,10 +30,10 @@ root.innerHTML = `
     <div id="damage-pop"></div>
     <div id="player-damage-vignette"></div>
     <div id="damage-direction">▲</div>
-    <div id="shield-break">SHIELD BROKEN</div>
+    <div id="shield-break">ARMOR BROKEN</div>
 
     <div id="player-status">
-      <div class="status-row shield-row"><span>SHIELD</span><b id="shield-value">100</b></div>
+      <div class="status-row shield-row"><span>ARMOR</span><b id="shield-value">100</b></div>
       <div class="status-bar shield-bar"><i id="shield-fill"></i></div>
       <div class="status-row health-row"><span>HP</span><b id="health-value">100</b></div>
       <div class="status-bar health-bar"><i id="health-fill"></i></div>
@@ -42,39 +44,60 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">
-      BUILD 006.1 · WEAPON FEEL PASS · RETICLES + RECOIL + TRUE SNIPER SCOPE
-    </div>
-
+    <div id="damage-test-hint">BUILD 007 · 2-GUN LOADOUT · WORLD PICKUPS · FINITE AMMO · SHELL ARMOR</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
-    <div id="weapon-bar">
-      <div class="weapon-slot active" data-slot="1"><b>1</b><span>TAC AR</span></div>
-      <div class="weapon-slot" data-slot="2"><b>2</b><span>MECH AR</span></div>
-      <div class="weapon-slot" data-slot="3"><b>3</b><span>TAC SG</span></div>
-      <div class="weapon-slot" data-slot="4"><b>4</b><span>PUMP</span></div>
-      <div class="weapon-slot" data-slot="5"><b>5</b><span>SNIPER</span></div>
-      <div class="weapon-slot" data-slot="6"><b>6</b><span>COMPACT</span></div>
-      <div class="weapon-slot" data-slot="7"><b>7</b><span>LONG SMG</span></div>
+    <div id="pickup-prompt">
+      <span id="pickup-key">E</span>
+      <div>
+        <strong id="pickup-title">TACTICAL AR</strong>
+        <small id="pickup-subtitle">MEDIUM AMMO</small>
+      </div>
+      <b id="pickup-action">SWAP ACTIVE SLOT</b>
     </div>
 
-    <div id="weapon-hud">
-      <div id="weapon-name" class="weapon-name">TACTICAL AR</div>
-      <div id="weapon-role" class="weapon-role">FAST CLOSE–MID</div>
-      <div><span id="ammo">30</span><span id="mag-size" class="reserve"> / 30</span></div>
-      <div id="weapon-statline">DMG 22 · 7 RPS</div>
-      <div id="reload-state"></div>
+    <div id="pickup-toast"></div>
+
+    <div id="combat-hotbar">
+      <div class="combat-slot gun-slot active" data-loadout-slot="0">
+        <span class="slot-accent"></span>
+        <span class="slot-key">1</span>
+        <small>PRIMARY</small>
+        <strong id="slot1-name">TACTICAL AR</strong>
+        <b id="slot1-ammo">30 / 90</b>
+      </div>
+      <div class="combat-slot gun-slot" data-loadout-slot="1">
+        <span class="slot-accent"></span>
+        <span class="slot-key">2</span>
+        <small>SECONDARY</small>
+        <strong id="slot2-name">COMPACT SMG</strong>
+        <b id="slot2-ammo">30 / 90</b>
+      </div>
+      <div class="combat-slot utility-slot armor-slot">
+        <span class="slot-key">3</span>
+        <small>SHELL ARMOR</small>
+        <strong>ARMOR PATCH</strong>
+        <b id="armor-count">×2</b>
+        <i id="armor-progress"></i>
+      </div>
+      <div class="combat-slot utility-slot fang-slot">
+        <span class="slot-key">V</span>
+        <small>MELEE</small>
+        <strong>TIN FANG</strong>
+        <b>NEXT BUILD</b>
+      </div>
     </div>
 
-    <div id="controls">1–7 weapons · B bot on/off · WASD move · LMB fire · RMB ADS · R reload · Shift sprint · Ctrl crouch/slide · Space jump</div>
-    <div id="touch-note">Touch device detected. Mobile combat controls will be added in the dedicated mobile-input phase.</div>
+    <div id="reload-state"></div>
+    <div id="controls">1 / 2 guns · E swap · 3 armor · V Tin Fang · B bot · LMB fire · RMB ADS · R reload · WASD move</div>
+    <div id="touch-note">Touch controls will be added in the dedicated mobile-input phase.</div>
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 006.1</div>
+        <div class="build-tag">BUILD 007</div>
         <h1>SHIFT Arena</h1>
-        <p>Weapon-feel rebuild: every class now has its own reticle, recoil pattern, accuracy behavior, camera treatment, handling weight and shot sound. The sniper enters a true scoped view.</p>
+        <p>Two-gun combat loadout. Pick up weapons from the kitchen test line, swap the active gun with E, manage finite ammunition, and restore armor with Shell Armor.</p>
         <label class="bot-toggle">
           <span class="bot-toggle-copy">
             <strong>COMBAT BOT</strong>
@@ -84,7 +107,7 @@ root.innerHTML = `
           <span class="bot-toggle-track"><i></i></span>
           <b id="bot-toggle-label">ON</b>
         </label>
-        <button type="button">ENTER WEAPON FEEL TEST</button>
+        <button type="button">ENTER LOADOUT TEST</button>
       </div>
     </div>
   </div>`;
@@ -123,11 +146,6 @@ const crosshair = document.querySelector('#crosshair');
 const scopeOverlay = document.querySelector('#scope-overlay');
 const hitMarker = document.querySelector('#hit-marker');
 const damagePop = document.querySelector('#damage-pop');
-const ammo = document.querySelector('#ammo');
-const magSize = document.querySelector('#mag-size');
-const weaponName = document.querySelector('#weapon-name');
-const weaponRole = document.querySelector('#weapon-role');
-const weaponStatline = document.querySelector('#weapon-statline');
 const reloadState = document.querySelector('#reload-state');
 const healthValue = document.querySelector('#health-value');
 const shieldValue = document.querySelector('#shield-value');
@@ -143,9 +161,22 @@ const botHealth = document.querySelector('#bot-health');
 const botToggle = document.querySelector('#bot-enabled');
 const botToggleLabel = document.querySelector('#bot-toggle-label');
 const botDebug = document.querySelector('#bot-debug');
-const weaponSlots = [...document.querySelectorAll('.weapon-slot')];
+const pickupPrompt = document.querySelector('#pickup-prompt');
+const pickupKey = document.querySelector('#pickup-key');
+const pickupTitle = document.querySelector('#pickup-title');
+const pickupSubtitle = document.querySelector('#pickup-subtitle');
+const pickupAction = document.querySelector('#pickup-action');
+const pickupToast = document.querySelector('#pickup-toast');
+const gunSlots = [...document.querySelectorAll('.gun-slot')];
+const slot1Name = document.querySelector('#slot1-name');
+const slot1Ammo = document.querySelector('#slot1-ammo');
+const slot2Name = document.querySelector('#slot2-name');
+const slot2Ammo = document.querySelector('#slot2-ammo');
+const armorCount = document.querySelector('#armor-count');
+const armorProgress = document.querySelector('#armor-progress');
 
 let weapon = null;
+let armor = null;
 let bot = null;
 
 const health = new PlayerHealth({
@@ -157,26 +188,42 @@ const health = new PlayerHealth({
     elimination.classList.add('show');
     crosshair.classList.add('disabled');
     weapon?.reset();
+    armor?.reset();
   },
   onRespawn: () => {
     elimination.classList.remove('show');
     crosshair.classList.remove('disabled');
     weapon?.reset();
+    armor?.reset();
   }
 });
 
 bot = new CombatBot({ scene, world, player, playerHealth: health, targets });
 setBotEnabled(botToggle.checked);
-
-botToggle.addEventListener('change', () => {
-  setBotEnabled(botToggle.checked);
-});
+botToggle.addEventListener('change', () => setBotEnabled(botToggle.checked));
 
 weapon = new WeaponSystem({
   scene, camera, cameraRig: thirdCam, player, input, world, targets,
   onFire: () => pulse(crosshair, 'shot'),
   onHit: (result) => showHit(result),
-  onSwitch: updateWeaponHud
+  onSwitch: updateWeaponPresentation,
+  onInventoryChange: updateHotbar
+});
+
+armor = new ShellArmorSystem({
+  input,
+  health,
+  onChange: updateArmorHud
+});
+
+const pickups = new PickupSystem({
+  scene,
+  player,
+  input,
+  weapons: weapon,
+  armor,
+  onPrompt: updatePickupPrompt,
+  onToast: showToast
 });
 
 const start = document.querySelector('#start');
@@ -206,16 +253,48 @@ function setBotEnabled(enabled) {
   botHealth.textContent = enabled ? String(Math.round(bot.health)) : '—';
 }
 
-function updateWeaponHud(info) {
-  if (!weaponName) return;
-  weaponName.textContent = info.name;
-  weaponRole.textContent = info.role;
-  weaponStatline.textContent = `DMG ${info.damage} · ${info.fireRate.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')} RPS`;
-  magSize.textContent = ` / ${info.magazineSize}`;
+function updateWeaponPresentation(info) {
   crosshair.dataset.type = info.reticle;
-  weaponSlots.forEach((slot) => {
-    slot.classList.toggle('active', Number(slot.dataset.slot) === info.slot);
+}
+
+function updateHotbar(state) {
+  if (!state?.slots?.length) return;
+  const nodes = [
+    { name: slot1Name, ammo: slot1Ammo },
+    { name: slot2Name, ammo: slot2Ammo }
+  ];
+
+  state.slots.forEach((slot, index) => {
+    nodes[index].name.textContent = slot.name;
+    nodes[index].ammo.textContent = `${slot.magazine} / ${slot.reserve}`;
+    gunSlots[index].classList.toggle('active', index === state.activeSlot);
+    gunSlots[index].style.setProperty('--accent', colorHex(slot.color));
   });
+}
+
+function updateArmorHud(state) {
+  if (!state) return;
+  armorCount.textContent = `×${state.charges}`;
+  armorProgress.style.width = `${state.using ? state.progress * 100 : 0}%`;
+  document.querySelector('.armor-slot').classList.toggle('using', state.using);
+}
+
+function updatePickupPrompt(info) {
+  pickupPrompt.classList.toggle('show', Boolean(info?.show));
+  if (!info?.show) return;
+  pickupKey.textContent = info.key;
+  pickupTitle.textContent = info.title;
+  pickupSubtitle.textContent = info.subtitle;
+  pickupAction.textContent = info.action;
+}
+
+function showToast(message) {
+  pickupToast.textContent = message;
+  pickupToast.classList.remove('show');
+  void pickupToast.offsetWidth;
+  pickupToast.classList.add('show');
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => pickupToast.classList.remove('show'), 950);
 }
 
 function updateHealthHud(state) {
@@ -270,13 +349,20 @@ function pulse(element, className) {
   pulse.timer = setTimeout(() => element.classList.remove(className), 70);
 }
 
+function colorHex(value) {
+  return `#${Number(value).toString(16).padStart(6, '0')}`;
+}
+
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
 
   if (health.alive) {
-    const combatFacing = input.pointerLocked && (input.mouseDown(2) || input.mouseDown(0));
+    armor.update(dt);
+    weapon.setBlocked(armor.using);
+
+    const combatFacing = input.pointerLocked && !armor.using && (input.mouseDown(2) || input.mouseDown(0));
     player.update(dt, thirdCam.yaw, combatFacing);
     weapon.updateSelection();
 
@@ -289,11 +375,11 @@ function loop(now) {
     });
 
     weapon.update(dt);
+    if (!armor.using) pickups.update(dt);
+    else updatePickupPrompt({ show: false });
   }
 
-  if (input.consume('toggleBot')) {
-    setBotEnabled(!bot.enabled);
-  }
+  if (input.consume('toggleBot')) setBotEnabled(!bot.enabled);
 
   health.update(dt);
   targets.update(dt);
@@ -307,14 +393,14 @@ function loop(now) {
   crosshair.style.setProperty('--gap', `${weapon.crosshairGap.toFixed(1)}px`);
   crosshair.classList.toggle('ads', health.alive && weapon.aiming);
   crosshair.classList.toggle('scoped-hidden', scoped);
-
   scopeOverlay.classList.toggle('show', scoped);
   scopeOverlay.classList.toggle('unstable', scoped && weapon.scopeUnstable);
 
-  ammo.textContent = String(weapon.ammo);
   reloadState.textContent = health.alive && weapon.isReloading
-    ? `RELOADING ${Math.round(weapon.reloadProgress * 100)}%`
-    : '';
+    ? `RELOADING · ${Math.round(weapon.reloadProgress * 100)}%`
+    : armor?.using
+      ? `APPLYING SHELL ARMOR · ${Math.round(armor.progress * 100)}%`
+      : '';
 
   botState.textContent = bot.enabled ? bot.state : 'OFF';
   botHealth.textContent = bot.enabled ? String(Math.round(bot.health)) : '—';
@@ -327,7 +413,7 @@ function loop(now) {
     frames = 0;
     fpsTimer = 0;
     const speed = Math.hypot(player.velocity.x, player.velocity.z);
-    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${!health.alive ? 'ELIMINATED' : weapon.scoped ? 'SCOPED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
+    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${!health.alive ? 'ELIMINATED' : armor?.using ? 'ARMOR' : weapon.scoped ? 'SCOPED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
   }
 }
 requestAnimationFrame(loop);

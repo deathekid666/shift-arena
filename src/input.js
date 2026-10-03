@@ -7,14 +7,12 @@ const ACTION_CODES = {
   sprint: ['ShiftLeft', 'ShiftRight'],
   crouch: ['ControlLeft', 'ControlRight'],
   reload: ['KeyR'],
+  interact: ['KeyE'],
+  armor: ['Digit3'],
+  melee: ['KeyV'],
   toggleBot: ['KeyB'],
   slot1: ['Digit1'],
-  slot2: ['Digit2'],
-  slot3: ['Digit3'],
-  slot4: ['Digit4'],
-  slot5: ['Digit5'],
-  slot6: ['Digit6'],
-  slot7: ['Digit7']
+  slot2: ['Digit2']
 };
 
 export class InputController {

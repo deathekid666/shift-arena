@@ -693,3 +693,259 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 #bot-debug.bot-off b {
   color: #8998a5 !important;
 }
+
+
+/* Build 007 — compact Fortnite-inspired combat hotbar */
+#combat-hotbar {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+.combat-slot {
+  --accent: #6fa8d8;
+  position: relative;
+  width: 112px;
+  height: 82px;
+  padding: 22px 9px 8px;
+  overflow: hidden;
+  border: 2px solid rgba(215,232,246,.34);
+  border-radius: 5px;
+  background:
+    linear-gradient(145deg, rgba(40,58,78,.95), rgba(13,22,34,.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.05),
+    0 4px 14px rgba(0,0,0,.28);
+  transition: transform 110ms ease, border-color 110ms ease, filter 110ms ease;
+}
+.combat-slot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(130deg, rgba(255,255,255,.07), transparent 45%);
+  pointer-events: none;
+}
+.combat-slot .slot-accent {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 8px;
+  background: var(--accent);
+  box-shadow: 0 1px 8px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.combat-slot .slot-key {
+  position: absolute;
+  top: 11px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  min-width: 21px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(4,9,15,.72);
+  border: 1px solid rgba(255,255,255,.24);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+}
+.combat-slot small {
+  position: absolute;
+  top: 13px;
+  right: 8px;
+  color: #9eb1c2;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+.combat-slot strong {
+  position: absolute;
+  left: 9px;
+  right: 7px;
+  bottom: 25px;
+  overflow: hidden;
+  color: #f3f8fc;
+  font-size: 10px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: .025em;
+}
+.combat-slot > b {
+  position: absolute;
+  left: 9px;
+  bottom: 7px;
+  color: #d7e2eb;
+  font-size: 13px;
+  line-height: 1;
+}
+.gun-slot.active {
+  z-index: 2;
+  transform: translateY(-6px) scale(1.045);
+  border-color: #ffffff;
+  filter: brightness(1.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.32),
+    0 0 0 2px rgba(86,170,235,.38),
+    0 7px 20px rgba(0,0,0,.38);
+}
+.utility-slot {
+  width: 100px;
+  background: linear-gradient(145deg, rgba(45,55,72,.95), rgba(14,22,31,.97));
+}
+.armor-slot {
+  --accent: #68b9ee;
+}
+.armor-slot.using {
+  border-color: #bce8ff;
+  filter: brightness(1.12);
+}
+#armor-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: 4px;
+  background: #7fd0ff;
+  box-shadow: 0 0 10px rgba(93,197,255,.75);
+}
+.fang-slot {
+  --accent: #e69b4c;
+  opacity: .82;
+}
+.fang-slot::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 8px;
+  background: var(--accent);
+}
+.fang-slot > b {
+  color: #e9ad6a;
+  font-size: 8px;
+  letter-spacing: .08em;
+}
+
+#pickup-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 132px;
+  transform: translate(-50%, 8px);
+  min-width: 330px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 6px;
+  background: rgba(8,15,24,.88);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+#pickup-prompt.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+#pickup-key {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  background: #edf6fc;
+  color: #111d28;
+  font-size: 13px;
+  font-weight: 1000;
+}
+#pickup-prompt div {
+  display: grid;
+  gap: 2px;
+}
+#pickup-title {
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+#pickup-subtitle {
+  color: #90a7b9;
+  font-size: 9px;
+  font-weight: 700;
+}
+#pickup-action {
+  color: #c9d7e2;
+  font-size: 8px;
+  letter-spacing: .06em;
+}
+#pickup-toast {
+  position: absolute;
+  left: 50%;
+  top: 19%;
+  transform: translate(-50%, -6px);
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(8,15,24,.78);
+  border: 1px solid rgba(255,255,255,.13);
+  color: #eaf5fc;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  opacity: 0;
+}
+#pickup-toast.show {
+  animation: pickupToast .95s ease both;
+}
+@keyframes pickupToast {
+  0% { opacity: 0; transform: translate(-50%, -6px); }
+  16% { opacity: 1; transform: translate(-50%, 0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -5px); }
+}
+
+#reload-state {
+  position: absolute;
+  right: 18px;
+  bottom: 108px;
+  min-height: 14px;
+  color: #ffd181;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+#weapon-bar,
+#weapon-hud {
+  display: none !important;
+}
+
+@media (max-width: 980px) {
+  #combat-hotbar {
+    right: 10px;
+    gap: 4px;
+  }
+  .combat-slot {
+    width: 92px;
+    height: 72px;
+  }
+  .utility-slot {
+    width: 82px;
+  }
+  .combat-slot strong {
+    font-size: 8px;
+  }
+  #controls {
+    display: none;
+  }
+}
+@media (pointer: coarse) {
+  #combat-hotbar,
+  #pickup-prompt,
+  #reload-state {
+    display: none;
+  }
+}

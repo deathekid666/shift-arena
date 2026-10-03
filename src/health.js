@@ -82,6 +82,15 @@ export class PlayerHealth {
     return result;
   }
 
+  restoreArmor(amount) {
+    if (!this.alive || amount <= 0) return 0;
+    const before = this.shield;
+    this.shield = Math.min(this.cfg.maxShield, this.shield + amount);
+    const restored = this.shield - before;
+    if (restored > 0) this.emitChange();
+    return restored;
+  }
+
   eliminate() {
     if (!this.alive) return;
     this.alive = false;

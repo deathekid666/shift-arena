@@ -3,7 +3,7 @@ import { GAME_CONFIG, WEAPON_ORDER } from './config.js';
 import { WeaponAudio } from './audio.js';
 
 export class WeaponSystem {
-  constructor({ scene, camera, cameraRig, player, input, world, targets, onHit, onFire, onSwitch }) {
+  constructor({ scene, camera, cameraRig, player, input, world, targets, onHit, onFire, onSwitch, onInventoryChange }) {
     this.scene = scene;
     this.camera = camera;
     this.cameraRig = cameraRig;
@@ -14,12 +14,18 @@ export class WeaponSystem {
     this.onHit = onHit;
     this.onFire = onFire;
     this.onSwitch = onSwitch;
+    this.onInventoryChange = onInventoryChange;
 
     this.audio = new WeaponAudio();
     this.cameraRay = new THREE.Raycaster();
     this.muzzleRay = new THREE.Raycaster();
     this.center = new THREE.Vector2(0, 0);
-    this.activeIndex = 0;
+    this.activeSlot = 0;
+    this.loadout = ['tacticalAR', 'compactSMG'];
+    this.blocked = false;
+    this.ammoPool = { light: 90, medium: 90, shells: 24, heavy: 8 };
+    this.ammoCaps = { light: 180, medium: 180, shells: 48, heavy: 20 };
+    this.startingAmmo = { ...this.ammoPool };
 
     this.entries = WEAPON_ORDER.map((key) => {
       const cfg = GAME_CONFIG.weapons[key];
@@ -39,25 +45,28 @@ export class WeaponSystem {
       return { key, cfg, model, state };
     });
 
-    this.entries.forEach((entry, index) => {
-      entry.model.group.visible = index === this.activeIndex;
+    this.catalog = new Map(this.entries.map((entry) => [entry.key, entry]));
+    this.entries.forEach((entry) => {
+      entry.model.group.visible = entry.key === this.loadout[this.activeSlot];
       this.player.group.add(entry.model.group);
     });
 
     this.emitSwitch();
+    this.emitInventory();
   }
 
   unlockAudio() {
     this.audio.unlock();
   }
 
-  get active() { return this.entries[this.activeIndex]; }
+  get active() { return this.catalog.get(this.loadout[this.activeSlot]); }
   get cfg() { return this.active.cfg; }
   get state() { return this.active.state; }
   get name() { return this.cfg.name; }
   get role() { return this.cfg.role; }
   get ammo() { return this.state.ammo; }
   get magazineSize() { return this.cfg.magazineSize; }
+  get reserveAmmo() { return this.ammoPool[this.cfg.ammoType] ?? 0; }
   get isReloading() { return this.state.isReloading; }
   get reticleType() { return this.cfg.reticle; }
   get scoped() { return Boolean(this.cfg.scope && this.aiming); }
@@ -71,12 +80,45 @@ export class WeaponSystem {
   }
 
   get aiming() {
-    return this.input.pointerLocked && this.input.mouseDown(2);
+    return !this.blocked && this.input.pointerLocked && this.input.mouseDown(2);
   }
 
   get firing() {
-    if (!this.input.pointerLocked) return false;
+    if (this.blocked || !this.input.pointerLocked) return false;
     return this.cfg.automatic ? this.input.mouseDown(0) : this.input.consumeMouse(0);
+  }
+
+  setBlocked(blocked) {
+    this.blocked = Boolean(blocked);
+  }
+
+  getConfig(key) {
+    return GAME_CONFIG.weapons[key] ?? null;
+  }
+
+  getEntry(key) {
+    return this.catalog.get(key) ?? null;
+  }
+
+  getLoadoutState() {
+    return {
+      activeSlot: this.activeSlot,
+      slots: this.loadout.map((key, index) => {
+        const entry = this.catalog.get(key);
+        return {
+          slot: index + 1,
+          key,
+          name: entry.cfg.name,
+          role: entry.cfg.role,
+          ammoType: entry.cfg.ammoType,
+          magazine: entry.state.ammo,
+          magazineSize: entry.cfg.magazineSize,
+          reserve: this.ammoPool[entry.cfg.ammoType] ?? 0,
+          color: entry.cfg.color
+        };
+      }),
+      ammoPool: { ...this.ammoPool }
+    };
   }
 
   get scopeUnstable() {
@@ -91,7 +133,7 @@ export class WeaponSystem {
   }
 
   updateSelection() {
-    this.processWeaponSwitch();
+    if (!this.blocked) this.processWeaponSwitch();
   }
 
   update(dt) {
@@ -116,10 +158,15 @@ export class WeaponSystem {
     if (state.isReloading) {
       state.reloadTimer -= dt;
       if (state.reloadTimer <= 0) {
-        state.ammo = cfg.magazineSize;
+        const needed = cfg.magazineSize - state.ammo;
+        const available = this.ammoPool[cfg.ammoType] ?? 0;
+        const loaded = Math.min(needed, available);
+        state.ammo += loaded;
+        this.ammoPool[cfg.ammoType] = available - loaded;
         state.isReloading = false;
+        this.emitInventory();
       }
-    } else if (this.input.consume('reload') && state.ammo < cfg.magazineSize) {
+    } else if (!this.blocked && this.input.consume('reload') && state.ammo < cfg.magazineSize) {
       this.beginReload();
     }
 
@@ -181,50 +228,105 @@ export class WeaponSystem {
   }
 
   processWeaponSwitch() {
-    for (let index = 0; index < this.entries.length; index++) {
-      if (this.input.consume(`slot${index + 1}`)) {
-        this.switchTo(index);
-        return;
-      }
+    if (this.input.consume('slot1')) {
+      this.equipSlot(0);
+      return;
+    }
+    if (this.input.consume('slot2')) {
+      this.equipSlot(1);
     }
   }
 
-  switchTo(index) {
-    if (index < 0 || index >= this.entries.length || index === this.activeIndex) return;
-
+  equipSlot(index) {
+    if (index < 0 || index > 1 || index === this.activeSlot) return;
     const previous = this.active;
     previous.model.group.visible = false;
     previous.model.muzzleFlash.visible = false;
     previous.state.isReloading = false;
     previous.state.reloadTimer = 0;
 
-    this.activeIndex = index;
+    this.activeSlot = index;
     this.active.model.group.visible = true;
     this.emitSwitch();
+    this.emitInventory();
+  }
+
+  swapActiveWithPickup(weaponKey, magazineAmmo) {
+    if (!this.catalog.has(weaponKey)) return { accepted: false, reason: 'UNKNOWN' };
+
+    const otherSlot = this.activeSlot === 0 ? 1 : 0;
+    if (this.loadout[otherSlot] === weaponKey) {
+      this.equipSlot(otherSlot);
+      return { accepted: false, reason: 'ALREADY EQUIPPED' };
+    }
+
+    const oldKey = this.loadout[this.activeSlot];
+    const oldEntry = this.catalog.get(oldKey);
+    const newEntry = this.catalog.get(weaponKey);
+    const dropped = { weaponKey: oldKey, magazineAmmo: oldEntry.state.ammo };
+
+    oldEntry.model.group.visible = false;
+    oldEntry.model.muzzleFlash.visible = false;
+    oldEntry.state.isReloading = false;
+    oldEntry.state.reloadTimer = 0;
+
+    this.loadout[this.activeSlot] = weaponKey;
+    newEntry.state.ammo = THREE.MathUtils.clamp(
+      Number.isFinite(magazineAmmo) ? magazineAmmo : newEntry.cfg.magazineSize,
+      0,
+      newEntry.cfg.magazineSize
+    );
+    newEntry.state.isReloading = false;
+    newEntry.state.reloadTimer = 0;
+    newEntry.model.group.visible = true;
+
+    this.emitSwitch();
+    this.emitInventory();
+    return { accepted: true, dropped };
+  }
+
+  addAmmo(type, amount) {
+    if (!(type in this.ammoPool) || amount <= 0) return 0;
+    const before = this.ammoPool[type];
+    this.ammoPool[type] = Math.min(this.ammoCaps[type], before + amount);
+    const added = this.ammoPool[type] - before;
+    if (added > 0) this.emitInventory();
+    return added;
+  }
+
+  emitInventory() {
+    this.onInventoryChange?.(this.getLoadoutState());
   }
 
   emitSwitch() {
     this.onSwitch?.({
-      index: this.activeIndex,
-      slot: this.cfg.slot,
+      index: this.activeSlot,
+      slot: this.activeSlot + 1,
       name: this.cfg.name,
       role: this.cfg.role,
       damage: this.cfg.damage,
       magazineSize: this.cfg.magazineSize,
       fireRate: this.cfg.fireRate,
       reticle: this.cfg.reticle,
-      scoped: Boolean(this.cfg.scope)
+      scoped: Boolean(this.cfg.scope),
+      ammoType: this.cfg.ammoType
     });
   }
 
   beginReload() {
     const state = this.state;
-    if (state.isReloading || state.ammo === this.cfg.magazineSize) return;
+    if (
+      this.blocked ||
+      state.isReloading ||
+      state.ammo === this.cfg.magazineSize ||
+      (this.ammoPool[this.cfg.ammoType] ?? 0) <= 0
+    ) return;
     state.isReloading = true;
     state.reloadTimer = this.cfg.reloadTime;
   }
 
   reset() {
+    this.ammoPool = { ...this.startingAmmo };
     for (const entry of this.entries) {
       entry.state.ammo = entry.cfg.magazineSize;
       entry.state.fireCooldown = 0;
@@ -237,6 +339,7 @@ export class WeaponSystem {
       entry.state.sinceShot = 999;
       entry.model.muzzleFlash.visible = false;
     }
+    this.emitInventory();
   }
 
   fire() {
@@ -245,6 +348,7 @@ export class WeaponSystem {
     const spread = this.currentSpread();
 
     state.ammo -= 1;
+    this.emitInventory();
     state.fireCooldown = 1 / cfg.fireRate;
     state.flashTimer = cfg.pellets > 1 ? 0.07 : 0.045;
     state.sinceShot = 0;

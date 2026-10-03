@@ -1,43 +1,33 @@
-# SHIFT Arena — Build 006
+# SHIFT Arena — Build 007
 
 Browser-first third-person shooter prototype.
 
-## Current scope
-- Build 001 movement + vertical obstacle collision
-- Build 002 TPS aiming
-- Build 003 HP / Shield / elimination / respawn
-- Build 004 first combat bot
-- Build 005 giant-kitchen graybox
-- Build 006 full seven-weapon test loadout
-
-## Weapon philosophy
-Build 006 uses a single fixed baseline tier so we can compare weapon roles without adding rarity yet. Damage/fire-rate/magazine baselines are modeled on Fortnite-style weapon archetypes, while keeping SHIFT Arena's custom weapon names and role split.
-
-1. Tactical AR — fast, accurate close-mid AR
-2. Mechanical AR — slower, harder-hitting, more stable long-range AR
-3. Tactical Shotgun — faster follow-up shotgun
-4. Pump Shotgun — stronger burst, slower follow-up
-5. Marksman Sniper — 110 body damage and exactly 2 shots before reload
-6. Compact SMG — very fast close-range pressure
-7. Long SMG — slower, tighter and more useful at distance
+## Build 007 — compact cockroach combat loadout
+- Two firearm slots only.
+- Slot 1 and Slot 2 can each hold any current firearm.
+- Seven world weapon pickups are available in the kitchen test area.
+- E swaps the currently selected gun with the world gun.
+- The dropped gun stays in the world and preserves its magazine ammo.
+- Finite reserve ammunition replaces infinite ammo.
+- Ammo types: Light (SMGs), Medium (ARs), Shells (shotguns), Heavy (sniper).
+- Ammo boxes auto-pickup and respawn for testing.
+- Dedicated Shell Armor slot on key 3.
+- Shell Armor has two charges, takes 1.6 seconds to apply, restores 50 armor, and blocks firing while applying.
+- Armor pickups can restore a charge.
+- Dedicated Tin Fang hotbar slot is reserved on V; full melee/throw/retrieval behavior is Build 008.
+- Combat Bot ON/OFF remains available with B and on the start screen.
+- Weapon-specific reticles, recoil, scope, movement accuracy, sway, bob and audio from Build 006.1 are preserved.
 
 ## Controls
-- 1–7: switch weapons
+- 1 / 2: firearm slots
+- E: swap nearby weapon
+- 3: apply Shell Armor
+- V: Tin Fang slot (full behavior in Build 008)
+- B: bot on/off
+- R: reload
+- LMB: fire
+- RMB: ADS / sniper scope
 - WASD: move
-- Mouse: look
 - Shift: sprint
 - Ctrl: crouch / slide
 - Space: jump
-- Left mouse: fire
-- Right mouse: ADS
-- R: reload
-- Esc: release pointer
-
-No pickups or inventory limits yet. Build 007 will turn this test loadout into a real pickup/inventory system.
-
-
-## Test controls added
-- Combat Bot can be switched ON/OFF before entering the arena.
-- Press B during play to toggle the bot instantly.
-- OFF disables bot AI, shooting, visibility and hit registration.
-- Turning it back ON respawns it at full health.
