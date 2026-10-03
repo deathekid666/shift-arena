@@ -53,7 +53,8 @@ export class WeaponSystem {
       forward: new THREE.Vector3(),
       weaponQuaternion: new THREE.Quaternion(),
       rightHandIK: false,
-      rightHandOrient: false
+      rightHandOrient: false,
+      leftHandLambda: 30
     };
 
     this.entries = WEAPON_ORDER.map((key) => {
@@ -123,6 +124,7 @@ export class WeaponSystem {
 
   get combatPoseActive() {
     if (this.blocked || !this.input.pointerLocked) return false;
+    if (this.cfg.masterHandCarry) return true;
     const firingNow = this.input.mouseDown(0);
     const recentShot = this.state.sinceShot < 0.30;
     return this.aiming || firingNow || recentShot;
@@ -332,6 +334,55 @@ export class WeaponSystem {
       -0.020,
       0.020
     );
+
+    // Standard shooter hierarchy for long weapons:
+    // Right hand is the FK/master hand. The weapon is rigid to that hand,
+    // while only the left/support hand is solved to the foregrip.
+    if (cfg.masterHandCarry && this.handMounted) {
+      const handWorld =
+        this.player.getHandWorldPosition?.(
+          'right',
+          this.tmpHandWorld
+        ) ?? null;
+
+      if (handWorld) {
+        this.tmpGripLocal.copy(handWorld);
+        this.player.group.worldToLocal(this.tmpGripLocal);
+
+        // Fixed weapon orientation relative to the character.
+        // No hand-relative bob/sway/lag is allowed here because that would
+        // separate the pistol grip from the master hand.
+        this.tmpDesiredLocalQ.setFromEuler(
+          new THREE.Euler(
+            cfg.carryPitch ?? -0.11,
+            cfg.carryYaw ?? 0,
+            cfg.carryRoll ?? -0.055,
+            'YXZ'
+          )
+        );
+
+        this.tmpGripOffset
+          .copy(modelData.rightGrip.position)
+          .multiply(model.scale)
+          .applyQuaternion(this.tmpDesiredLocalQ);
+
+        const targetPosition = this.tmpGripLocal
+          .clone()
+          .sub(this.tmpGripOffset);
+
+        // Rigid master-hand mount: zero damped chase, zero feedback jitter.
+        model.position.copy(targetPosition);
+        model.quaternion.copy(this.tmpDesiredLocalQ);
+
+        model.updateWorldMatrix(true, true);
+        this.updateGripPose(
+          false,
+          false,
+          cfg.supportHandIKLambda ?? 150
+        );
+        return;
+      }
+    }
 
     if (shoulderPose && this.handMounted) {
       // Shooter architecture: crosshair/camera owns the weapon transform.
@@ -632,7 +683,11 @@ export class WeaponSystem {
     this.updateGripPose(false, false);
   }
 
-  updateGripPose(rightHandIK = false, rightHandOrient = false) {
+  updateGripPose(
+    rightHandIK = false,
+    rightHandOrient = false,
+    leftHandLambda = 30
+  ) {
     const model = this.active.model;
     model.rightGrip.getWorldPosition(this.gripPose.rightGrip);
     model.leftGrip.getWorldPosition(this.gripPose.leftGrip);
@@ -650,6 +705,7 @@ export class WeaponSystem {
       !this.blocked;
     this.gripPose.rightHandIK = Boolean(rightHandIK);
     this.gripPose.rightHandOrient = Boolean(rightHandOrient);
+    this.gripPose.leftHandLambda = leftHandLambda;
   }
 
   getGripPose() {

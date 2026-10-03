@@ -1423,7 +1423,7 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     bones.leftHand,
     gripPose.leftGrip,
     IK_TMP.pole,
-    30,
+    gripPose.leftHandLambda ?? 30,
     dt
   );
 }

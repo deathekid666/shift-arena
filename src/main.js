@@ -621,8 +621,9 @@ function loop(now) {
     weapon.setVisualHidden(fangBlocking);
     weapon.update(dt);
 
-    // Final ADS hand placement happens after the weapon has been aligned to
-    // the camera/crosshair. The gun owns the grip sockets; both arms solve to it.
+    // Final support-hand placement happens after the weapon pose is resolved.
+    // Master-hand weapons keep the right hand authoritative; only the support
+    // hand is IK-solved to the weapon.
     if (!armor.using && !fangBlocking && weapon.holdPoseActive) {
       player.applyWeaponIK(weapon.getGripPose(), dt);
     }
