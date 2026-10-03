@@ -1132,7 +1132,7 @@ function applyCrouchLocomotion(
 
   if (moving) {
     const reverse = localForward < -0.25 ? -1 : 1;
-    locomotion.phase += dt * 5.35 * reverse;
+    locomotion.phase += dt * 6.3 * reverse;
   }
 
   locomotion.state = moving ? 'CROUCH_WALK' : 'CROUCH';

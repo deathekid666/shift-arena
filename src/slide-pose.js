@@ -67,9 +67,9 @@ export function createSlidePoseLayer(character) {
     // far backward like the old skid pose.
     const baseHip = underlyingP.get(b.hips);
     b.hips.position.copy(baseHip);
-    b.hips.position.y -= 0.31 * poseBlend;
-    b.hips.position.z += 0.045 * poseBlend;
-    b.hips.position.x += 0.035 * poseBlend;
+    b.hips.position.y -= 0.33 * poseBlend;
+    b.hips.position.z += 0.025 * poseBlend;
+    b.hips.position.x += 0.020 * poseBlend;
 
     // Torso stays upright enough to keep a weapon-ready silhouette.
     rotateLocal(

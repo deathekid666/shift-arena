@@ -74,26 +74,38 @@ export function createCrouchPoseLayer(character) {
     tmp.leftFoot.addScaledVector(tmp.right, -stance);
     tmp.rightFoot.addScaledVector(tmp.right, stance);
 
-    // Short crouch-walk foot targets. Much smaller than standing stride.
+    // Real crouch gait: alternating planted steps with visible knee travel,
+    // heel/toe roll and lateral weight transfer. This replaces the old tiny
+    // 5 cm foot shuffle that looked like the character was gliding.
+    let leftStep = 0;
+    let rightStep = 0;
+    let leftLift = 0;
+    let rightLift = 0;
+    let stridePhase = 0;
+
     if (moving) {
-      const stride = 0.125 * blend;
-      const lift = 0.052 * blend;
+      const speed01 = THREE.MathUtils.clamp(speed / 2.8, 0, 1);
+      const stride = THREE.MathUtils.lerp(0.10, 0.16, speed01) * blend;
+      const lift = THREE.MathUtils.lerp(0.030, 0.055, speed01) * blend;
       const s = Math.sin(phase);
-      const leftForward = s * stride;
-      const rightForward = -s * stride;
-      tmp.leftFoot.addScaledVector(tmp.forward, leftForward);
-      tmp.rightFoot.addScaledVector(tmp.forward, rightForward);
+      const c = Math.cos(phase);
 
-      // Clear alternating crouch steps: one foot lifts while the other plants.
-      tmp.leftFoot.y += Math.max(0, -s) * lift;
-      tmp.rightFoot.y += Math.max(0, s) * lift;
+      leftStep = s * stride;
+      rightStep = -s * stride;
+      leftLift = Math.max(0, -c) * lift;
+      rightLift = Math.max(0, c) * lift;
+      stridePhase = c;
 
-      // Small lateral weight transfer makes the step readable from behind.
-      const weightShift = Math.cos(phase) * 0.018 * blend;
-      tmp.leftFoot.addScaledVector(tmp.right, -weightShift);
-      tmp.rightFoot.addScaledVector(tmp.right, -weightShift);
-      tmp.leftFoot.addScaledVector(tmp.right, localStrafe * 0.018 * blend);
-      tmp.rightFoot.addScaledVector(tmp.right, localStrafe * 0.018 * blend);
+      tmp.leftFoot.addScaledVector(tmp.forward, leftStep);
+      tmp.rightFoot.addScaledVector(tmp.forward, rightStep);
+      tmp.leftFoot.y += leftLift;
+      tmp.rightFoot.y += rightLift;
+
+      // Natural crouch strafe: widen the outside foot and let the inside foot
+      // cross less, rather than translating both feet equally.
+      const strafeStep = localStrafe * 0.045 * blend;
+      tmp.leftFoot.addScaledVector(tmp.right, strafeStep - localStrafe * 0.018 * s);
+      tmp.rightFoot.addScaledVector(tmp.right, strafeStep + localStrafe * 0.018 * s);
     }
 
     // Lower pelvis substantially, but feet remain planted by IK.
@@ -120,7 +132,8 @@ export function createCrouchPoseLayer(character) {
         underlyingQ.get(b.spine),
         0.18 * blend,
         0,
-        -localStrafe * 0.018 * blend
+        -localStrafe * 0.018 * blend +
+          (moving ? Math.sin(phase) * 0.018 * blend : 0)
       );
     }
     if (b.chest) {
@@ -129,7 +142,8 @@ export function createCrouchPoseLayer(character) {
         underlyingQ.get(b.chest),
         0.07 * blend,
         0,
-        -localStrafe * 0.012 * blend
+        -localStrafe * 0.012 * blend -
+          (moving ? Math.sin(phase) * 0.012 * blend : 0)
       );
     }
 
@@ -152,9 +166,31 @@ export function createCrouchPoseLayer(character) {
       1
     );
 
-    // Restore feet toward their pre-crouch world orientation so soles remain flat.
-    setWorldQuaternion(b.leftFoot, tmp.leftFootQ);
-    setWorldQuaternion(b.rightFoot, tmp.rightFootQ);
+    // Heel/toe roll during crouch-walk. Stationary crouch remains planted flat.
+    if (moving) {
+      const leftRoll = THREE.MathUtils.clamp(leftStep * 1.4, -0.16, 0.16);
+      const rightRoll = THREE.MathUtils.clamp(rightStep * 1.4, -0.16, 0.16);
+
+      setWorldQuaternion(
+        b.leftFoot,
+        tmp.leftFootQ.clone().multiply(
+          new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(leftRoll, 0, 0)
+          )
+        )
+      );
+      setWorldQuaternion(
+        b.rightFoot,
+        tmp.rightFootQ.clone().multiply(
+          new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(rightRoll, 0, 0)
+          )
+        )
+      );
+    } else {
+      setWorldQuaternion(b.leftFoot, tmp.leftFootQ);
+      setWorldQuaternion(b.rightFoot, tmp.rightFootQ);
+    }
 
     // Blend solved crouch over the underlying locomotion pose.
     for (const node of nodes) {
