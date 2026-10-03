@@ -130,8 +130,8 @@ export class TinFangSystem {
 
     // Temporary fallback placement before the humanoid skeleton is available.
     // Keep it close and small instead of the old oversized floating prop.
-    this.sheath.position.set(0.14, -0.11, -0.070);
-    this.sheath.rotation.set(0.02, -0.36, -0.38);
+    this.sheath.position.set(-0.14, -0.11, -0.070);
+    this.sheath.rotation.set(0.02, 0.36, 0.38);
     this.sheath.scale.setScalar(0.48);
     this.player.body.add(this.sheath);
 
@@ -150,6 +150,7 @@ export class TinFangSystem {
 
     this.useRealHand = true;
     this.armRig.visible = false;
+    // Active Fang always binds to the RIGHT hand. Storage is on LEFT hip.
     socket.add(this.handFang);
     this.handFang.position.set(0.0, 0.015, -0.10);
     this.handFang.rotation.set(-0.10, 0.0, Math.PI * 0.52);
@@ -1531,18 +1532,18 @@ function buildSheath() {
     new THREE.BoxGeometry(0.150, 0.105, 0.026),
     darkMetalMat
   );
-  mountPlate.position.set(-0.020, 0.205, -0.042);
-  mountPlate.rotation.z = 0.05;
+  mountPlate.position.set(0.020, 0.205, -0.042);
+  mountPlate.rotation.z = -0.05;
   group.add(mountPlate);
 
   // Two short belt straps sell the physical attachment from side/rear views.
-  for (const x of [-0.046, 0.035]) {
+  for (const x of [0.046, -0.035]) {
     const loop = new THREE.Mesh(
       new THREE.BoxGeometry(0.038, 0.135, 0.024),
       edgeLeatherMat
     );
     loop.position.set(x, 0.245, -0.052);
-    loop.rotation.z = x < 0 ? -0.08 : 0.06;
+    loop.rotation.z = x > 0 ? 0.08 : -0.06;
     group.add(loop);
 
     const buckle = new THREE.Mesh(

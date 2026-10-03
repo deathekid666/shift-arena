@@ -260,16 +260,16 @@ function buildCharacterInterface({
     root.add(fangSocket);
   }
 
-  // Dedicated wearable-equipment anchor. Because this lives on the real hips
-  // bone, the sheath follows walk/crouch/turn animation without floating.
+  // Left-hip storage: the knife is worn on the character's left side while
+  // the active Fang stays attached to the right hand for draw/throw attacks.
   const holsterSocket = new THREE.Object3D();
   holsterSocket.name = 'holsterSocket';
   if (bones.hips) {
-    holsterSocket.position.set(0.120, -0.025, -0.112);
-    holsterSocket.rotation.set(0.02, -0.46, -0.42);
+    holsterSocket.position.set(-0.120, -0.025, -0.112);
+    holsterSocket.rotation.set(0.02, 0.46, 0.42);
     bones.hips.add(holsterSocket);
   } else {
-    holsterSocket.position.set(0.16, -0.12, -0.055);
+    holsterSocket.position.set(-0.16, -0.12, -0.055);
     root.add(holsterSocket);
   }
 
