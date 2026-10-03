@@ -747,13 +747,11 @@ function updatePose(character, dt, state) {
   const time = performance.now() * 0.001;
   const breathe = Math.sin(time * 2.4) * 0.025;
 
-  // Upper body is layered over locomotion. Gun/Fang poses keep control of the
-  // shoulders while the legs continue walking/running underneath.
-  if (combat && !fang) {
-    dampBoneEuler(bones.leftUpperArm, baseRotations, -0.62, 0.16, -0.68, 16, dt);
-    dampBoneEuler(bones.leftLowerArm, baseRotations, -0.82, -0.08, -0.16, 16, dt);
-    dampBoneEuler(bones.rightUpperArm, baseRotations, -0.48, -0.10, 0.70, 16, dt);
-    dampBoneEuler(bones.rightLowerArm, baseRotations, -0.76, 0.02, 0.18, 16, dt);
+  // Upper-body weapon layer runs after locomotion.
+  if (state.aiming && !fang) {
+    applyWeaponAimPose(bones, baseRotations, state, dt);
+  } else if (combat && !fang) {
+    applyHipFirePose(bones, baseRotations, state, dt);
   } else if (!fang && !authored) {
     const armAmplitude =
       stateName === 'RUN' ? 0.58 :
@@ -1124,6 +1122,41 @@ function animateScoutAccessories(character, locomotion, dt) {
       dt
     );
   }
+}
+
+function applyWeaponAimPose(bones, baseRotations, state, dt) {
+  const pitch = THREE.MathUtils.clamp(state.aimPitch ?? 0, -0.68, 0.86);
+  const yaw = THREE.MathUtils.clamp(state.aimYawOffset ?? 0, -1.18, 1.18);
+
+  dampBoneEuler(bones.spine, baseRotations, -pitch * 0.22, yaw * 0.28, -yaw * 0.025, 20, dt);
+  dampBoneEuler(bones.chest, baseRotations, -pitch * 0.28, yaw * 0.34, -yaw * 0.035, 22, dt);
+  dampBoneEuler(bones.upperChest, baseRotations, -pitch * 0.22, yaw * 0.26, 0, 22, dt);
+  dampBoneEuler(bones.neck, baseRotations, -pitch * 0.10, yaw * 0.08, 0, 18, dt);
+  dampBoneEuler(bones.head, baseRotations, -pitch * 0.08, yaw * 0.06, 0, 18, dt);
+
+  dampBoneEuler(bones.leftShoulder, baseRotations, -0.10, 0.08, -0.18, 24, dt);
+  dampBoneEuler(bones.rightShoulder, baseRotations, -0.08, -0.06, 0.16, 24, dt);
+
+  dampBoneEuler(bones.leftUpperArm, baseRotations, -1.12, 0.18, -0.78, 26, dt);
+  dampBoneEuler(bones.leftLowerArm, baseRotations, -1.06, -0.04, -0.24, 28, dt);
+  dampBoneEuler(bones.leftHand, baseRotations, -0.14, 0.06, -0.08, 28, dt);
+
+  dampBoneEuler(bones.rightUpperArm, baseRotations, -0.98, -0.14, 0.74, 26, dt);
+  dampBoneEuler(bones.rightLowerArm, baseRotations, -1.02, 0.04, 0.18, 28, dt);
+  dampBoneEuler(bones.rightHand, baseRotations, -0.16, -0.04, 0.08, 28, dt);
+}
+
+function applyHipFirePose(bones, baseRotations, state, dt) {
+  const pitch = THREE.MathUtils.clamp(state.aimPitch ?? 0, -0.55, 0.55);
+  const yaw = THREE.MathUtils.clamp(state.aimYawOffset ?? 0, -0.92, 0.92);
+
+  dampBoneEuler(bones.spine, baseRotations, -pitch * 0.12, yaw * 0.18, 0, 14, dt);
+  dampBoneEuler(bones.chest, baseRotations, -pitch * 0.16, yaw * 0.22, 0, 16, dt);
+
+  dampBoneEuler(bones.leftUpperArm, baseRotations, -0.72, 0.12, -0.66, 18, dt);
+  dampBoneEuler(bones.leftLowerArm, baseRotations, -0.82, -0.04, -0.18, 18, dt);
+  dampBoneEuler(bones.rightUpperArm, baseRotations, -0.62, -0.08, 0.68, 18, dt);
+  dampBoneEuler(bones.rightLowerArm, baseRotations, -0.80, 0.03, 0.16, 18, dt);
 }
 
 function applyRealFangPose(bones, baseRotations, fang, dt) {

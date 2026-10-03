@@ -36,6 +36,9 @@ export class PlayerController {
     this.weaponVisualActive = true;
     this.fangArmOverride = false;
     this.fangAnimation = null;
+    this.aimYawOffset = 0;
+    this.aimPitch = 0;
+    this.weaponAiming = false;
 
     // Start the real anime/VRM pipeline immediately. The old geometry only
     // reappears if the external development avatar genuinely fails to load.
@@ -59,7 +62,7 @@ export class PlayerController {
     this.fangArmOverride = false;
   }
 
-  update(dt, cameraYaw, combatFacing = false) {
+  update(dt, cameraYaw, combatFacing = false, aimPitch = 0, weaponAiming = false) {
     const cfg = GAME_CONFIG.movement;
     const supportY = this.supportHeightAt(this.group.position.x, this.group.position.z);
     this.grounded = supportY !== null && this.group.position.y <= supportY + 0.04 && this.velocity.y <= 0;
@@ -122,14 +125,48 @@ export class PlayerController {
       this.resetAt(this.world.spawnPoint);
     }
 
+    const moving = targetIsMoving(this.velocity);
+    const movementFacing = moving
+      ? Math.atan2(this.velocity.x, this.velocity.z) + Math.PI
+      : this.group.rotation.y;
+
     if (combatFacing) {
-      this.group.rotation.y = dampAngle(this.group.rotation.y, cameraYaw, 22, dt);
-    } else if (targetIsMoving(this.velocity)) {
-      const facing = Math.atan2(this.velocity.x, this.velocity.z) + Math.PI;
-      if (Number.isFinite(facing)) {
-        this.group.rotation.y = dampAngle(this.group.rotation.y, facing, 14, dt);
+      if (moving && Number.isFinite(movementFacing)) {
+        const desiredTwist = angleDelta(movementFacing, cameraYaw);
+        const allowedTwist = THREE.MathUtils.clamp(desiredTwist, -1.15, 1.15);
+        const rootTarget = cameraYaw - allowedTwist;
+        this.group.rotation.y = dampAngle(
+          this.group.rotation.y,
+          rootTarget,
+          16,
+          dt
+        );
+      } else {
+        this.group.rotation.y = dampAngle(
+          this.group.rotation.y,
+          cameraYaw,
+          20,
+          dt
+        );
       }
+    } else if (moving && Number.isFinite(movementFacing)) {
+      this.group.rotation.y = dampAngle(
+        this.group.rotation.y,
+        movementFacing,
+        14,
+        dt
+      );
     }
+
+    this.aimYawOffset = combatFacing
+      ? THREE.MathUtils.clamp(
+          angleDelta(this.group.rotation.y, cameraYaw),
+          -1.18,
+          1.18
+        )
+      : 0;
+    this.aimPitch = THREE.MathUtils.clamp(aimPitch, -0.68, 0.86);
+    this.weaponAiming = Boolean(weaponAiming);
 
     // Collider height still changes when crouching, but a real humanoid must
     // crouch with bones instead of being vertically squashed like the old capsule.
@@ -149,6 +186,9 @@ export class PlayerController {
       sprinting: this.input.down('sprint') && !this.crouching && !this.sliding,
       sliding: this.sliding,
       combat: this.weaponVisualActive && combatFacing,
+      aiming: this.weaponVisualActive && this.weaponAiming,
+      aimPitch: this.aimPitch,
+      aimYawOffset: this.aimYawOffset,
       crouching: this.crouching,
       grounded: this.grounded,
       rightArmOverride: this.fangArmOverride,
@@ -454,6 +494,13 @@ function withTimeout(promise, timeoutMs, message) {
 
 function targetIsMoving(velocity) {
   return Math.hypot(velocity.x, velocity.z) > 0.25;
+}
+
+function angleDelta(current, target) {
+  return Math.atan2(
+    Math.sin(target - current),
+    Math.cos(target - current)
+  );
 }
 
 function dampAngle(current, target, lambda, dt) {

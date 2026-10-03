@@ -10,8 +10,8 @@ const ANIMATION_LIBRARY_URL =
 const REST_POSE_CLIP = 'A_TPose';
 const CLIPS = {
   IDLE: 'Idle_Loop',
-  WALK: 'Walk_Loop',
-  RUN: 'Jog_Fwd_Loop'
+  MOVE: 'Jog_Fwd_Loop',
+  SPRINT: 'Sprint_Loop'
 };
 
 const SOURCE_BONE_TO_HUMAN = {
@@ -57,88 +57,98 @@ export async function createVrmLocomotionController(character, vrm) {
     action.enabled = true;
     action.setLoop(THREE.LoopRepeat, Infinity);
     action.clampWhenFinished = false;
-    action.setEffectiveWeight(1);
+    action.setEffectiveWeight(0);
+    action.setEffectiveTimeScale(1);
+    action.play();
     actions.set(clip.name, action);
   }
 
+  const idle = actions.get(CLIPS.IDLE);
+  const move = actions.get(CLIPS.MOVE);
+  const sprint = actions.get(CLIPS.SPRINT);
+
+  if (!idle || !move || !sprint) {
+    throw new Error('Authored locomotion clips missing from animation library.');
+  }
+
+  idle.weight = 1;
+
   const controller = {
     ready: true,
-    active: false,
+    active: true,
     state: 'IDLE',
     phase: 0,
     mixer,
     actions,
-    currentAction: null,
-    currentClipName: null,
-    update(dt, state) {
-      const movementState = resolveAuthoredState(state);
-      this.state = movementState;
+    weights: { idle: 1, move: 0, sprint: 0 },
 
-      const clipName = CLIPS[movementState] ?? null;
-      if (!clipName) {
+    update(dt, state) {
+      if (
+        state.grounded === false ||
+        state.sliding ||
+        state.crouching
+      ) {
         this.active = false;
-        if (this.currentAction) {
-          this.currentAction.fadeOut(0.10);
-          this.currentAction = null;
-          this.currentClipName = null;
-        }
+        this.state = 'PROCEDURAL';
+
+        this.weights.idle = THREE.MathUtils.damp(this.weights.idle, 0, 14, dt);
+        this.weights.move = THREE.MathUtils.damp(this.weights.move, 0, 14, dt);
+        this.weights.sprint = THREE.MathUtils.damp(this.weights.sprint, 0, 14, dt);
+
+        idle.weight = this.weights.idle;
+        move.weight = this.weights.move;
+        sprint.weight = this.weights.sprint;
         this.mixer.update(dt);
         return;
       }
 
       this.active = true;
-      if (clipName !== this.currentClipName) {
-        const next = this.actions.get(clipName);
-        if (next) {
-          const previous = this.currentAction;
-          next.reset();
-          next.enabled = true;
-          next.setEffectiveWeight(1);
-          next.fadeIn(previous ? 0.16 : 0.05);
-          next.play();
-          previous?.fadeOut(0.16);
-          this.currentAction = next;
-          this.currentClipName = clipName;
-        }
-      }
 
       const speed = Math.max(0, state.speed ?? 0);
-      if (this.currentAction) {
-        let referenceSpeed = 1;
-        if (movementState === 'WALK') referenceSpeed = 5.2;
-        if (movementState === 'RUN') referenceSpeed = 8.4;
+      const moving = speed > 0.28;
+      const sprinting = Boolean(state.sprinting) && speed > 5.9;
 
-        let timeScale = movementState === 'IDLE'
-          ? 1
-          : THREE.MathUtils.clamp(speed / referenceSpeed, 0.78, 1.28);
+      const idleIntent = moving ? 0 : 1;
+      const moveIntent = moving && !sprinting ? 1 : 0;
+      const sprintIntent = sprinting ? 1 : 0;
 
-        // In combat-facing movement, a true backward clip is preferable, but
-        // playing the authored walk in reverse keeps planted-foot timing much
-        // better than translating a forward walk backward.
-        const localForward = speed > 0.05
-          ? THREE.MathUtils.clamp(-(state.localZ ?? 0) / speed, -1, 1)
-          : 1;
+      this.weights.idle = THREE.MathUtils.damp(this.weights.idle, idleIntent, 12, dt);
+      this.weights.move = THREE.MathUtils.damp(this.weights.move, moveIntent, 10, dt);
+      this.weights.sprint = THREE.MathUtils.damp(this.weights.sprint, sprintIntent, 10, dt);
 
-        if (localForward < -0.35 && movementState !== 'IDLE') {
-          timeScale *= -1;
-          if (this.currentAction.time < 0.03) {
-            this.currentAction.time =
-              Math.max(0.03, this.currentAction.getClip().duration - 0.03);
-          }
+      const total = this.weights.idle + this.weights.move + this.weights.sprint;
+      const norm = total > 0.0001 ? 1 / total : 1;
+      idle.weight = this.weights.idle * norm;
+      move.weight = this.weights.move * norm;
+      sprint.weight = this.weights.sprint * norm;
+
+      move.setEffectiveTimeScale(
+        THREE.MathUtils.clamp(speed / 3.55, 0.90, 1.62)
+      );
+      sprint.setEffectiveTimeScale(
+        THREE.MathUtils.clamp(speed / 6.05, 0.92, 1.55)
+      );
+
+      const dominant = sprint.weight > move.weight ? sprint : move;
+      const follower = dominant === sprint ? move : sprint;
+
+      if (moving) {
+        const dominantDuration = Math.max(0.001, dominant.getClip().duration);
+        const followerDuration = Math.max(0.001, follower.getClip().duration);
+        const normalized =
+          ((dominant.time / dominantDuration) % 1 + 1) % 1;
+
+        if (Math.min(move.weight, sprint.weight) > 0.04) {
+          follower.time = normalized * followerDuration;
         }
 
-        this.currentAction.setEffectiveTimeScale(timeScale);
-      }
-
-      this.mixer.update(dt);
-
-      if (this.currentAction) {
-        const duration = Math.max(0.001, this.currentAction.getClip().duration);
-        const normalized =
-          ((this.currentAction.time / duration) % 1 + 1) % 1;
         this.phase = normalized * Math.PI * 2;
       }
+
+      this.state = !moving ? 'IDLE' : sprinting ? 'SPRINT' : 'JOG';
+      this.mixer.update(dt);
     },
+
     dispose() {
       this.mixer.stopAllAction();
       this.mixer.uncacheRoot(character.root);
@@ -146,25 +156,7 @@ export async function createVrmLocomotionController(character, vrm) {
     }
   };
 
-  controller.update(0, {
-    speed: 0,
-    grounded: true,
-    crouching: false,
-    sliding: false,
-    sprinting: false
-  });
-
   return controller;
-}
-
-function resolveAuthoredState(state) {
-  if (state.grounded === false) return 'PROCEDURAL';
-  if (state.sliding || state.crouching) return 'PROCEDURAL';
-
-  const speed = Math.max(0, state.speed ?? 0);
-  if (speed < 0.28) return 'IDLE';
-  if (state.sprinting || speed > 6.15) return 'RUN';
-  return 'WALK';
 }
 
 function loadAnimationLibrary() {

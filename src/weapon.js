@@ -241,7 +241,15 @@ export class WeaponSystem {
         22 / cfg.mass,
         dt
       );
-      model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 24 / cfg.mass, dt);
+      const aimYaw = this.aiming
+        ? (this.player.aimYawOffset ?? 0)
+        : 0;
+      model.rotation.y = THREE.MathUtils.damp(
+        model.rotation.y,
+        aimYaw,
+        24 / cfg.mass,
+        dt
+      );
       model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -0.05 - swayX * 0.7, 20 / cfg.mass, dt);
       return;
     }
@@ -255,7 +263,12 @@ export class WeaponSystem {
     model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / cfg.mass, dt);
     model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 22 / cfg.mass, dt);
     model.rotation.x = THREE.MathUtils.damp(model.rotation.x, -0.04 - state.visualKick * 0.75, 18 / cfg.mass, dt);
-    model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 18 / cfg.mass, dt);
+    model.rotation.y = THREE.MathUtils.damp(
+      model.rotation.y,
+      this.aiming ? (this.player.aimYawOffset ?? 0) : 0,
+      18 / cfg.mass,
+      dt
+    );
     model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / cfg.mass, dt);
   }
 
