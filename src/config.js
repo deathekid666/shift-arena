@@ -84,7 +84,7 @@ export const GAME_CONFIG = {
       recoilPattern: [[0.009,0],[0.010,0.002],[0.011,-0.002],[0.012,0.003],[0.012,-0.003]],
       recoilRecovery: 12, visualKick: 0.075, mass: 1.0, sway: 0.0055, bob: 0.018,
       adsFov: 57, adsDistance: 3.15, adsShoulderOffset: 0.92,
-      reticle: 'rifle', reticleMinGap: 5, reticleMaxGap: 18,
+      reticle: 'rifle', reticleMinGap: 5, reticleMaxGap: 17,
       pellets: 1, color: 0x3a8fd8, modelLength: 0.76,
       sound: { pitch: 145, duration: 0.075, noise: 0.55, gain: 0.20 }
     },
@@ -108,7 +108,7 @@ export const GAME_CONFIG = {
       recoilPattern: [[0.013,0],[0.014,-0.001],[0.015,0.001],[0.016,-0.002],[0.016,0.002]],
       recoilRecovery: 10, visualKick: 0.105, mass: 1.22, sway: 0.0042, bob: 0.014,
       adsFov: 52, adsDistance: 2.95, adsShoulderOffset: 0.86,
-      reticle: 'precision', reticleMinGap: 4, reticleMaxGap: 16,
+      reticle: 'precision', reticleMinGap: 4, reticleMaxGap: 14,
       pellets: 1, color: 0x86a75b, modelLength: 0.88,
       sound: { pitch: 118, duration: 0.095, noise: 0.48, gain: 0.23 }
     },
@@ -132,7 +132,7 @@ export const GAME_CONFIG = {
       recoilPattern: [[0.030,0.004],[0.032,-0.004]],
       recoilRecovery: 8, visualKick: 0.19, mass: 1.18, sway: 0.0045, bob: 0.015,
       adsFov: 61, adsDistance: 4.10, adsShoulderOffset: 0.86,
-      reticle: 'shotgun', reticleMinGap: 26, reticleMaxGap: 48,
+      reticle: 'shotgun', reticleMinGap: 18, reticleMaxGap: 35,
       pellets: 10, color: 0xd89045, modelLength: 0.74,
       sound: { pitch: 82, duration: 0.16, noise: 0.88, gain: 0.31 }
     },
@@ -156,7 +156,7 @@ export const GAME_CONFIG = {
       recoilPattern: [[0.052,0.006], [0.050,-0.005]],
       recoilRecovery: 6.5, visualKick: 0.31, mass: 1.42, sway: 0.0035, bob: 0.011,
       adsFov: 60, adsDistance: 4.25, adsShoulderOffset: 0.84,
-      reticle: 'pump', reticleMinGap: 22, reticleMaxGap: 42,
+      reticle: 'pump', reticleMinGap: 16, reticleMaxGap: 32,
       pellets: 10, color: 0xa85f43, modelLength: 0.90,
       sound: { pitch: 64, duration: 0.22, noise: 1.0, gain: 0.36 }
     },
@@ -180,7 +180,7 @@ export const GAME_CONFIG = {
       recoilPattern: [[0.070,0.004],[0.068,-0.004]],
       recoilRecovery: 5.5, visualKick: 0.36, mass: 1.58, sway: 0.0027, bob: 0.008,
       adsFov: 24, adsDistance: 0.10, adsShoulderOffset: 0,
-      reticle: 'sniper', reticleMinGap: 6, reticleMaxGap: 30, scope: true,
+      reticle: 'sniper', reticleMinGap: 8, reticleMaxGap: 30, scope: true,
       pellets: 1, color: 0x7356b6, modelLength: 1.10,
       sound: { pitch: 52, duration: 0.24, noise: 0.78, gain: 0.37 }
     },
@@ -204,7 +204,7 @@ export const GAME_CONFIG = {
       recoilPattern: [[0.005,0.002],[0.005,-0.002],[0.006,0.003],[0.006,-0.003],[0.007,0.002]],
       recoilRecovery: 16, visualKick: 0.047, mass: 0.72, sway: 0.0080, bob: 0.028,
       adsFov: 60, adsDistance: 3.85, adsShoulderOffset: 0.92,
-      reticle: 'smg', reticleMinGap: 7, reticleMaxGap: 25,
+      reticle: 'smg', reticleMinGap: 7, reticleMaxGap: 24,
       pellets: 1, color: 0xd5bd3f, modelLength: 0.55,
       sound: { pitch: 205, duration: 0.045, noise: 0.42, gain: 0.15 }
     },
@@ -228,7 +228,7 @@ export const GAME_CONFIG = {
       recoilPattern: [[0.004,0.001],[0.004,-0.001],[0.005,0.0015],[0.005,-0.0015]],
       recoilRecovery: 17, visualKick: 0.038, mass: 0.88, sway: 0.0064, bob: 0.021,
       adsFov: 55, adsDistance: 3.45, adsShoulderOffset: 0.88,
-      reticle: 'precision-smg', reticleMinGap: 5, reticleMaxGap: 18,
+      reticle: 'precision-smg', reticleMinGap: 5, reticleMaxGap: 17,
       pellets: 1, color: 0x42a690, modelLength: 0.70,
       sound: { pitch: 174, duration: 0.052, noise: 0.36, gain: 0.16 }
     }

@@ -100,6 +100,7 @@ export class WeaponSystem {
   get magazineSize() { return this.cfg.magazineSize; }
   get reserveAmmo() { return this.ammoPool[this.cfg.ammoType] ?? 0; }
   get isReloading() { return this.state.isReloading; }
+  get weaponKey() { return this.loadout[this.activeSlot]; }
   get reticleType() { return this.cfg.reticle; }
   get scoped() { return Boolean(this.cfg.scope && this.aiming); }
   get adsFov() { return this.cfg.adsFov; }
@@ -183,10 +184,25 @@ export class WeaponSystem {
     return !this.player.grounded || this.player.horizontalSpeed() > 1.5 || this.state.sinceShot < 0.42;
   }
 
-  get crosshairGap() {
+  get firstShotReady() {
+    return this.isFirstShotReady();
+  }
+
+  get spreadRatio() {
     const spread = this.currentSpread();
-    const normalized = Math.min(1, spread / Math.max(0.001, this.cfg.hipBloom * 1.8));
-    return THREE.MathUtils.lerp(this.cfg.reticleMinGap, this.cfg.reticleMaxGap, normalized);
+    return THREE.MathUtils.clamp(
+      spread / Math.max(0.001, this.cfg.hipBloom * 1.8),
+      0,
+      1
+    );
+  }
+
+  get crosshairGap() {
+    return THREE.MathUtils.lerp(
+      this.cfg.reticleMinGap,
+      this.cfg.reticleMaxGap,
+      this.spreadRatio
+    );
   }
 
   updateSelection() {
@@ -623,6 +639,16 @@ export class WeaponSystem {
     }
   }
 
+  isFirstShotReady() {
+    return (
+      this.cfg.firstShotAccuracy &&
+      this.aiming &&
+      this.player.grounded &&
+      this.player.horizontalSpeed() < 0.25 &&
+      this.state.sinceShot > 0.42
+    );
+  }
+
   currentSpread() {
     const cfg = this.cfg;
     const state = this.state;
@@ -633,14 +659,7 @@ export class WeaponSystem {
     if (!this.player.grounded) spread *= cfg.airSpreadMult;
     if (this.player.crouching && this.player.grounded) spread *= cfg.crouchSpreadMult;
 
-    const firstShotReady =
-      cfg.firstShotAccuracy &&
-      this.aiming &&
-      this.player.grounded &&
-      speed < 0.25 &&
-      state.sinceShot > 0.42;
-
-    if (firstShotReady) spread *= 0.22;
+    if (this.isFirstShotReady()) spread *= 0.22;
     return spread;
   }
 
@@ -837,6 +856,7 @@ export class WeaponSystem {
     const cfg = this.cfg;
     const pelletDamage = cfg.damage / cfg.pellets;
     let totalDamage = 0;
+    let pelletsHit = 0;
     let anyHeadshot = false;
     let eliminated = false;
     let firstMuzzle = null;
@@ -857,6 +877,7 @@ export class WeaponSystem {
       );
 
       if (!result) continue;
+      pelletsHit += 1;
       totalDamage += result.damage;
       anyHeadshot = anyHeadshot || result.headshot;
       eliminated = eliminated || result.eliminated;
@@ -870,7 +891,9 @@ export class WeaponSystem {
       this.onHit?.({
         damage: Math.round(totalDamage),
         headshot: anyHeadshot,
-        eliminated
+        eliminated,
+        pelletsHit,
+        pelletsTotal: cfg.pellets
       });
     }
   }

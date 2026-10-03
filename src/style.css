@@ -1452,3 +1452,323 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 #crosshair.fang-charging .reticle-ring {
   animation: none;
 }
+
+
+/* Build 010.12 — Fortnite-inspired weapon-specific reticle gameplay.
+   The gap is driven by the SAME spread calculation used by bullets. */
+#crosshair[data-mode="gun"] {
+  --shot-kick: 0px;
+  --pellet-hit-angle: 0deg;
+  width: 96px;
+  height: 96px;
+  transform: translate(-50%, -50%);
+  transition: opacity 80ms ease;
+}
+#crosshair[data-mode="gun"].ads,
+#crosshair[data-mode="gun"].ads.shot,
+#crosshair[data-mode="gun"].shot {
+  transform: translate(-50%, -50%);
+}
+#crosshair[data-mode="gun"].shot {
+  --shot-kick: 2.5px;
+  filter: brightness(1.32);
+}
+#crosshair[data-mode="gun"] > .arm {
+  --v-len: 8px;
+  --h-len: 8px;
+  opacity: .94;
+  border-radius: 999px;
+  background: rgba(255,255,255,.94);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.28),
+    0 1px 3px rgba(0,0,0,.58);
+  transition:
+    transform 48ms linear,
+    width 70ms ease,
+    height 70ms ease,
+    opacity 70ms ease,
+    background 70ms ease,
+    box-shadow 70ms ease;
+}
+#crosshair[data-mode="gun"] > .top,
+#crosshair[data-mode="gun"] > .bottom {
+  width: 2px;
+  height: var(--v-len);
+}
+#crosshair[data-mode="gun"] > .left,
+#crosshair[data-mode="gun"] > .right {
+  width: var(--h-len);
+  height: 2px;
+}
+#crosshair[data-mode="gun"] > .top {
+  transform: translate(
+    -50%,
+    calc(0px - var(--gap) - var(--shot-kick) - var(--v-len))
+  );
+}
+#crosshair[data-mode="gun"] > .bottom {
+  transform: translate(
+    -50%,
+    calc(var(--gap) + var(--shot-kick))
+  );
+}
+#crosshair[data-mode="gun"] > .left {
+  transform: translate(
+    calc(0px - var(--gap) - var(--shot-kick) - var(--h-len)),
+    -50%
+  );
+}
+#crosshair[data-mode="gun"] > .right {
+  transform: translate(
+    calc(var(--gap) + var(--shot-kick)),
+    -50%
+  );
+}
+#crosshair[data-mode="gun"] > .reticle-dot {
+  width: 2.5px;
+  height: 2.5px;
+  background: rgba(255,255,255,.98);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.34),
+    0 0 4px rgba(0,0,0,.46);
+  transition:
+    width 70ms ease,
+    height 70ms ease,
+    background 70ms ease,
+    box-shadow 70ms ease;
+}
+
+/* Tactical AR — familiar responsive four-tick rifle reticle. */
+#crosshair[data-mode="gun"][data-type="rifle"] > .arm {
+  --v-len: 8px;
+  --h-len: 8px;
+}
+#crosshair[data-mode="gun"][data-type="rifle"].gun-ads > .arm {
+  --v-len: 7px;
+  --h-len: 7px;
+}
+
+/* Mechanical AR — thinner precision marks with a tiny center pip. */
+#crosshair[data-mode="gun"][data-type="precision"] > .arm {
+  --v-len: 6px;
+  --h-len: 6px;
+  opacity: .90;
+}
+#crosshair[data-mode="gun"][data-type="precision"] > .reticle-dot {
+  width: 2px;
+  height: 2px;
+}
+
+/* First-shot accuracy is a real ballistic state, not decorative.
+   Fortnite has historically surfaced this state on the reticle. */
+#crosshair[data-mode="gun"].first-shot-ready > .arm {
+  background: rgba(255,104,92,.98);
+  box-shadow:
+    0 0 0 1px rgba(35,0,0,.24),
+    0 0 6px rgba(255,70,58,.36);
+}
+#crosshair[data-mode="gun"].first-shot-ready > .reticle-dot {
+  width: 3px;
+  height: 3px;
+  background: #ff665c;
+  box-shadow:
+    0 0 0 1px rgba(40,0,0,.28),
+    0 0 8px rgba(255,70,55,.58);
+}
+
+/* Compact SMG — quick, wider, lighter close-range reticle. */
+#crosshair[data-mode="gun"][data-type="smg"] > .arm {
+  --v-len: 5px;
+  --h-len: 5px;
+  opacity: .82;
+}
+#crosshair[data-mode="gun"][data-type="smg"] > .reticle-dot {
+  width: 2px;
+  height: 2px;
+}
+
+/* Long SMG — sits between AR precision and SMG speed. */
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .arm {
+  --v-len: 5px;
+  --h-len: 6px;
+  opacity: .90;
+}
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .reticle-dot {
+  width: 2.25px;
+  height: 2.25px;
+}
+
+/* Shotguns use the actual pellet-spread radius as a segmented ring.
+   This reads much better than four huge generic bars. */
+#crosshair[data-mode="gun"][data-type="shotgun"] > .arm,
+#crosshair[data-mode="gun"][data-type="pump"] > .arm {
+  opacity: 0;
+}
+#crosshair[data-mode="gun"][data-type="shotgun"] > .reticle-ring,
+#crosshair[data-mode="gun"][data-type="pump"] > .reticle-ring {
+  display: block;
+  width: calc(var(--gap) * 2.05);
+  height: calc(var(--gap) * 2.05);
+  border: 0;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(
+      from 33deg,
+      rgba(255,255,255,.88) 0deg 20deg,
+      transparent 20deg 90deg
+    );
+  -webkit-mask:
+    radial-gradient(
+      circle,
+      transparent 0 69%,
+      #000 71% 82%,
+      transparent 84% 100%
+    );
+  mask:
+    radial-gradient(
+      circle,
+      transparent 0 69%,
+      #000 71% 82%,
+      transparent 84% 100%
+    );
+  box-shadow: none;
+  transition:
+    width 52ms linear,
+    height 52ms linear,
+    opacity 70ms ease;
+}
+#crosshair[data-mode="gun"][data-type="shotgun"] > .reticle-dot {
+  width: 2px;
+  height: 2px;
+  opacity: .78;
+}
+#crosshair[data-mode="gun"][data-type="pump"] > .reticle-ring {
+  width: calc(var(--gap) * 2.15);
+  height: calc(var(--gap) * 2.15);
+  background:
+    repeating-conic-gradient(
+      from 31deg,
+      rgba(255,255,255,.96) 0deg 24deg,
+      transparent 24deg 90deg
+    );
+  -webkit-mask:
+    radial-gradient(
+      circle,
+      transparent 0 66%,
+      #000 69% 85%,
+      transparent 87% 100%
+    );
+  mask:
+    radial-gradient(
+      circle,
+      transparent 0 66%,
+      #000 69% 85%,
+      transparent 87% 100%
+    );
+}
+#crosshair[data-mode="gun"][data-type="pump"] > .reticle-dot {
+  width: 2.5px;
+  height: 2.5px;
+}
+
+/* Pellet confirmation: amount of the outer arc corresponds to pellet-hit ratio. */
+#crosshair .pellet-feedback {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: none;
+  width: calc(var(--gap) * 2.30 + 8px);
+  height: calc(var(--gap) * 2.30 + 8px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    conic-gradient(
+      from -90deg,
+      rgba(255,255,255,.98) 0 var(--pellet-hit-angle),
+      transparent var(--pellet-hit-angle) 360deg
+    );
+  -webkit-mask:
+    radial-gradient(circle, transparent 0 78%, #000 80% 88%, transparent 90%);
+  mask:
+    radial-gradient(circle, transparent 0 78%, #000 80% 88%, transparent 90%);
+}
+#crosshair.pellet-confirm[data-mode="gun"][data-type="shotgun"] .pellet-feedback,
+#crosshair.pellet-confirm[data-mode="gun"][data-type="pump"] .pellet-feedback {
+  display: block;
+  animation: pelletConfirm 150ms ease-out both;
+}
+@keyframes pelletConfirm {
+  0% { opacity: 0; transform: translate(-50%,-50%) scale(.90); }
+  28% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%,-50%) scale(1.08); }
+}
+
+/* Sniper hip-fire is deliberately imprecise; ADS transitions to the scope. */
+#crosshair[data-mode="gun"][data-type="sniper"] > .arm {
+  --v-len: 7px;
+  --h-len: 7px;
+  opacity: .55;
+}
+#crosshair[data-mode="gun"][data-type="sniper"] > .reticle-ring {
+  display: block;
+  width: calc(var(--gap) * 1.65);
+  height: calc(var(--gap) * 1.65);
+  border: 1px solid rgba(255,255,255,.42);
+  background: transparent;
+  opacity: .70;
+}
+
+/* Airborne spread stays readable without adding another fake indicator. */
+#crosshair[data-mode="gun"].air-spread:not(.scoped-hidden) > .arm,
+#crosshair[data-mode="gun"].air-spread:not(.scoped-hidden) > .reticle-ring {
+  opacity: .58;
+}
+
+/* Scope: clean fine cross + distance ticks; instability no longer blurs the view. */
+#scope-overlay {
+  transition: opacity 72ms ease;
+}
+#scope-overlay .scope-reticle {
+  width: min(66vh, 66vw);
+  height: min(66vh, 66vw);
+  border-width: 1px;
+  box-shadow:
+    inset 0 0 22px rgba(0,0,0,.30),
+    0 0 0 1px rgba(0,0,0,.86);
+}
+.scope-reticle .scope-h,
+.scope-reticle .scope-v {
+  background: rgba(15,17,18,.92);
+}
+.scope-reticle .scope-h { height: 1px; }
+.scope-reticle .scope-v { width: 1px; }
+.scope-reticle b {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+  border: 1px solid rgba(12,15,16,.96);
+}
+.scope-reticle .mil {
+  width: 12px;
+  height: 1px;
+  margin-left: -6px;
+  border-radius: 0;
+  background: rgba(14,17,18,.90);
+}
+.scope-reticle .m1 { top: 57%; }
+.scope-reticle .m2 { top: 64%; width: 16px; margin-left: -8px; }
+.scope-reticle .m3 { top: 72%; }
+.scope-reticle .m4 { top: 81%; width: 18px; margin-left: -9px; }
+
+#scope-overlay.unstable .scope-reticle {
+  filter: none;
+  opacity: .82;
+}
+#scope-overlay.unstable::after {
+  display: none;
+}
+#scope-overlay.stable .scope-reticle b {
+  border-color: rgba(20,22,23,.98);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.12);
+}

@@ -17,6 +17,7 @@ root.innerHTML = `
     <div id="crosshair" data-type="rifle" data-mode="gun">
       <i class="arm top"></i><i class="arm right"></i><i class="arm bottom"></i><i class="arm left"></i>
       <span class="reticle-ring"></span><span class="reticle-dot"></span>
+      <span class="pellet-feedback" aria-hidden="true"></span>
       <div class="fang-reticle" aria-hidden="true">
         <i class="fang-charge-ring"></i>
         <i class="fang-blade-mark"></i>
@@ -66,7 +67,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.11H · LEFT-HIP KNIFE HOLSTER</div>
+    <div id="damage-test-hint">BUILD 010.12 · FORTNITE-STYLE WEAPON RETICLES</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -115,7 +116,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.11H · LEFT-HIP KNIFE HOLSTER</div>
+        <div class="build-tag">BUILD 010.12 · FORTNITE-STYLE WEAPON RETICLES</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
@@ -464,6 +465,25 @@ function showShieldBreak() {
 
 function showHit(result) {
   hitMarker.className = result.headshot ? 'show headshot' : 'show';
+
+  if (Number.isFinite(result.pelletsHit) && Number.isFinite(result.pelletsTotal)) {
+    const pelletRatio = Math.max(
+      0,
+      Math.min(1, result.pelletsHit / Math.max(1, result.pelletsTotal))
+    );
+    crosshair.style.setProperty(
+      '--pellet-hit-angle',
+      `${Math.max(28, pelletRatio * 360).toFixed(0)}deg`
+    );
+    crosshair.classList.remove('pellet-confirm');
+    void crosshair.offsetWidth;
+    crosshair.classList.add('pellet-confirm');
+    clearTimeout(showHit.pelletTimer);
+    showHit.pelletTimer = setTimeout(
+      () => crosshair.classList.remove('pellet-confirm'),
+      150
+    );
+  }
   damagePop.textContent = result.tinFang && result.headshot
     ? 'FANG HEAD · DOWN'
     : `${Math.round(result.damage)}${result.headshot ? ' HEAD' : ''}${result.eliminated ? ' · DOWN' : ''}`;
@@ -566,11 +586,32 @@ function loop(now) {
   const fangAiming = health.alive && fang.aiming;
   const scoped = health.alive && !fangAiming && weapon.scoped;
   crosshair.dataset.type = weapon.reticleType;
+  crosshair.dataset.weapon = weapon.weaponKey;
   crosshair.style.setProperty('--gap', `${weapon.crosshairGap.toFixed(1)}px`);
+  crosshair.style.setProperty(
+    '--spread-ratio',
+    weapon.spreadRatio.toFixed(3)
+  );
   crosshair.classList.toggle('ads', health.alive && (weapon.aiming || fangAiming));
+  crosshair.classList.toggle(
+    'gun-ads',
+    health.alive && !fangAiming && weapon.aiming && !scoped
+  );
+  crosshair.classList.toggle(
+    'first-shot-ready',
+    health.alive && !fangAiming && weapon.firstShotReady
+  );
+  crosshair.classList.toggle(
+    'air-spread',
+    health.alive && !player.grounded && !fangAiming
+  );
   crosshair.classList.toggle('scoped-hidden', scoped);
   scopeOverlay.classList.toggle('show', scoped);
   scopeOverlay.classList.toggle('unstable', scoped && weapon.scopeUnstable);
+  scopeOverlay.classList.toggle(
+    'stable',
+    scoped && !weapon.scopeUnstable
+  );
 
   reloadState.textContent = health.alive && weapon.isReloading
     ? `RELOADING · ${Math.round(weapon.reloadProgress * 100)}%`
