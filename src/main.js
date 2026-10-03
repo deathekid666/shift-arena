@@ -35,7 +35,7 @@ root.innerHTML = `
     </div>
 
     <div id="damage-test-hint">
-      BUILD 004 · FIGHT THE <b>RED BOT</b> · WALLS BLOCK BOT FIRE
+      BUILD 005 · GIANT KITCHEN GRAYBOX · FLOOR + HIGH ROUTES
     </div>
 
     <div id="bot-debug">
@@ -52,10 +52,10 @@ root.innerHTML = `
     <div id="touch-note">Touch device detected. Mobile combat controls will be added in the dedicated mobile-input phase.</div>
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 004</div>
+        <div class="build-tag">BUILD 005</div>
         <h1>SHIFT Arena</h1>
-        <p>First combat loop: the red bot detects, chases and shoots you. Break line-of-sight behind solid geometry, then eliminate it with the Tactical AR.</p>
-        <button type="button">ENTER BOT TEST</button>
+        <p>First real map graybox: fight through a giant kitchen with floor lanes, island high ground, a spoon bridge, under-table flanks, a sink tunnel, stove counter and fridge landmark.</p>
+        <button type="button">ENTER KITCHEN</button>
       </div>
     </div>
   </div>`;

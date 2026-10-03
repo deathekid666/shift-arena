@@ -9,13 +9,13 @@ export class TargetRange {
   }
 
   build() {
-    this.createDummy(-5.2, 3.5);
-    this.createDummy(0.2, 1.0);
-    this.createDummy(5.0, -1.8);
-    this.createDummy(-4.0, -5.4);
+    // Kitchen weapon-test targets: floor, table high ground, stove high ground.
+    this.createDummy(-25.0, 0, 2.0);
+    this.createDummy(16.0, 3.0, 8.0);
+    this.createDummy(2.0, 3.28, -20.0);
   }
 
-  createDummy(x, z) {
+  createDummy(x, y, z) {
     const group = new THREE.Group();
     const bodyMaterial = new THREE.MeshStandardMaterial({
       color: 0xe6edf4,
@@ -46,7 +46,7 @@ export class TargetRange {
     base.receiveShadow = true;
     group.add(base);
 
-    group.position.set(x, 0, z);
+    group.position.set(x, y, z);
     this.scene.add(group);
 
     const target = {
@@ -66,6 +66,7 @@ export class TargetRange {
       mesh.userData.disabled = false;
       this.hitMeshes.push(mesh);
     }
+
     this.targets.push(target);
   }
 

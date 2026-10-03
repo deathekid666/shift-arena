@@ -1,29 +1,25 @@
-# SHIFT Arena — Build 004
+# SHIFT Arena — Build 005
 
 Browser-first third-person shooter prototype.
 
 ## Current scope
-- Build 001 movement + corrected vertical obstacle collision
+- Build 001 movement + vertical obstacle collision
 - Build 002 TPS aiming + Tactical AR
 - Build 003 HP / Shield / elimination / respawn
 - Build 004 first combat bot
-- Bot state machine: IDLE → CHASE / SEARCH → ATTACK → DEAD → RESPAWN
-- Bot line-of-sight checks against world geometry
-- Bot cannot damage the player through walls
-- Bot body/head hit zones use the same player weapon pipeline
-- Bot health feedback and respawn
-- Stationary weapon-test dummies retained
-- Build 003 orange/red damage pads retained for regression testing
+- Build 005 first giant-kitchen graybox
 
-## Controls
-- WASD: move
-- Mouse: look
-- Shift: sprint
-- Ctrl: crouch / slide
-- Space: jump
-- Left mouse: fire
-- Right mouse: ADS
-- R: reload
-- Esc: release pointer
+## Kitchen graybox routes
+- Floor spawn lane
+- Central kitchen island
+- Ramp to island high ground
+- Spoon bridge from island to table
+- Under-table flank route
+- Sink-counter tunnel
+- Cutting-board ramp to sink counter
+- Stove-counter lane
+- Giant fridge landmark
+- Cereal boxes, cup and pan used as oversized cover
+- Three stationary weapon-test targets relocated into the kitchen
 
-Bot combat numbers are development defaults and live in src/config.js so they can be tuned later without rewriting AI.
+This is intentionally graybox geometry. No final textures, props, hazards, animations or kitchen art yet. The purpose is to validate scale, sightlines, traversal and combat routes before visual production.
