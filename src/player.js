@@ -97,7 +97,7 @@ export class PlayerController {
     const displacement = this.velocity.clone().multiplyScalar(dt);
     this.moveHorizontal(displacement.x, 0);
     this.moveHorizontal(0, displacement.z);
-    this.moveVertical(displacement.y);
+    this.moveVertical(displacement.y, Math.hypot(displacement.x, displacement.z));
 
     if (this.group.position.y < -15) {
       this.resetAt(this.world.spawnPoint);
@@ -119,8 +119,16 @@ export class PlayerController {
 
   supportHeightAt(x, z) {
     const cfg = GAME_CONFIG.movement;
-    let supportY = this.world.groundHeightAt(x, z);
-    let found = true;
+    const feetY = this.group.position.y;
+    const rampY = this.world.rampHeightAt(x, z);
+    let supportY = 0;
+
+    // A ramp is valid support only when its surface is already at the player's
+    // feet (or just a small step above). This prevents walking underneath a
+    // ramp from snapping the player onto its top surface.
+    if (rampY !== null && rampY <= feetY + 0.12) {
+      supportY = Math.max(supportY, rampY);
+    }
 
     for (const c of this.world.colliders) {
       const b = c.box;
@@ -133,16 +141,15 @@ export class PlayerController {
       if (!overlapsXZ) continue;
 
       const top = b.max.y;
-      if (top <= this.group.position.y + 0.06 && top > supportY) {
+      if (top <= feetY + 0.06 && top > supportY) {
         supportY = top;
       }
     }
 
-    if (supportY > this.group.position.y + 0.06) found = false;
-    return found ? supportY : null;
+    return supportY <= feetY + 0.12 ? supportY : null;
   }
 
-  moveVertical(dy) {
+  moveVertical(dy, horizontalTravel = 0) {
     const cfg = GAME_CONFIG.movement;
     const height = this.crouching ? cfg.crouchHeight : cfg.standingHeight;
     const x = this.group.position.x;
@@ -151,7 +158,21 @@ export class PlayerController {
     const newY = oldY + dy;
 
     if (dy <= 0) {
-      let landingY = this.world.groundHeightAt(x, z);
+      let landingY = 0;
+
+      const rampY = this.world.rampHeightAt(x, z);
+      if (rampY !== null) {
+        // Walking up a ramp can raise the floor slightly between frames.
+        // Landing from above is also allowed. Being well below the surface is not.
+        const rampStepTolerance = Math.max(0.12, horizontalTravel * 0.7 + 0.04);
+        const canReachRampFromAbove =
+          oldY >= rampY - rampStepTolerance &&
+          newY <= rampY + 0.001;
+
+        if (canReachRampFromAbove) {
+          landingY = Math.max(landingY, rampY);
+        }
+      }
 
       for (const c of this.world.colliders) {
         const b = c.box;

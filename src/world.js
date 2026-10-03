@@ -205,8 +205,8 @@ export class TestWorld {
     this.scene.add(grid);
   }
 
-  groundHeightAt(x, z) {
-    let y = 0;
+  rampHeightAt(x, z) {
+    let y = null;
 
     for (const r of this.ramps) {
       if (x < r.minX || x > r.maxX || z < r.minZ || z > r.maxZ) continue;
@@ -216,9 +216,15 @@ export class TestWorld {
         : (x - r.minX) / (r.maxX - r.minX);
 
       const k = r.direction === 1 ? t : 1 - t;
-      y = Math.max(y, r.baseY + (r.topY - r.baseY) * k);
+      const rampY = r.baseY + (r.topY - r.baseY) * k;
+      y = y === null ? rampY : Math.max(y, rampY);
     }
 
     return y;
+  }
+
+  groundHeightAt(x, z) {
+    const rampY = this.rampHeightAt(x, z);
+    return rampY === null ? 0 : Math.max(0, rampY);
   }
 }
