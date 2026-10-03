@@ -480,11 +480,14 @@ export class TinFangSystem {
   }
 
   cancelHandAction() {
+    const wasClaw = this.state === 'CLAW';
     this.handRig.visible = false;
     this.sheath.visible = true;
     this.slashArc.visible = false;
     setFangGlow(this.handFang, 0);
-    this.state = 'READY';
+    this.state = wasClaw
+      ? (this.stuckPosition ? 'STUCK' : this.projectile ? 'THROWN' : 'LOST')
+      : 'READY';
     this.holdTime = 0;
   }
 
