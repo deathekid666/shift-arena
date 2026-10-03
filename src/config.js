@@ -44,5 +44,17 @@ export const GAME_CONFIG = {
     maxHealth: 100,
     maxShield: 100,
     respawnDelay: 2.5
+  },
+  bot: {
+    maxHealth: 100,
+    moveSpeed: 3.4,
+    detectionRange: 28,
+    attackRange: 15,
+    preferredRange: 9,
+    damage: 12,
+    fireRate: 2.2,
+    respawnDelay: 2.5,
+    searchDuration: 2.2,
+    radius: 0.42
   }
 };

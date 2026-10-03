@@ -69,9 +69,21 @@ export class TargetRange {
     this.targets.push(target);
   }
 
+  registerHitMeshes(meshes) {
+    for (const mesh of meshes) {
+      if (!this.hitMeshes.includes(mesh)) this.hitMeshes.push(mesh);
+    }
+  }
+
   applyDamage(mesh, baseDamage, headshotMultiplier) {
     const target = mesh.userData.combatTarget;
-    if (!target || !target.alive) return null;
+    if (!target) return null;
+
+    if (typeof target.takeWeaponDamage === 'function') {
+      return target.takeWeaponDamage(mesh.userData.hitZone, baseDamage, headshotMultiplier);
+    }
+
+    if (!target.alive) return null;
 
     const headshot = mesh.userData.hitZone === 'head';
     const damage = Math.round(baseDamage * (headshot ? headshotMultiplier : 1));

@@ -220,8 +220,23 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
   letter-spacing: .05em;
   white-space: nowrap;
 }
-#damage-test-hint b:first-of-type { color: #ffb356; }
-#damage-test-hint b:last-of-type { color: #ff7070; }
+#damage-test-hint b { color: #ff7770; }
+
+#bot-debug {
+  position: absolute;
+  left: 50%;
+  top: 48px;
+  transform: translateX(-50%);
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(7,12,20,.66);
+  border: 1px solid rgba(255,255,255,.11);
+  color: #c8d2da;
+  font-size: 10px;
+  letter-spacing: .06em;
+}
+#bot-debug b:first-of-type { color: #ff8c84; }
+#bot-debug b:last-of-type { color: #91e39f; }
 
 #stats {
   position: absolute;
@@ -287,7 +302,7 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
   background: radial-gradient(circle at center, rgba(13,23,36,.35), rgba(4,8,14,.86));
 }
 #start-card {
-  width: min(450px, calc(100vw - 32px));
+  width: min(470px, calc(100vw - 32px));
   padding: 24px;
   border-radius: 20px;
   background: rgba(10,18,29,.95);
@@ -332,6 +347,6 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
   font-size: 12px;
 }
 @media (pointer: coarse) {
-  #controls, #weapon-hud, #player-status, #damage-test-hint { display:none; }
+  #controls, #weapon-hud, #player-status, #damage-test-hint, #bot-debug { display:none; }
   #touch-note { display:block; }
 }

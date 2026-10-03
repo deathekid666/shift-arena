@@ -6,6 +6,7 @@ import { ThirdPersonCamera } from './camera.js';
 import { TargetRange } from './targets.js';
 import { TacticalAR } from './weapon.js';
 import { PlayerHealth } from './health.js';
+import { CombatBot } from './bot.js';
 
 const root = document.querySelector('#app');
 root.innerHTML = `
@@ -34,7 +35,11 @@ root.innerHTML = `
     </div>
 
     <div id="damage-test-hint">
-      BUILD 003 TEST · <b>ORANGE</b> PAD = 30 DMG · <b>RED</b> PAD = 80 DMG
+      BUILD 004 · FIGHT THE <b>RED BOT</b> · WALLS BLOCK BOT FIRE
+    </div>
+
+    <div id="bot-debug">
+      BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b>
     </div>
 
     <div id="stats"></div>
@@ -47,10 +52,10 @@ root.innerHTML = `
     <div id="touch-note">Touch device detected. Mobile combat controls will be added in the dedicated mobile-input phase.</div>
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 003</div>
+        <div class="build-tag">BUILD 004</div>
         <h1>SHIFT Arena</h1>
-        <p>Health + shield lifecycle test. Use the orange and red floor pads near spawn to validate damage, shield break, elimination and respawn.</p>
-        <button type="button">ENTER COMBAT TEST</button>
+        <p>First combat loop: the red bot detects, chases and shoots you. Break line-of-sight behind solid geometry, then eliminate it with the Tactical AR.</p>
+        <button type="button">ENTER BOT TEST</button>
       </div>
     </div>
   </div>`;
@@ -99,18 +104,11 @@ const damageDirection = document.querySelector('#damage-direction');
 const shieldBreak = document.querySelector('#shield-break');
 const elimination = document.querySelector('#elimination');
 const respawnCountdown = document.querySelector('#respawn-countdown');
+const botState = document.querySelector('#bot-state');
+const botHealth = document.querySelector('#bot-health');
 
-const weapon = new TacticalAR({
-  scene,
-  camera,
-  cameraRig: thirdCam,
-  player,
-  input,
-  world,
-  targets,
-  onFire: () => pulse(crosshair, 'shot'),
-  onHit: (result) => showHit(result)
-});
+let weapon = null;
+let bot = null;
 
 const health = new PlayerHealth({
   player,
@@ -122,13 +120,33 @@ const health = new PlayerHealth({
   onEliminated: () => {
     elimination.classList.add('show');
     crosshair.classList.add('disabled');
-    weapon.reset();
+    weapon?.reset();
   },
   onRespawn: () => {
     elimination.classList.remove('show');
     crosshair.classList.remove('disabled');
-    weapon.reset();
+    weapon?.reset();
   }
+});
+
+bot = new CombatBot({
+  scene,
+  world,
+  player,
+  playerHealth: health,
+  targets
+});
+
+weapon = new TacticalAR({
+  scene,
+  camera,
+  cameraRig: thirdCam,
+  player,
+  input,
+  world,
+  targets,
+  onFire: () => pulse(crosshair, 'shot'),
+  onHit: (result) => showHit(result)
 });
 
 const start = document.querySelector('#start');
@@ -215,6 +233,7 @@ function loop(now) {
 
   health.update(dt);
   targets.update(dt);
+  bot.update(dt, camera);
   renderer.render(scene, camera);
 
   crosshair.classList.toggle('ads', health.alive && weapon.aiming);
@@ -222,6 +241,9 @@ function loop(now) {
   reloadState.textContent = health.alive && weapon.isReloading
     ? `RELOADING ${Math.round(weapon.reloadProgress * 100)}%`
     : '';
+
+  botState.textContent = bot.state;
+  botHealth.textContent = String(Math.round(bot.health));
 
   if (!health.alive) {
     respawnCountdown.textContent = health.respawnTimer.toFixed(1);
