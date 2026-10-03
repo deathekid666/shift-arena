@@ -52,6 +52,7 @@ export class WeaponSystem {
       this.player.group.add(entry.model.group);
     });
 
+    this.player.setWeaponVisualActive?.(true);
     this.emitSwitch();
     this.emitInventory();
   }
@@ -95,6 +96,7 @@ export class WeaponSystem {
 
   setVisualHidden(hidden) {
     this.visualHidden = Boolean(hidden);
+    this.player.setWeaponVisualActive?.(!this.visualHidden);
     for (const entry of this.entries) {
       entry.model.group.visible =
         !this.visualHidden &&
@@ -205,9 +207,9 @@ export class WeaponSystem {
     const swayX = THREE.MathUtils.clamp(-this.cameraRig.lookX * swayScale, -0.07, 0.07);
     const swayY = THREE.MathUtils.clamp(this.cameraRig.lookY * swayScale * 0.5, -0.035, 0.035);
 
-    const targetX = (this.aiming ? 0.40 : 0.48) + bobX + swayX;
-    const targetY = 1.02 + bobY + swayY;
-    const targetZ = (this.aiming ? -0.58 : -0.46) + state.visualKick;
+    const targetX = (this.aiming ? 0.28 : 0.34) + bobX + swayX;
+    const targetY = 1.05 + bobY + swayY;
+    const targetZ = (this.aiming ? -0.60 : -0.48) + state.visualKick;
 
     model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 18 / cfg.mass, dt);
     model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / cfg.mass, dt);
@@ -592,7 +594,7 @@ export class WeaponSystem {
     muzzleFlash.visible = false;
     group.add(muzzleFlash);
 
-    group.position.set(0.48, 1.02, -0.46);
+    group.position.set(0.34, 1.05, -0.48);
     group.rotation.x = -0.04;
 
     return { group, muzzle, muzzleFlash };

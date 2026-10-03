@@ -105,3 +105,17 @@ Browser-first third-person shooter prototype.
 - This prevents the giant yellow player body from covering the crosshair when camera collision gets tight.
 - Settled Fang floor fitting now ignores the invisible shootable hitbox and calculates bounds from visible blade/handle geometry only.
 - This prevents the visible knife from hovering or sinking because of the larger invisible hit sphere.
+
+
+## Build 009 — Phase 1: Character 01 / Roach Scout
+- Replaced the visible yellow capsule with the first stylized humanoid cockroach character.
+- Character direction follows the approved first sketch: cute anime/cartoon proportions, human-like silhouette, warm brown/orange chitin, cream outfit, oversized expressive eyes, hair/crest, long antennae and no wings.
+- Character is constructed as articulated body parts rather than decorating the old capsule.
+- Added head, face, anime eyes/highlights, smile, crest/hair, antennae, torso, chest panel, belt, hips, shell-back plates, arms, hands, legs and boots.
+- Added explicit weapon, Fang and head sockets for later rigging/character variants.
+- Existing movement collision values remain unchanged so Build 009 is visual-first.
+- Basic articulated combat pose wraps the character's arms around the current firearm position.
+- Gun presentation was centered slightly to fit the new character's hands.
+- The dedicated Tin Fang throw arm now uses the character palette and temporarily replaces the right character arm during Fang animations.
+- Camera body hiding hides only the character mesh; gun/Fang visuals remain available in cramped spaces.
+- Full locomotion/scuttle/idle animation remains Build 010.

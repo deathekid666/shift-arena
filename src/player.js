@@ -1,5 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG } from './config.js';
+import { buildRoachScoutCharacter, updateRoachScoutCharacter } from './character.js';
 
 export class PlayerController {
   constructor(world, input) {
@@ -12,18 +13,19 @@ export class PlayerController {
     this.sliding = false;
     this.slideTimer = 0;
 
-    const mat = new THREE.MeshStandardMaterial({ color: 0xf6b84a, roughness: 0.55 });
-    this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.43, 0.94, 8, 16), mat);
-    this.body.castShadow = true;
-    this.body.position.y = 0.9;
+    // The gameplay capsule remains implicit in movement/collision values.
+    // This pivot contains only the visible character and animation attachments.
+    this.body = new THREE.Group();
+    this.body.name = 'PlayerVisualPivot';
+    this.body.position.y = GAME_CONFIG.movement.standingHeight / 2;
     this.group.add(this.body);
 
-    this.visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.52, 0.18, 0.12),
-      new THREE.MeshStandardMaterial({ color: 0x16283a, metalness: 0.35, roughness: 0.28 })
-    );
-    this.visor.position.set(0, 1.28, -0.37);
-    this.group.add(this.visor);
+    this.character = buildRoachScoutCharacter();
+    this.visualRoot = this.character.root;
+    this.body.add(this.visualRoot);
+
+    this.weaponVisualActive = true;
+    this.fangArmOverride = false;
     this.resetAt(world.spawnPoint);
     world.scene.add(this.group);
   }
@@ -37,7 +39,10 @@ export class PlayerController {
     this.sliding = false;
     this.slideTimer = 0;
     this.body.scale.set(1, 1, 1);
+    this.body.rotation.set(0, 0, 0);
     this.body.position.y = GAME_CONFIG.movement.standingHeight / 2;
+    this.visualRoot.visible = true;
+    this.fangArmOverride = false;
   }
 
   update(dt, cameraYaw, combatFacing = false) {
@@ -115,6 +120,15 @@ export class PlayerController {
     const height = this.crouching ? cfg.crouchHeight : cfg.standingHeight;
     this.body.scale.y = THREE.MathUtils.damp(this.body.scale.y, height / cfg.standingHeight, 18, dt);
     this.body.position.y = height / 2;
+
+    updateRoachScoutCharacter(this.character, {
+      dt,
+      speed: this.horizontalSpeed(),
+      combat: this.weaponVisualActive || combatFacing,
+      crouching: this.crouching,
+      grounded: this.grounded,
+      rightArmOverride: this.fangArmOverride
+    });
   }
 
   supportHeightAt(x, z) {
@@ -289,9 +303,20 @@ export class PlayerController {
   }
 
   setCameraBodyHidden(hidden) {
-    const visible = !hidden;
-    this.body.visible = visible;
-    if (this.visor) this.visor.visible = visible;
+    // Keep weapon / Fang animation attachments visible. Only hide the actual
+    // character mesh when the camera is forced very close by kitchen geometry.
+    this.visualRoot.visible = !hidden;
+  }
+
+  setFangArmOverride(active) {
+    this.fangArmOverride = Boolean(active);
+    if (!active && this.character?.rightArm?.root) {
+      this.character.rightArm.root.visible = true;
+    }
+  }
+
+  setWeaponVisualActive(active) {
+    this.weaponVisualActive = Boolean(active);
   }
 
   horizontalSpeed() {

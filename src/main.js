@@ -59,7 +59,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 008.2 · TIN FANG AIMING · PHYSICAL STICK / FALL / BOUNCE</div>
+    <div id="damage-test-hint">BUILD 009 · CHARACTER 01 · ROACH SCOUT</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -108,9 +108,9 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 008.2</div>
+        <div class="build-tag">BUILD 009 · PHASE 1</div>
         <h1>SHIFT Arena</h1>
-        <p>Tin Fang aiming is now crosshair-correct and animated. Hold V to enter an over-shoulder throwing pose with a real ballistic trajectory, then release for a timed arm snap and follow-through. Embedded Fangs can be shot loose, fall, bounce and be recovered.</p>
+        <p>Character 01 is now in-game: the first cute anime/cartoon humanoid cockroach design replaces the yellow capsule visually while the proven gameplay collision remains unchanged underneath.</p>
         <label class="bot-toggle">
           <span class="bot-toggle-copy">
             <strong>COMBAT BOT</strong>

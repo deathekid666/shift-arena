@@ -69,19 +69,17 @@ export class TinFangSystem {
   }
 
   buildPlayerVisuals() {
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0xf6b84a,
-      roughness: 0.58
+    const bodyMat = new THREE.MeshToonMaterial({
+      color: 0xc78553
     });
-    const handMat = new THREE.MeshStandardMaterial({
-      color: 0xd99a37,
-      roughness: 0.62
+    const handMat = new THREE.MeshToonMaterial({
+      color: 0xf1d7aa
     });
 
     this.armRig = new THREE.Group();
-    this.armRig.position.set(0.39, 1.38, -0.02);
+    this.armRig.position.set(0.31, 0.48, -0.02);
     this.armRig.visible = false;
-    this.player.group.add(this.armRig);
+    this.player.body.add(this.armRig);
 
     this.upperArm = new THREE.Mesh(
       new THREE.CylinderGeometry(0.095, 0.115, 0.48, 9),
@@ -122,9 +120,9 @@ export class TinFangSystem {
     this.handRoot.add(this.handFang);
 
     this.sheath = buildSheath();
-    this.sheath.position.set(0.50, 0.67, 0.18);
+    this.sheath.position.set(0.46, -0.22, 0.18);
     this.sheath.rotation.set(-0.15, 0.05, 0.42);
-    this.player.group.add(this.sheath);
+    this.player.body.add(this.sheath);
 
     this.slashArc = buildSlashArc();
     this.slashArc.visible = false;
@@ -156,6 +154,7 @@ export class TinFangSystem {
     this.releaseLaunched = false;
     this.stuckPosition = null;
     this.armRig.visible = false;
+    this.player.setFangArmOverride?.(false);
     this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
@@ -219,6 +218,7 @@ export class TinFangSystem {
     this.holdTime = 0;
     this.actionTime = 0;
     this.armRig.visible = true;
+    this.player.setFangArmOverride?.(true);
     this.handFang.visible = true;
     this.sheath.visible = false;
     this.trajectoryLine.visible = false;
@@ -415,6 +415,7 @@ export class TinFangSystem {
 
     if (t >= 1) {
       this.armRig.visible = false;
+      this.player.setFangArmOverride?.(false);
       this.handFang.visible = true;
       this.resetBodyPose();
       this.state = this.stateFromProjectile();
@@ -425,6 +426,7 @@ export class TinFangSystem {
     this.actionTime = 0;
     this.actionDuration = 0.38;
     this.armRig.visible = true;
+    this.player.setFangArmOverride?.(true);
     this.handFang.visible = true;
     this.sheath.visible = false;
     this.slashArc.visible = true;
@@ -1015,6 +1017,7 @@ export class TinFangSystem {
     this.state = 'READY';
     this.sheath.visible = true;
     this.armRig.visible = false;
+    this.player.setFangArmOverride?.(false);
     this.handFang.visible = true;
     this.resetBodyPose();
     this.audio?.playFang?.('recover');
@@ -1027,6 +1030,7 @@ export class TinFangSystem {
     this.state = 'LOST';
     this.sheath.visible = true;
     this.armRig.visible = false;
+    this.player.setFangArmOverride?.(false);
     this.handFang.visible = true;
     this.resetBodyPose();
     this.onToast?.('TIN FANG LOST · RETURNS ON RESPAWN');
@@ -1051,6 +1055,7 @@ export class TinFangSystem {
 
   finishHandAction() {
     this.armRig.visible = false;
+    this.player.setFangArmOverride?.(false);
     this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
@@ -1064,6 +1069,7 @@ export class TinFangSystem {
   cancelHandAction() {
     const wasClaw = this.state === 'CLAW';
     this.armRig.visible = false;
+    this.player.setFangArmOverride?.(false);
     this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
