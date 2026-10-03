@@ -11,7 +11,19 @@ import { CombatBot } from './bot.js';
 const root = document.querySelector('#app');
 root.innerHTML = `
   <div id="hud">
-    <div id="crosshair"><span></span></div>
+    <div id="crosshair" data-type="rifle">
+      <i class="arm top"></i><i class="arm right"></i><i class="arm bottom"></i><i class="arm left"></i>
+      <span class="reticle-ring"></span><span class="reticle-dot"></span>
+    </div>
+
+    <div id="scope-overlay">
+      <div class="scope-reticle">
+        <i class="scope-h"></i><i class="scope-v"></i>
+        <span class="mil m1"></span><span class="mil m2"></span><span class="mil m3"></span><span class="mil m4"></span>
+        <b></b>
+      </div>
+    </div>
+
     <div id="hit-marker"></div>
     <div id="damage-pop"></div>
     <div id="player-damage-vignette"></div>
@@ -19,13 +31,9 @@ root.innerHTML = `
     <div id="shield-break">SHIELD BROKEN</div>
 
     <div id="player-status">
-      <div class="status-row shield-row">
-        <span>SHIELD</span><b id="shield-value">100</b>
-      </div>
+      <div class="status-row shield-row"><span>SHIELD</span><b id="shield-value">100</b></div>
       <div class="status-bar shield-bar"><i id="shield-fill"></i></div>
-      <div class="status-row health-row">
-        <span>HP</span><b id="health-value">100</b>
-      </div>
+      <div class="status-row health-row"><span>HP</span><b id="health-value">100</b></div>
       <div class="status-bar health-bar"><i id="health-fill"></i></div>
     </div>
 
@@ -35,13 +43,10 @@ root.innerHTML = `
     </div>
 
     <div id="damage-test-hint">
-      BUILD 006 · 7-WEAPON BALANCE TEST · KEYS <b>1–7</b>
+      BUILD 006.1 · WEAPON FEEL PASS · RETICLES + RECOIL + TRUE SNIPER SCOPE
     </div>
 
-    <div id="bot-debug">
-      BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b>
-    </div>
-
+    <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
     <div id="weapon-bar">
@@ -58,7 +63,7 @@ root.innerHTML = `
       <div id="weapon-name" class="weapon-name">TACTICAL AR</div>
       <div id="weapon-role" class="weapon-role">FAST CLOSE–MID</div>
       <div><span id="ammo">30</span><span id="mag-size" class="reserve"> / 30</span></div>
-      <div id="weapon-statline">DMG 22 · 7.0 RPS</div>
+      <div id="weapon-statline">DMG 22 · 7 RPS</div>
       <div id="reload-state"></div>
     </div>
 
@@ -67,10 +72,10 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 006</div>
+        <div class="build-tag">BUILD 006.1</div>
         <h1>SHIFT Arena</h1>
-        <p>Seven-weapon balance test in the giant kitchen. Switch with keys 1–7 and compare damage, fire rate, recoil, range, magazine size and ADS behavior.</p>
-        <button type="button">ENTER WEAPON TEST</button>
+        <p>Weapon-feel rebuild: every class now has its own reticle, recoil pattern, accuracy behavior, camera treatment, handling weight and shot sound. The sniper enters a true scoped view.</p>
+        <button type="button">ENTER WEAPON FEEL TEST</button>
       </div>
     </div>
   </div>`;
@@ -106,6 +111,7 @@ const thirdCam = new ThirdPersonCamera(camera, player, input, world);
 const targets = new TargetRange(scene);
 
 const crosshair = document.querySelector('#crosshair');
+const scopeOverlay = document.querySelector('#scope-overlay');
 const hitMarker = document.querySelector('#hit-marker');
 const damagePop = document.querySelector('#damage-pop');
 const ammo = document.querySelector('#ammo');
@@ -131,9 +137,7 @@ let weapon = null;
 let bot = null;
 
 const health = new PlayerHealth({
-  player,
-  world,
-  cameraRig: thirdCam,
+  player, world, cameraRig: thirdCam,
   onChange: updateHealthHud,
   onDamage: showPlayerDamage,
   onShieldBreak: showShieldBreak,
@@ -149,22 +153,10 @@ const health = new PlayerHealth({
   }
 });
 
-bot = new CombatBot({
-  scene,
-  world,
-  player,
-  playerHealth: health,
-  targets
-});
+bot = new CombatBot({ scene, world, player, playerHealth: health, targets });
 
 weapon = new WeaponSystem({
-  scene,
-  camera,
-  cameraRig: thirdCam,
-  player,
-  input,
-  world,
-  targets,
+  scene, camera, cameraRig: thirdCam, player, input, world, targets,
   onFire: () => pulse(crosshair, 'shot'),
   onHit: (result) => showHit(result),
   onSwitch: updateWeaponHud
@@ -173,10 +165,14 @@ weapon = new WeaponSystem({
 const start = document.querySelector('#start');
 const button = start.querySelector('button');
 button.addEventListener('click', () => {
+  weapon.unlockAudio();
   start.style.display = 'none';
   input.lockPointer();
 });
-renderer.domElement.addEventListener('click', () => input.lockPointer());
+renderer.domElement.addEventListener('click', () => {
+  weapon.unlockAudio();
+  input.lockPointer();
+});
 
 const stats = document.querySelector('#stats');
 let last = performance.now();
@@ -190,6 +186,7 @@ function updateWeaponHud(info) {
   weaponRole.textContent = info.role;
   weaponStatline.textContent = `DMG ${info.damage} · ${info.fireRate.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')} RPS`;
   magSize.textContent = ` / ${info.magazineSize}`;
+  crosshair.dataset.type = info.reticle;
   weaponSlots.forEach((slot) => {
     slot.classList.toggle('active', Number(slot.dataset.slot) === info.slot);
   });
@@ -216,12 +213,8 @@ function showPlayerDamage(result) {
 
   clearTimeout(showPlayerDamage.vignetteTimer);
   clearTimeout(showPlayerDamage.directionTimer);
-  showPlayerDamage.vignetteTimer = setTimeout(() => {
-    damageVignette.classList.remove('show', 'shield-only');
-  }, 190);
-  showPlayerDamage.directionTimer = setTimeout(() => {
-    damageDirection.classList.remove('show');
-  }, 280);
+  showPlayerDamage.vignetteTimer = setTimeout(() => damageVignette.classList.remove('show', 'shield-only'), 190);
+  showPlayerDamage.directionTimer = setTimeout(() => damageDirection.classList.remove('show'), 280);
 }
 
 function showShieldBreak() {
@@ -260,16 +253,34 @@ function loop(now) {
     const combatFacing = input.pointerLocked && (input.mouseDown(2) || input.mouseDown(0));
     player.update(dt, thirdCam.yaw, combatFacing);
     weapon.updateSelection();
-    thirdCam.update(dt, weapon.aiming, weapon.adsFov);
+
+    thirdCam.update(dt, {
+      aiming: weapon.aiming,
+      adsFov: weapon.adsFov,
+      adsDistance: weapon.adsDistance,
+      adsShoulderOffset: weapon.adsShoulderOffset,
+      scoped: weapon.scoped
+    });
+
     weapon.update(dt);
   }
 
   health.update(dt);
   targets.update(dt);
   bot.update(dt, camera);
+
+  player.group.visible = health.alive && !weapon.scoped;
   renderer.render(scene, camera);
 
+  const scoped = health.alive && weapon.scoped;
+  crosshair.dataset.type = weapon.reticleType;
+  crosshair.style.setProperty('--gap', `${weapon.crosshairGap.toFixed(1)}px`);
   crosshair.classList.toggle('ads', health.alive && weapon.aiming);
+  crosshair.classList.toggle('scoped-hidden', scoped);
+
+  scopeOverlay.classList.toggle('show', scoped);
+  scopeOverlay.classList.toggle('unstable', scoped && weapon.scopeUnstable);
+
   ammo.textContent = String(weapon.ammo);
   reloadState.textContent = health.alive && weapon.isReloading
     ? `RELOADING ${Math.round(weapon.reloadProgress * 100)}%`
@@ -277,7 +288,6 @@ function loop(now) {
 
   botState.textContent = bot.state;
   botHealth.textContent = String(Math.round(bot.health));
-
   if (!health.alive) respawnCountdown.textContent = health.respawnTimer.toFixed(1);
 
   frames += 1;
@@ -287,7 +297,7 @@ function loop(now) {
     frames = 0;
     fpsTimer = 0;
     const speed = Math.hypot(player.velocity.x, player.velocity.z);
-    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${!health.alive ? 'ELIMINATED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
+    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${!health.alive ? 'ELIMINATED' : weapon.scoped ? 'SCOPED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
   }
 }
 requestAnimationFrame(loop);

@@ -430,3 +430,186 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 @media (pointer: coarse) {
   #weapon-bar { display:none; }
 }
+
+
+/* Build 006.1 — weapon-driven reticles */
+#crosshair {
+  --gap: 8px;
+  width: 84px;
+  height: 84px;
+}
+#crosshair::before,
+#crosshair::after { display: none; }
+#crosshair .arm,
+#crosshair .reticle-dot,
+#crosshair .reticle-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  pointer-events: none;
+}
+#crosshair .arm {
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 0 3px rgba(0,0,0,.6);
+  border-radius: 2px;
+}
+#crosshair .top,
+#crosshair .bottom { width: 2px; height: 9px; }
+#crosshair .left,
+#crosshair .right { width: 9px; height: 2px; }
+#crosshair .top { transform: translate(-50%, calc(-1 * var(--gap) - 9px)); }
+#crosshair .bottom { transform: translate(-50%, var(--gap)); }
+#crosshair .left { transform: translate(calc(-1 * var(--gap) - 9px), -50%); }
+#crosshair .right { transform: translate(var(--gap), -50%); }
+#crosshair .reticle-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  box-shadow: 0 0 3px rgba(0,0,0,.75);
+}
+#crosshair .reticle-ring {
+  display: none;
+  width: calc(var(--gap) * 2.0);
+  height: calc(var(--gap) * 2.0);
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255,255,255,.9);
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(0,0,0,.55);
+}
+
+#crosshair[data-type="precision"] .arm { height: 7px; }
+#crosshair[data-type="precision"] .left,
+#crosshair[data-type="precision"] .right { width: 7px; height: 2px; }
+#crosshair[data-type="precision"] .reticle-dot { width: 2px; height: 2px; }
+
+#crosshair[data-type="smg"] .arm { opacity: .9; }
+#crosshair[data-type="smg"] .top,
+#crosshair[data-type="smg"] .bottom { height: 6px; }
+#crosshair[data-type="smg"] .left,
+#crosshair[data-type="smg"] .right { width: 6px; height: 2px; }
+
+#crosshair[data-type="precision-smg"] .top,
+#crosshair[data-type="precision-smg"] .bottom { height: 5px; }
+#crosshair[data-type="precision-smg"] .left,
+#crosshair[data-type="precision-smg"] .right { width: 5px; height: 2px; }
+#crosshair[data-type="precision-smg"] .reticle-dot { width: 2px; height: 2px; }
+
+#crosshair[data-type="shotgun"] .reticle-ring,
+#crosshair[data-type="pump"] .reticle-ring { display: block; }
+#crosshair[data-type="shotgun"] .reticle-dot,
+#crosshair[data-type="pump"] .reticle-dot { width: 2px; height: 2px; }
+#crosshair[data-type="shotgun"] .arm,
+#crosshair[data-type="pump"] .arm { background: rgba(255,255,255,.78); }
+#crosshair[data-type="pump"] .reticle-ring {
+  border-width: 3px;
+  border-style: dashed;
+}
+#crosshair[data-type="pump"] .arm {
+  opacity: .55;
+}
+
+#crosshair[data-type="sniper"] .reticle-ring {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-width: 1px;
+  opacity: .65;
+}
+#crosshair[data-type="sniper"] .arm { opacity: .55; }
+#crosshair.scoped-hidden { opacity: 0; }
+
+#scope-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 90ms ease;
+  background:
+    radial-gradient(circle at center,
+      transparent 0,
+      transparent min(34vh, 34vw),
+      rgba(0,0,0,.985) min(34.5vh, 34.5vw),
+      rgba(0,0,0,.998) 100%);
+}
+#scope-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+.scope-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(68vh, 68vw);
+  height: min(68vh, 68vw);
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(15,18,20,.96);
+  border-radius: 50%;
+  box-shadow: inset 0 0 24px rgba(0,0,0,.45);
+}
+.scope-reticle .scope-h,
+.scope-reticle .scope-v {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  background: rgba(18,21,23,.92);
+}
+.scope-reticle .scope-h {
+  width: 100%;
+  height: 1px;
+  transform: translate(-50%, -50%);
+}
+.scope-reticle .scope-v {
+  width: 1px;
+  height: 100%;
+  transform: translate(-50%, -50%);
+}
+.scope-reticle b {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(20,22,24,.96);
+}
+.scope-reticle .mil {
+  position: absolute;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: rgba(20,22,24,.9);
+}
+.scope-reticle .m1 { top: 58%; }
+.scope-reticle .m2 { top: 66%; }
+.scope-reticle .m3 { top: 74%; }
+.scope-reticle .m4 { top: 82%; }
+#scope-overlay.unstable .scope-reticle {
+  filter: blur(1.35px);
+  opacity: .72;
+}
+#scope-overlay.unstable::after {
+  content: "UNSTEADY";
+  position: absolute;
+  left: 50%;
+  top: calc(50% + min(37vh, 37vw));
+  transform: translateX(-50%);
+  color: rgba(255,190,120,.9);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+#crosshair.shot:not(.scoped-hidden) {
+  filter: brightness(1.5);
+}
+
+@media (pointer: coarse) {
+  #scope-overlay { display:none; }
+}

@@ -1,5 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG, WEAPON_ORDER } from './config.js';
+import { WeaponAudio } from './audio.js';
 
 export class WeaponSystem {
   constructor({ scene, camera, cameraRig, player, input, world, targets, onHit, onFire, onSwitch }) {
@@ -14,6 +15,7 @@ export class WeaponSystem {
     this.onFire = onFire;
     this.onSwitch = onSwitch;
 
+    this.audio = new WeaponAudio();
     this.cameraRay = new THREE.Raycaster();
     this.muzzleRay = new THREE.Raycaster();
     this.center = new THREE.Vector2(0, 0);
@@ -27,7 +29,12 @@ export class WeaponSystem {
         fireCooldown: 0,
         reloadTimer: 0,
         flashTimer: 0,
-        isReloading: false
+        isReloading: false,
+        dynamicBloom: 0,
+        visualKick: 0,
+        shotIndex: 0,
+        sinceShot: 999,
+        bobTime: 0
       };
       return { key, cfg, model, state };
     });
@@ -40,37 +47,23 @@ export class WeaponSystem {
     this.emitSwitch();
   }
 
-  get active() {
-    return this.entries[this.activeIndex];
+  unlockAudio() {
+    this.audio.unlock();
   }
 
-  get cfg() {
-    return this.active.cfg;
-  }
-
-  get state() {
-    return this.active.state;
-  }
-
-  get name() {
-    return this.cfg.name;
-  }
-
-  get role() {
-    return this.cfg.role;
-  }
-
-  get ammo() {
-    return this.state.ammo;
-  }
-
-  get magazineSize() {
-    return this.cfg.magazineSize;
-  }
-
-  get isReloading() {
-    return this.state.isReloading;
-  }
+  get active() { return this.entries[this.activeIndex]; }
+  get cfg() { return this.active.cfg; }
+  get state() { return this.active.state; }
+  get name() { return this.cfg.name; }
+  get role() { return this.cfg.role; }
+  get ammo() { return this.state.ammo; }
+  get magazineSize() { return this.cfg.magazineSize; }
+  get isReloading() { return this.state.isReloading; }
+  get reticleType() { return this.cfg.reticle; }
+  get scoped() { return Boolean(this.cfg.scope && this.aiming); }
+  get adsFov() { return this.cfg.adsFov; }
+  get adsDistance() { return this.cfg.adsDistance; }
+  get adsShoulderOffset() { return this.cfg.adsShoulderOffset; }
 
   get reloadProgress() {
     if (!this.state.isReloading) return 0;
@@ -81,13 +74,20 @@ export class WeaponSystem {
     return this.input.pointerLocked && this.input.mouseDown(2);
   }
 
-  get adsFov() {
-    return this.cfg.adsFov;
-  }
-
   get firing() {
     if (!this.input.pointerLocked) return false;
     return this.cfg.automatic ? this.input.mouseDown(0) : this.input.consumeMouse(0);
+  }
+
+  get scopeUnstable() {
+    if (!this.scoped) return false;
+    return !this.player.grounded || this.player.horizontalSpeed() > 1.5 || this.state.sinceShot < 0.42;
+  }
+
+  get crosshairGap() {
+    const spread = this.currentSpread();
+    const normalized = Math.min(1, spread / Math.max(0.001, this.cfg.hipBloom * 1.8));
+    return THREE.MathUtils.lerp(this.cfg.reticleMinGap, this.cfg.reticleMaxGap, normalized);
   }
 
   updateSelection() {
@@ -96,11 +96,17 @@ export class WeaponSystem {
 
   update(dt) {
     for (const entry of this.entries) {
-      entry.state.fireCooldown = Math.max(0, entry.state.fireCooldown - dt);
+      const s = entry.state;
+      s.fireCooldown = Math.max(0, s.fireCooldown - dt);
+      s.sinceShot += dt;
+      s.dynamicBloom = THREE.MathUtils.damp(s.dynamicBloom, 0, entry.cfg.bloomDecay, dt);
+      s.visualKick = THREE.MathUtils.damp(s.visualKick, 0, 14 / entry.cfg.mass, dt);
 
-      if (entry.state.flashTimer > 0) {
-        entry.state.flashTimer -= dt;
-        if (entry.state.flashTimer <= 0) entry.model.muzzleFlash.visible = false;
+      if (s.sinceShot > 0.6) s.shotIndex = 0;
+
+      if (s.flashTimer > 0) {
+        s.flashTimer -= dt;
+        if (s.flashTimer <= 0) entry.model.muzzleFlash.visible = false;
       }
     }
 
@@ -123,11 +129,55 @@ export class WeaponSystem {
       else this.beginReload();
     }
 
+    this.updateWeaponPose(dt);
+  }
+
+  updateWeaponPose(dt) {
+    const cfg = this.cfg;
+    const state = this.state;
     const model = this.active.model.group;
-    const targetX = this.aiming ? 0.40 : 0.48;
-    const targetZ = this.aiming ? -0.58 : -0.46;
-    model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 18, dt);
-    model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 18, dt);
+    const speed = this.player.horizontalSpeed();
+    const moving = Math.min(1, speed / 5.2);
+
+    state.bobTime += dt * (3.5 + speed * 1.4);
+    const bobScale = cfg.bob * moving * (this.aiming ? 0.3 : 1);
+    const bobX = Math.cos(state.bobTime) * bobScale;
+    const bobY = Math.abs(Math.sin(state.bobTime * 2)) * bobScale * 0.65;
+
+    const swayScale = cfg.sway * (this.aiming ? 0.42 : 1);
+    const swayX = THREE.MathUtils.clamp(-this.cameraRig.lookX * swayScale, -0.07, 0.07);
+    const swayY = THREE.MathUtils.clamp(this.cameraRig.lookY * swayScale * 0.5, -0.035, 0.035);
+
+    const targetX = (this.aiming ? 0.40 : 0.48) + bobX + swayX;
+    const targetY = 1.02 + bobY + swayY;
+    const targetZ = (this.aiming ? -0.58 : -0.46) + state.visualKick;
+
+    model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 18 / cfg.mass, dt);
+    model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / cfg.mass, dt);
+    model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 22 / cfg.mass, dt);
+    model.rotation.x = THREE.MathUtils.damp(model.rotation.x, -0.04 - state.visualKick * 0.75, 18 / cfg.mass, dt);
+    model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / cfg.mass, dt);
+  }
+
+  currentSpread() {
+    const cfg = this.cfg;
+    const state = this.state;
+    let spread = (this.aiming ? cfg.adsBloom : cfg.hipBloom) + state.dynamicBloom;
+
+    const speed = this.player.horizontalSpeed();
+    if (speed > 0.35) spread *= cfg.moveSpreadMult;
+    if (!this.player.grounded) spread *= cfg.airSpreadMult;
+    if (this.player.crouching && this.player.grounded) spread *= cfg.crouchSpreadMult;
+
+    const firstShotReady =
+      cfg.firstShotAccuracy &&
+      this.aiming &&
+      this.player.grounded &&
+      speed < 0.25 &&
+      state.sinceShot > 0.42;
+
+    if (firstShotReady) spread *= 0.22;
+    return spread;
   }
 
   processWeaponSwitch() {
@@ -161,7 +211,9 @@ export class WeaponSystem {
       role: this.cfg.role,
       damage: this.cfg.damage,
       magazineSize: this.cfg.magazineSize,
-      fireRate: this.cfg.fireRate
+      fireRate: this.cfg.fireRate,
+      reticle: this.cfg.reticle,
+      scoped: Boolean(this.cfg.scope)
     });
   }
 
@@ -179,6 +231,10 @@ export class WeaponSystem {
       entry.state.reloadTimer = 0;
       entry.state.flashTimer = 0;
       entry.state.isReloading = false;
+      entry.state.dynamicBloom = 0;
+      entry.state.visualKick = 0;
+      entry.state.shotIndex = 0;
+      entry.state.sinceShot = 999;
       entry.model.muzzleFlash.visible = false;
     }
   }
@@ -186,23 +242,34 @@ export class WeaponSystem {
   fire() {
     const cfg = this.cfg;
     const state = this.state;
+    const spread = this.currentSpread();
 
     state.ammo -= 1;
     state.fireCooldown = 1 / cfg.fireRate;
-    state.flashTimer = 0.045;
-    this.active.model.muzzleFlash.visible = true;
+    state.flashTimer = cfg.pellets > 1 ? 0.07 : 0.045;
+    state.sinceShot = 0;
+    state.visualKick = Math.max(state.visualKick, cfg.visualKick);
 
-    const yawKick = (Math.random() - 0.5) * 2 * cfg.recoilYaw;
-    this.cameraRig.kick(cfg.recoilPitch, yawKick);
+    const pattern = cfg.recoilPattern[state.shotIndex % cfg.recoilPattern.length];
+    state.shotIndex += 1;
+    this.cameraRig.kick(pattern[0], pattern[1], cfg.recoilRecovery);
+
+    this.active.model.muzzleFlash.visible = true;
+    this.audio.playShot(cfg.sound);
     this.onFire?.({ name: cfg.name });
 
-    if (cfg.pellets > 1) this.fireShotgun();
-    else this.fireSingle();
+    if (cfg.pellets > 1) this.fireShotgun(spread);
+    else this.fireSingle(spread);
+
+    state.dynamicBloom = Math.min(
+      cfg.hipBloom * 1.65,
+      state.dynamicBloom + cfg.bloomPerShot
+    );
   }
 
-  fireSingle() {
+  fireSingle(spread) {
     const cfg = this.cfg;
-    const shot = this.traceShot(cfg.hipBloom, cfg.adsBloom, cfg.range);
+    const shot = this.traceShot(spread, cfg.range);
 
     if (shot.actualHit?.object?.userData?.combatTarget) {
       const multiplier = damageFalloff(shot.distance, cfg);
@@ -211,16 +278,17 @@ export class WeaponSystem {
         cfg.damage * multiplier,
         cfg.headshotMultiplier
       );
+
       if (result) {
         result.damage = Math.round(result.damage);
         this.onHit?.(result);
       }
     }
 
-    this.spawnTracer(shot.muzzlePos, shot.impactPoint, 1);
+    this.spawnTracer(shot.muzzlePos, shot.impactPoint, cfg.scope ? 0.55 : 1);
   }
 
-  fireShotgun() {
+  fireShotgun(spread) {
     const cfg = this.cfg;
     const pelletDamage = cfg.damage / cfg.pellets;
     let totalDamage = 0;
@@ -230,7 +298,7 @@ export class WeaponSystem {
     const tracerPoints = [];
 
     for (let i = 0; i < cfg.pellets; i++) {
-      const shot = this.traceShot(cfg.hipBloom, cfg.adsBloom, cfg.range);
+      const shot = this.traceShot(spread, cfg.range);
       if (!firstMuzzle) firstMuzzle = shot.muzzlePos.clone();
       if (i % 3 === 0) tracerPoints.push(shot.impactPoint.clone());
 
@@ -250,7 +318,7 @@ export class WeaponSystem {
     }
 
     if (firstMuzzle) {
-      tracerPoints.forEach((point) => this.spawnTracer(firstMuzzle, point, 0.72));
+      tracerPoints.forEach((point) => this.spawnTracer(firstMuzzle, point, 0.65));
     }
 
     if (totalDamage > 0) {
@@ -262,8 +330,7 @@ export class WeaponSystem {
     }
   }
 
-  traceShot(hipBloom, adsBloom, range) {
-    const spread = this.aiming ? adsBloom : hipBloom;
+  traceShot(spread, range) {
     this.cameraRay.setFromCamera(this.center, this.camera);
 
     const cameraDirection = this.cameraRay.ray.direction.clone();
@@ -284,7 +351,12 @@ export class WeaponSystem {
       : this.camera.position.clone().add(cameraDirection.multiplyScalar(range));
 
     const muzzlePos = new THREE.Vector3();
-    this.active.model.muzzle.getWorldPosition(muzzlePos);
+
+    if (this.scoped) {
+      muzzlePos.copy(this.camera.position);
+    } else {
+      this.active.model.muzzle.getWorldPosition(muzzlePos);
+    }
 
     const muzzleDirection = aimPoint.clone().sub(muzzlePos);
     const aimDistance = muzzleDirection.length();
@@ -360,7 +432,7 @@ export class WeaponSystem {
     stock.position.z = cfg.modelLength * 0.45;
     group.add(stock);
 
-    const barrelLength = cfg.name.includes('SNIPER') ? 0.78 : cfg.pellets > 1 ? 0.54 : 0.44;
+    const barrelLength = cfg.scope ? 0.78 : cfg.pellets > 1 ? 0.54 : 0.44;
     const barrel = new THREE.Mesh(
       new THREE.CylinderGeometry(0.04, 0.05, barrelLength, 10),
       dark
@@ -379,7 +451,7 @@ export class WeaponSystem {
 
     if (!cfg.name.includes('SHOTGUN')) {
       const sight = new THREE.Mesh(
-        new THREE.BoxGeometry(cfg.name.includes('SNIPER') ? 0.14 : 0.10, 0.08, cfg.name.includes('SNIPER') ? 0.28 : 0.16),
+        new THREE.BoxGeometry(cfg.scope ? 0.16 : 0.10, cfg.scope ? 0.11 : 0.08, cfg.scope ? 0.34 : 0.16),
         accent
       );
       sight.position.set(0, 0.15, -0.16);
@@ -391,7 +463,7 @@ export class WeaponSystem {
     group.add(muzzle);
 
     const muzzleFlash = new THREE.Mesh(
-      new THREE.SphereGeometry(cfg.pellets > 1 ? 0.11 : 0.075, 8, 6),
+      new THREE.SphereGeometry(cfg.pellets > 1 ? 0.12 : cfg.scope ? 0.10 : 0.075, 8, 6),
       new THREE.MeshBasicMaterial({ color: 0xffd466 })
     );
     muzzleFlash.position.copy(muzzle.position);
@@ -426,7 +498,6 @@ function applySpread(direction, camera, amount) {
 function damageFalloff(distance, cfg) {
   if (distance <= cfg.falloffStart) return 1;
   if (distance >= cfg.falloffEnd) return cfg.minDamageMultiplier;
-
   const t = (distance - cfg.falloffStart) / (cfg.falloffEnd - cfg.falloffStart);
   return 1 - (1 - cfg.minDamageMultiplier) * t;
 }
