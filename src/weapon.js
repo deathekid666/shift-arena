@@ -39,7 +39,7 @@ export class WeaponSystem {
     this.reticleDirection = new THREE.Vector3();
     this.center = new THREE.Vector2(0, 0);
     this.activeSlot = 0;
-    this.loadout = ['mechanicalAR', 'compactSMG'];
+    this.loadout = ['tacticalAR', 'compactSMG'];
     this.blocked = false;
     this.visualHidden = false;
     this.ammoPool = { light: 90, medium: 90, shells: 24, heavy: 8 };
