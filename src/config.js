@@ -129,7 +129,8 @@ export const GAME_CONFIG = {
     maxThrowSpeed: 29,
     projectileGravity: 8.5,
     projectileLifetime: 4.8,
-    recoveryRadius: 0.85
+    recoveryRadius: 1.15,
+    recoveryVerticalTolerance: 1.65
   },
   playerCombat: {
     maxHealth: 100,

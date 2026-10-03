@@ -61,3 +61,11 @@ Browser-first third-person shooter prototype.
 - Death/respawn returns the Fang.
 - Procedural animation includes draw, wind-up, charge pose, slash arc, throw snap, spinning flight/trail, stuck pulse and recovery.
 - Guns are visually holstered and firing/switching is blocked during melee/throw wind-up.
+
+
+## Build 008.1 — Fang input/recovery fixes
+- Hold behavior now checks the physical V key state every frame.
+- Quick tap V always resolves to melee as soon as V is no longer held.
+- Holding V past the prime threshold enters charge; releasing V throws immediately.
+- Fang recovery now uses horizontal proximity plus vertical tolerance instead of strict 3D distance.
+- Recovery radius increased to 1.15 with 1.65 vertical tolerance so stuck Fang pickups work on floors, walls and target bodies.

@@ -89,9 +89,22 @@ export class TinFangSystem {
 
     this.updateProjectile(dt);
 
-    if ((this.state === 'STUCK') && this.stuckPosition) {
-      const distance = this.player.group.position.distanceTo(this.stuckPosition);
-      if (distance <= this.cfg.recoveryRadius) this.recover();
+    if (this.state === 'STUCK' && this.stuckPosition) {
+      const playerPos = this.player.group.position;
+      const horizontalDistance = Math.hypot(
+        playerPos.x - this.stuckPosition.x,
+        playerPos.z - this.stuckPosition.z
+      );
+      const verticalDistance = Math.abs(
+        (playerPos.y + 0.9) - this.stuckPosition.y
+      );
+
+      if (
+        horizontalDistance <= this.cfg.recoveryRadius &&
+        verticalDistance <= this.cfg.recoveryVerticalTolerance
+      ) {
+        this.recover();
+      }
     }
 
     if (this.state === 'READY' && this.input.consume('melee')) {
@@ -101,19 +114,29 @@ export class TinFangSystem {
     }
 
     if (this.state === 'PRIMING' || this.state === 'CHARGING') {
-      this.holdTime += dt;
+      // Holding is based on the actual current key state every frame.
+      // This is intentionally not dependent on a separate keyup/release event.
+      const stillHolding = this.input.down('melee');
 
-      if (this.state === 'PRIMING' && this.holdTime >= this.cfg.primeThreshold) {
-        this.state = 'CHARGING';
-        this.audio?.playFang?.('charge');
+      if (stillHolding) {
+        this.holdTime += dt;
+
+        if (this.state === 'PRIMING' && this.holdTime >= this.cfg.primeThreshold) {
+          this.state = 'CHARGING';
+          this.audio?.playFang?.('charge');
+        }
+      } else {
+        if (this.holdTime >= this.cfg.primeThreshold) {
+          if (this.state !== 'CHARGING') this.state = 'CHARGING';
+          this.throwFang();
+        } else {
+          this.beginSlash();
+        }
       }
 
-      if (this.input.consumeReleased('melee')) {
-        if (this.state === 'CHARGING') this.throwFang();
-        else this.beginSlash();
-      }
+      // Drain the old release queue only as housekeeping; it no longer controls behavior.
+      this.input.consumeReleased('melee');
     } else {
-      // Consume stale releases so a prior V release cannot trigger later.
       this.input.consumeReleased('melee');
     }
 
@@ -496,7 +519,10 @@ export class TinFangSystem {
     let bearing = 0;
 
     if (this.stuckPosition) {
-      distance = this.player.group.position.distanceTo(this.stuckPosition);
+      distance = Math.hypot(
+        this.player.group.position.x - this.stuckPosition.x,
+        this.player.group.position.z - this.stuckPosition.z
+      );
       const dx = this.stuckPosition.x - this.player.group.position.x;
       const dz = this.stuckPosition.z - this.player.group.position.z;
       const worldAngle = Math.atan2(dx, -dz);
