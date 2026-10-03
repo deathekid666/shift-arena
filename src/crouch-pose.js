@@ -35,7 +35,16 @@ export function createCrouchPoseLayer(character) {
 
   function apply(state, dt) {
     const blend = THREE.MathUtils.clamp(state?.crouchBlend ?? 0, 0, 1);
+    const authoredState = character.authoredLocomotion?.state;
+    const authoredCrouch =
+      character.authoredLocomotion?.ready &&
+      character.authoredLocomotion?.active &&
+      (authoredState === 'CROUCH' || authoredState === 'CROUCH_WALK');
+
+    // The authored Quaternius crouch clips are the primary path. Keep this
+    // procedural IK layer only as a fallback if authored locomotion failed.
     if (
+      authoredCrouch ||
       blend <= 0.001 ||
       state?.sliding ||
       state?.grounded === false ||

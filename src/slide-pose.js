@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 
-// Tactical one-knee combat slide inspired by modern third-person shooters.
-// Lower body only: weapon/Fang upper-body layers remain free to aim/fire.
+// Deterministic two-knee combat slide for normalized VRM humanoid bones.
+// We intentionally do NOT solve the slide through foot-target IK: that solver
+// could re-straighten one leg depending on target distance. The normalized VRM
+// leg axes let us author the silhouette directly and guarantee both knees flex.
 export function createSlidePoseLayer(character) {
   const { bones: b, root } = character;
   const nodes = [...new Set([
@@ -26,11 +28,18 @@ export function createSlidePoseLayer(character) {
     blend = THREE.MathUtils.damp(
       blend,
       target,
-      target > blend ? 19 : 10,
+      target > blend ? 22 : 11,
       dt
     );
 
-    if (blend < 0.003) return;
+    if (
+      blend < 0.003 ||
+      !b.hips ||
+      !b.leftUpperLeg || !b.leftLowerLeg || !b.leftFoot ||
+      !b.rightUpperLeg || !b.rightLowerLeg || !b.rightFoot
+    ) {
+      return;
+    }
 
     restore();
     for (const node of nodes) {
@@ -38,147 +47,86 @@ export function createSlidePoseLayer(character) {
       underlyingP.set(node, node.position.clone());
     }
 
-    root.updateWorldMatrix(true, true);
-
-    const rootQ = root.getWorldQuaternion(new THREE.Quaternion());
-    const forward = new THREE.Vector3(0, 0, -1)
-      .applyQuaternion(rootQ)
-      .normalize();
-    const right = new THREE.Vector3(1, 0, 0)
-      .applyQuaternion(rootQ)
-      .normalize();
-
-    const leftFootBase = b.leftFoot.getWorldPosition(new THREE.Vector3());
-    const rightFootBase = b.rightFoot.getWorldPosition(new THREE.Vector3());
-    const leftFootQ = b.leftFoot.getWorldQuaternion(new THREE.Quaternion());
-    const rightFootQ = b.rightFoot.getWorldQuaternion(new THREE.Quaternion());
-
     const progress = THREE.MathUtils.clamp(state?.slideProgress ?? 0, 0, 1);
 
-    // Fast drop into the knee slide, stable middle, softer recovery.
-    const enter = smooth01(THREE.MathUtils.clamp(progress / 0.18, 0, 1));
-    const exit = smooth01(
-      THREE.MathUtils.clamp((1 - progress) / 0.20, 0, 1)
+    // Snap into the readable silhouette quickly, hold it through the middle,
+    // then blend out only near the end of the skid.
+    const enter = smooth01(
+      THREE.MathUtils.clamp(progress / 0.085, 0, 1)
     );
-    const phaseBlend = Math.min(enter, exit + 0.08);
-    const poseBlend = THREE.MathUtils.clamp(blend * phaseBlend, 0, 1);
+    const exit = smooth01(
+      THREE.MathUtils.clamp((1 - progress) / 0.15, 0, 1)
+    );
+    const poseBlend = THREE.MathUtils.clamp(
+      blend * Math.min(enter, exit + 0.10),
+      0,
+      1
+    );
 
-    // Low pelvis, but centered over the kneeling/right leg rather than thrown
-    // far backward like the old skid pose.
     const baseHip = underlyingP.get(b.hips);
     b.hips.position.copy(baseHip);
-    b.hips.position.y -= 0.33 * poseBlend;
-    b.hips.position.z += 0.025 * poseBlend;
-    b.hips.position.x += 0.020 * poseBlend;
+    b.hips.position.x += 0.025 * poseBlend;
+    b.hips.position.y -= 0.39 * poseBlend;
+    b.hips.position.z += 0.035 * poseBlend;
 
-    // Torso stays upright enough to keep a weapon-ready silhouette.
-    rotateLocal(
-      b.hips,
-      underlyingQ.get(b.hips),
-      0.08 * poseBlend,
-      0,
-      -0.03 * poseBlend
-    );
-    if (b.spine) {
-      rotateLocal(
-        b.spine,
-        underlyingQ.get(b.spine),
-        -0.055 * poseBlend,
-        0,
-        0.025 * poseBlend
-      );
-    }
-    if (b.chest) {
-      rotateLocal(
-        b.chest,
-        underlyingQ.get(b.chest),
-        -0.025 * poseBlend,
-        0,
-        0.015 * poseBlend
-      );
-    }
+    // Pelvis and torso stay compact but weapon-ready.
+    offsetLocal(b.hips, underlyingQ.get(b.hips), 0.13, 0, -0.045, poseBlend);
+    offsetLocal(b.spine, underlyingQ.get(b.spine), -0.085, 0, 0.035, poseBlend);
+    offsetLocal(b.chest, underlyingQ.get(b.chest), -0.035, 0, 0.020, poseBlend);
 
-    root.updateWorldMatrix(true, true);
-
-    // Reference-style silhouette:
-    // - right knee under the body, close to the floor
-    // - right lower leg/foot trails backward
-    // - left leg reaches forward-left with a strong but not locked knee bend
-    const rightTarget = rightFootBase.clone()
-      .addScaledVector(forward, -0.24 * poseBlend)
-      .addScaledVector(right, 0.055 * poseBlend);
-    rightTarget.y += 0.018 * poseBlend;
-
-    const leftTarget = leftFootBase.clone()
-      .addScaledVector(forward, 0.11 * poseBlend)
-      .addScaledVector(right, -0.13 * poseBlend);
-    leftTarget.y += 0.020 * poseBlend;
-
-    solveLeg(
-      root,
-      b.rightUpperLeg,
-      b.rightLowerLeg,
-      b.rightFoot,
-      rightTarget,
-      1,
-      {
-        compression: 0.58,
-        poleForward: 0.56,
-        poleOut: 0.14,
-        poleDown: 0.20
-      }
-    );
-
-    solveLeg(
-      root,
+    // Lead / left leg: visibly bent, never near-locked.
+    // Upper leg comes forward while the shin folds back under the knee.
+    offsetLocal(
       b.leftUpperLeg,
+      underlyingQ.get(b.leftUpperLeg),
+      -0.92,
+      -0.035,
+      -0.12,
+      poseBlend
+    );
+    offsetLocal(
       b.leftLowerLeg,
+      underlyingQ.get(b.leftLowerLeg),
+      0.94,
+      0,
+      0.035,
+      poseBlend
+    );
+    offsetLocal(
       b.leftFoot,
-      leftTarget,
-      -1,
-      {
-        compression: 0.48,
-        poleForward: 0.50,
-        poleOut: 0.20,
-        poleDown: 0.12
-      }
+      underlyingQ.get(b.leftFoot),
+      -0.08,
+      0.025,
+      -0.025,
+      poseBlend
     );
 
-    // Kneeling leg foot points backward naturally. Lead foot stays flatter.
-    const kneelFootQ = rightFootQ.clone().multiply(
-      new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(
-          -0.18 * poseBlend,
-          -0.05 * poseBlend,
-          0.05 * poseBlend
-        )
-      )
+    // Rear / right leg: deep knee fold under the body. This is deliberately
+    // stronger than the lead knee so the side/front silhouette reads clearly.
+    offsetLocal(
+      b.rightUpperLeg,
+      underlyingQ.get(b.rightUpperLeg),
+      -0.74,
+      0.045,
+      0.17,
+      poseBlend
     );
-    setWorldQuaternion(b.rightFoot, kneelFootQ);
-
-    const leadFootQ = leftFootQ.clone().multiply(
-      new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(
-          -0.04 * poseBlend,
-          0.02 * poseBlend,
-          -0.03 * poseBlend
-        )
-      )
+    offsetLocal(
+      b.rightLowerLeg,
+      underlyingQ.get(b.rightLowerLeg),
+      1.50,
+      0,
+      -0.055,
+      poseBlend
     );
-    setWorldQuaternion(b.leftFoot, leadFootQ);
-
-    // Blend solved knee-slide over the underlying locomotion pose.
-    for (const node of nodes) {
-      const solvedQ = node.quaternion.clone();
-      const baseQ = underlyingQ.get(node);
-      if (baseQ) node.quaternion.copy(baseQ).slerp(solvedQ, poseBlend);
-
-      if (node === b.hips) {
-        const solvedP = node.position.clone();
-        const baseP = underlyingP.get(node);
-        if (baseP) node.position.copy(baseP).lerp(solvedP, poseBlend);
-      }
-    }
+    offsetLocal(
+      b.rightFoot,
+      underlyingQ.get(b.rightFoot),
+      -0.58,
+      -0.055,
+      0.07,
+      poseBlend
+    );
 
     root.updateWorldMatrix(true, true);
   }
@@ -186,94 +134,16 @@ export function createSlidePoseLayer(character) {
   return { apply, restore };
 }
 
-function solveLeg(root, upper, lower, foot, targetFoot, side, options) {
-  root.updateWorldMatrix(true, true);
-
-  const hip = upper.getWorldPosition(new THREE.Vector3());
-  const kneeNow = lower.getWorldPosition(new THREE.Vector3());
-  const footNow = foot.getWorldPosition(new THREE.Vector3());
-
-  const a = Math.max(0.001, hip.distanceTo(kneeNow));
-  const b = Math.max(0.001, kneeNow.distanceTo(footNow));
-
-  const toTarget = targetFoot.clone().sub(hip);
-  let d = toTarget.length();
-  if (d < 0.001) return;
-
-  const dir = toTarget.normalize();
-  const compression = THREE.MathUtils.clamp(options.compression ?? 0.25, 0, 0.65);
-
-  d = THREE.MathUtils.clamp(
-    d,
-    Math.abs(a - b) + 0.003,
-    (a + b) * (0.97 - compression * 0.24)
-  );
-
-  const rootQ = root.getWorldQuaternion(new THREE.Quaternion());
-  const forward = new THREE.Vector3(0, 0, -1)
-    .applyQuaternion(rootQ)
-    .normalize();
-  const right = new THREE.Vector3(1, 0, 0)
-    .applyQuaternion(rootQ)
-    .normalize();
-
-  const pole = hip.clone()
-    .addScaledVector(forward, options.poleForward ?? 0.36)
-    .addScaledVector(right, side * (options.poleOut ?? 0.14))
-    .addScaledVector(
-      new THREE.Vector3(0, -1, 0),
-      options.poleDown ?? 0.08
-    );
-
-  const bend = pole.sub(hip);
-  bend.addScaledVector(dir, -bend.dot(dir));
-  if (bend.lengthSq() < 1e-6) bend.copy(forward);
-  bend.normalize();
-
-  const along = (a * a + d * d - b * b) / (2 * d);
-  const height = Math.sqrt(Math.max(0, a * a - along * along));
-  const kneeTarget = hip.clone()
-    .addScaledVector(dir, along)
-    .addScaledVector(bend, height);
-
-  pointBone(upper, lower, kneeTarget);
-  root.updateWorldMatrix(true, true);
-  pointBone(lower, foot, targetFoot);
-  root.updateWorldMatrix(true, true);
-}
-
-function rotateLocal(node, baseQ, x, y, z) {
+function offsetLocal(node, baseQ, x, y, z, blend) {
   if (!node || !baseQ) return;
-  node.quaternion.copy(baseQ).multiply(
+
+  const targetQ = baseQ.clone().multiply(
     new THREE.Quaternion().setFromEuler(
       new THREE.Euler(x, y, z, 'XYZ')
     )
   );
-}
 
-function pointBone(node, child, target) {
-  const origin = node.getWorldPosition(new THREE.Vector3());
-  const current = child.getWorldPosition(new THREE.Vector3())
-    .sub(origin)
-    .normalize();
-  const desired = target.clone()
-    .sub(origin)
-    .normalize();
-
-  if (current.lengthSq() < 1e-6 || desired.lengthSq() < 1e-6) return;
-
-  const delta = new THREE.Quaternion().setFromUnitVectors(current, desired);
-  const worldQ = node.getWorldQuaternion(new THREE.Quaternion());
-  setWorldQuaternion(node, delta.multiply(worldQ));
-}
-
-function setWorldQuaternion(node, worldQ) {
-  const parentQ = node.parent
-    ? node.parent.getWorldQuaternion(new THREE.Quaternion())
-    : new THREE.Quaternion();
-
-  node.quaternion.copy(parentQ.invert().multiply(worldQ));
-  node.updateWorldMatrix(false, true);
+  node.quaternion.copy(baseQ).slerp(targetQ, blend);
 }
 
 function smooth01(t) {

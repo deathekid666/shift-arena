@@ -11,7 +11,9 @@ const REST_POSE_CLIP = 'A_TPose';
 const CLIPS = {
   IDLE: 'Idle_Loop',
   MOVE: 'Jog_Fwd_Loop',
-  SPRINT: 'Sprint_Loop'
+  SPRINT: 'Sprint_Loop',
+  CROUCH_IDLE: 'Crouch_Idle_Loop',
+  CROUCH_MOVE: 'Crouch_Fwd_Loop'
 };
 
 const SOURCE_BONE_TO_HUMAN = {
@@ -66,8 +68,10 @@ export async function createVrmLocomotionController(character, vrm) {
   const idle = actions.get(CLIPS.IDLE);
   const move = actions.get(CLIPS.MOVE);
   const sprint = actions.get(CLIPS.SPRINT);
+  const crouchIdle = actions.get(CLIPS.CROUCH_IDLE);
+  const crouchMove = actions.get(CLIPS.CROUCH_MOVE);
 
-  if (!idle || !move || !sprint) {
+  if (!idle || !move || !sprint || !crouchIdle || !crouchMove) {
     throw new Error('Authored locomotion clips missing from animation library.');
   }
 
@@ -80,25 +84,43 @@ export async function createVrmLocomotionController(character, vrm) {
     phase: 0,
     mixer,
     actions,
-    weights: { idle: 1, move: 0, sprint: 0 },
+    weights: {
+      idle: 1,
+      move: 0,
+      sprint: 0,
+      crouchIdle: 0,
+      crouchMove: 0
+    },
 
     update(dt, state) {
-      if (
-        state.grounded === false ||
-        state.sliding ||
-        state.crouching ||
-        (state.crouchBlend ?? 0) > 0.025
-      ) {
+      // Airborne and slide states use their dedicated procedural layers.
+      // Crouch stays authored: the same Quaternius library already contains
+      // proper crouch-idle and crouch-forward loops, so do not fake it with IK.
+      if (state.grounded === false || state.sliding) {
         this.active = false;
         this.state = 'PROCEDURAL';
 
         this.weights.idle = THREE.MathUtils.damp(this.weights.idle, 0, 14, dt);
         this.weights.move = THREE.MathUtils.damp(this.weights.move, 0, 14, dt);
         this.weights.sprint = THREE.MathUtils.damp(this.weights.sprint, 0, 14, dt);
+        this.weights.crouchIdle = THREE.MathUtils.damp(
+          this.weights.crouchIdle,
+          0,
+          14,
+          dt
+        );
+        this.weights.crouchMove = THREE.MathUtils.damp(
+          this.weights.crouchMove,
+          0,
+          14,
+          dt
+        );
 
         idle.weight = this.weights.idle;
         move.weight = this.weights.move;
         sprint.weight = this.weights.sprint;
+        crouchIdle.weight = this.weights.crouchIdle;
+        crouchMove.weight = this.weights.crouchMove;
         this.mixer.update(dt);
         return;
       }
@@ -107,21 +129,93 @@ export async function createVrmLocomotionController(character, vrm) {
 
       const speed = Math.max(0, state.speed ?? 0);
       const moving = speed > 0.28;
-      const sprinting = Boolean(state.sprinting) && speed > 5.9;
+      const crouching =
+        Boolean(state.crouching) || (state.crouchBlend ?? 0) > 0.025;
 
+      if (crouching) {
+        this.weights.idle = THREE.MathUtils.damp(this.weights.idle, 0, 14, dt);
+        this.weights.move = THREE.MathUtils.damp(this.weights.move, 0, 14, dt);
+        this.weights.sprint = THREE.MathUtils.damp(this.weights.sprint, 0, 14, dt);
+        this.weights.crouchIdle = THREE.MathUtils.damp(
+          this.weights.crouchIdle,
+          moving ? 0 : 1,
+          12,
+          dt
+        );
+        this.weights.crouchMove = THREE.MathUtils.damp(
+          this.weights.crouchMove,
+          moving ? 1 : 0,
+          12,
+          dt
+        );
+
+        const total =
+          this.weights.idle +
+          this.weights.move +
+          this.weights.sprint +
+          this.weights.crouchIdle +
+          this.weights.crouchMove;
+        const norm = total > 0.0001 ? 1 / total : 1;
+
+        idle.weight = this.weights.idle * norm;
+        move.weight = this.weights.move * norm;
+        sprint.weight = this.weights.sprint * norm;
+        crouchIdle.weight = this.weights.crouchIdle * norm;
+        crouchMove.weight = this.weights.crouchMove * norm;
+
+        const backwards = (state.localZ ?? 0) > 0.08;
+        const crouchScale = THREE.MathUtils.clamp(speed / 2.8, 0.82, 1.30);
+        crouchMove.setEffectiveTimeScale(backwards ? -crouchScale : crouchScale);
+
+        if (moving) {
+          const duration = Math.max(0.001, crouchMove.getClip().duration);
+          const normalized = ((crouchMove.time / duration) % 1 + 1) % 1;
+          this.phase = normalized * Math.PI * 2;
+        }
+
+        this.state = moving ? 'CROUCH_WALK' : 'CROUCH';
+        this.mixer.update(dt);
+        return;
+      }
+
+      const sprinting = Boolean(state.sprinting) && speed > 5.9;
       const idleIntent = moving ? 0 : 1;
       const moveIntent = moving && !sprinting ? 1 : 0;
       const sprintIntent = sprinting ? 1 : 0;
 
       this.weights.idle = THREE.MathUtils.damp(this.weights.idle, idleIntent, 12, dt);
       this.weights.move = THREE.MathUtils.damp(this.weights.move, moveIntent, 10, dt);
-      this.weights.sprint = THREE.MathUtils.damp(this.weights.sprint, sprintIntent, 10, dt);
+      this.weights.sprint = THREE.MathUtils.damp(
+        this.weights.sprint,
+        sprintIntent,
+        10,
+        dt
+      );
+      this.weights.crouchIdle = THREE.MathUtils.damp(
+        this.weights.crouchIdle,
+        0,
+        14,
+        dt
+      );
+      this.weights.crouchMove = THREE.MathUtils.damp(
+        this.weights.crouchMove,
+        0,
+        14,
+        dt
+      );
 
-      const total = this.weights.idle + this.weights.move + this.weights.sprint;
+      const total =
+        this.weights.idle +
+        this.weights.move +
+        this.weights.sprint +
+        this.weights.crouchIdle +
+        this.weights.crouchMove;
       const norm = total > 0.0001 ? 1 / total : 1;
       idle.weight = this.weights.idle * norm;
       move.weight = this.weights.move * norm;
       sprint.weight = this.weights.sprint * norm;
+      crouchIdle.weight = this.weights.crouchIdle * norm;
+      crouchMove.weight = this.weights.crouchMove * norm;
 
       move.setEffectiveTimeScale(
         THREE.MathUtils.clamp(speed / 3.55, 0.90, 1.62)
