@@ -70,7 +70,12 @@ export class PlayerController {
     this.body.scale.set(1, 1, 1);
     this.body.rotation.set(0, 0, 0);
     this.body.position.y = GAME_CONFIG.movement.standingHeight / 2;
-    if (this.visualRoot) this.visualRoot.visible = true;
+    // Never reveal the procedural fallback while the production character is
+    // still loading. It may only become visible after a real load failure.
+    if (this.visualRoot) {
+      this.visualRoot.visible =
+        this.characterLoadState !== 'loading';
+    }
     this.fangArmOverride = false;
   }
 
@@ -465,13 +470,16 @@ export class PlayerController {
 
       this.vrmCharacter = avatar;
       this.character = avatar;
+
+      // Attach the finished avatar hidden, then switch visual ownership in one
+      // synchronous step so a rendered frame can never show both characters.
+      avatar.root.visible = false;
       this.body.add(avatar.root);
 
       this.fallbackVisualRoot.visible = false;
       this.visualRoot = avatar.root;
-      this.visualRoot.visible = true;
-
       this.characterLoadState = 'ready';
+      this.visualRoot.visible = true;
       this.characterLoadError = null;
       return avatar;
     } catch (error) {
