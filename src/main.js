@@ -66,7 +66,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 009.3 · CONTEXT RETICLE</div>
+    <div id="damage-test-hint">BUILD 009.4 · ROACH SCOUT V1</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -115,9 +115,9 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 009.3 · CONTEXT RETICLE</div>
+        <div class="build-tag">BUILD 009.4 · ROACH SCOUT V1</div>
         <h1>SHIFT Arena</h1>
-        <p>The primitive character has been replaced as the normal path by a real skinned anime VRM pipeline. This build uses a temporary VRoid rig base for pipeline validation, with Roach Scout antennae/shell attached to real humanoid bones. The final custom Roach Scout asset will replace this base without changing gameplay code.</p>
+        <p>Roach Scout V1 now uses the real humanoid rig with a dedicated SHIFT costume/silhouette pass: goggles, hair crest, segmented antennae, scarf, harness, belt/pouches, shoulder armor, segmented shell, wrist cuffs, knee armor and boot overlays. The underlying VRM is still the temporary rig base until the final custom mesh is generated.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
         <label class="bot-toggle">
           <span class="bot-toggle-copy">

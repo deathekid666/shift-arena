@@ -165,3 +165,21 @@ Browser-first third-person shooter prototype.
 - Quick Tin Fang melee and missing-Fang claw attacks use a short dual-slash melee indicator.
 - Existing ballistic trajectory remains the spatial landing predictor, using the same projectile solution as the actual throw.
 - Design references: weapon-driven reticles/accuracy feedback in Fortnite and held-throw trajectory guidance in Apex-style throwable systems.
+
+
+## Build 009.4 — Roach Scout V1 costume/silhouette pass
+- Kept the proven real VRM humanoid rig and current gun/Fang mechanics.
+- Added a dedicated Roach Scout costume layer following the approved 3D reference sheet.
+- Added forehead goggles with separate rims, dark lenses and bridge.
+- Added a stylized brown hair crest over the temporary VRM hair silhouette.
+- Rebuilt the antennae as longer segmented tubes with three orange bands and bright tips.
+- Added a thick cream scarf collar and front flap.
+- Added cream chest bib and crossed dark harness straps.
+- Added brown/orange shoulder armor attached directly to the upper-arm bones.
+- Rebuilt the back shell as a large segmented five-row shell with paired plates, horizontal seams and a bright central ridge.
+- Added belt, metal buckle and side pouches on the hips.
+- Added cream wrist cuffs, orange/dark knee armor and cream/orange/dark boot overlays.
+- Added conservative material retinting by mesh/material name so recognizable hair/clothes/boots move toward the Roach Scout palette without blindly recoloring eyes/face details.
+- Added lower-leg and foot humanoid bones to the character attachment map for later locomotion and equipment work.
+- This is a visible in-game approximation on the temporary VRM rig, not the final generated custom mesh.
+- The final production asset can replace the temporary VRM while keeping the same humanoid sockets and combat code.
