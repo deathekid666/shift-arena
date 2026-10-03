@@ -1,6 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG } from './config.js';
 import { buildRoachScoutCharacter, updateRoachScoutCharacter } from './character.js';
+import { loadRoachScoutVrmBase } from './vrm-character.js';
 
 export class PlayerController {
   constructor(world, input) {
@@ -20,12 +21,24 @@ export class PlayerController {
     this.body.position.y = GAME_CONFIG.movement.standingHeight / 2;
     this.group.add(this.body);
 
-    this.character = buildRoachScoutCharacter();
-    this.visualRoot = this.character.root;
-    this.body.add(this.visualRoot);
+    // Procedural Build 009 model is now fallback-only.
+    this.fallbackCharacter = buildRoachScoutCharacter();
+    this.fallbackVisualRoot = this.fallbackCharacter.root;
+    this.fallbackVisualRoot.visible = false;
+    this.body.add(this.fallbackVisualRoot);
+
+    this.character = this.fallbackCharacter;
+    this.visualRoot = this.fallbackVisualRoot;
+    this.vrmCharacter = null;
+    this.characterLoadState = 'loading';
+    this.characterLoadError = null;
 
     this.weaponVisualActive = true;
     this.fangArmOverride = false;
+
+    // Start the real anime/VRM pipeline immediately. The old geometry only
+    // reappears if the external development avatar genuinely fails to load.
+    this.characterReady = this.loadVrmVisual();
     this.resetAt(world.spawnPoint);
     world.scene.add(this.group);
   }
@@ -41,7 +54,7 @@ export class PlayerController {
     this.body.scale.set(1, 1, 1);
     this.body.rotation.set(0, 0, 0);
     this.body.position.y = GAME_CONFIG.movement.standingHeight / 2;
-    this.visualRoot.visible = true;
+    if (this.visualRoot) this.visualRoot.visible = true;
     this.fangArmOverride = false;
   }
 
@@ -121,14 +134,60 @@ export class PlayerController {
     this.body.scale.y = THREE.MathUtils.damp(this.body.scale.y, height / cfg.standingHeight, 18, dt);
     this.body.position.y = height / 2;
 
-    updateRoachScoutCharacter(this.character, {
+    const characterState = {
       dt,
       speed: this.horizontalSpeed(),
       combat: this.weaponVisualActive || combatFacing,
       crouching: this.crouching,
       grounded: this.grounded,
       rightArmOverride: this.fangArmOverride
-    });
+    };
+
+    if (this.vrmCharacter) {
+      this.vrmCharacter.update(dt, characterState);
+    } else if (this.characterLoadState === 'error') {
+      updateRoachScoutCharacter(this.fallbackCharacter, characterState);
+    }
+  }
+
+  async loadVrmVisual() {
+    try {
+      const avatar = await loadRoachScoutVrmBase();
+
+      if (this.vrmCharacter?.root?.parent) {
+        this.vrmCharacter.root.parent.remove(this.vrmCharacter.root);
+      }
+
+      this.vrmCharacter = avatar;
+      this.character = avatar;
+      this.body.add(avatar.root);
+
+      this.fallbackVisualRoot.visible = false;
+      this.visualRoot = avatar.root;
+      this.visualRoot.visible = true;
+      avatar.setRightArmHidden(this.fangArmOverride);
+
+      this.characterLoadState = 'ready';
+      this.characterLoadError = null;
+      return avatar;
+    } catch (error) {
+      console.error('VRM character load failed:', error);
+      this.vrmCharacter = null;
+      this.character = this.fallbackCharacter;
+      this.visualRoot = this.fallbackVisualRoot;
+      this.visualRoot.visible = true;
+      this.characterLoadState = 'error';
+      this.characterLoadError = error;
+      return null;
+    }
+  }
+
+  getCharacterStatus() {
+    return {
+      state: this.characterLoadState,
+      usingVrm: Boolean(this.vrmCharacter),
+      error: this.characterLoadError ? String(this.characterLoadError) : null
+    };
   }
 
   supportHeightAt(x, z) {
@@ -310,8 +369,14 @@ export class PlayerController {
 
   setFangArmOverride(active) {
     this.fangArmOverride = Boolean(active);
-    if (!active && this.character?.rightArm?.root) {
-      this.character.rightArm.root.visible = true;
+
+    if (this.vrmCharacter) {
+      this.vrmCharacter.setRightArmHidden(this.fangArmOverride);
+      return;
+    }
+
+    if (!active && this.fallbackCharacter?.rightArm?.root) {
+      this.fallbackCharacter.rightArm.root.visible = true;
     }
   }
 

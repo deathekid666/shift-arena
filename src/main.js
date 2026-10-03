@@ -59,7 +59,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 009 · CHARACTER 01 · ROACH SCOUT</div>
+    <div id="damage-test-hint">BUILD 009.1 · REAL VRM CHARACTER PIPELINE</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -108,9 +108,10 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 009 · PHASE 1</div>
+        <div class="build-tag">BUILD 009.1 · VRM PIPELINE</div>
         <h1>SHIFT Arena</h1>
-        <p>Character 01 is now in-game: the first cute anime/cartoon humanoid cockroach design replaces the yellow capsule visually while the proven gameplay collision remains unchanged underneath.</p>
+        <p>The primitive character has been replaced as the normal path by a real skinned anime VRM pipeline. This build uses a temporary VRoid rig base for pipeline validation, with Roach Scout antennae/shell attached to real humanoid bones. The final custom Roach Scout asset will replace this base without changing gameplay code.</p>
+        <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
         <label class="bot-toggle">
           <span class="bot-toggle-copy">
             <strong>COMBAT BOT</strong>
@@ -194,6 +195,7 @@ const fangChargeFill = document.querySelector('#fang-charge-fill');
 const fangMarker = document.querySelector('#fang-marker');
 const fangMarkerArrow = document.querySelector('#fang-marker-arrow');
 const fangMarkerDistance = document.querySelector('#fang-marker-distance');
+const characterLoadStatus = document.querySelector('#character-load-status');
 
 let weapon = null;
 let armor = null;
@@ -261,6 +263,16 @@ const pickups = new PickupSystem({
   armor,
   onPrompt: updatePickupPrompt,
   onToast: showToast
+});
+
+player.characterReady.then((avatar) => {
+  const status = player.getCharacterStatus();
+  if (characterLoadStatus) {
+    characterLoadStatus.textContent = status.usingVrm
+      ? 'CHARACTER · REAL VRM RIG LOADED'
+      : 'CHARACTER · VRM FAILED · FALLBACK ACTIVE';
+  }
+  if (avatar) showToast('ANIME VRM RIG LOADED');
 });
 
 const start = document.querySelector('#start');

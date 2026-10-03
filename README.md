@@ -119,3 +119,20 @@ Browser-first third-person shooter prototype.
 - The dedicated Tin Fang throw arm now uses the character palette and temporarily replaces the right character arm during Fang animations.
 - Camera body hiding hides only the character mesh; gun/Fang visuals remain available in cramped spaces.
 - Full locomotion/scuttle/idle animation remains Build 010.
+
+
+## Build 009.1 — real VRM character pipeline
+- Replaced the procedural Three.js character as the normal rendering path.
+- Added an import map for one shared Three.js module plus GLTFLoader and @pixiv/three-vrm.
+- Added src/vrm-character.js, which loads a real skinned VRM avatar through GLTFLoader + VRMLoaderPlugin.
+- The temporary development avatar is sample2.vrm from norio/vrm-game-starter, pinned to commit b14c236fd8150855348ad085b7820c298eac4b30.
+- That upstream project is MIT for source and explicitly documents its bundled VRoid sample avatars as redistributed under their own VRM metadata terms. This avatar is a development rig base only, not the final SHIFT character artwork.
+- Avatar auto-fits to SHIFT's existing 1.8-unit gameplay capsule without altering movement/collision.
+- Exposes real humanoid head, chest, arm, hand, hip and leg bones.
+- Added Roach Scout antennae and shell accessories parented to real head/chest bones.
+- Added normalized weapon, Fang and head sockets for later exact weapon attachment.
+- Added a lightweight bone pose so the avatar does not remain in a raw T-pose while animation retargeting is still pending.
+- Fang can hide the actual VRM right arm while the dedicated throw arm is active.
+- The old Build 009 primitive mesh remains fallback-only if VRM loading fails.
+- Final target remains a custom Roach Scout VRM/GLB matching the approved sketch; replacing the temporary base will require only swapping the asset URL/model, not rewriting movement/combat.
+- Open-source character-loader/VRM architecture references: pixiv/three-vrm (MIT), norio/vrm-game-starter (MIT), M3-org/CharacterStudio (MIT).
