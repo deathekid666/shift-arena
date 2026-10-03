@@ -86,13 +86,20 @@ export class PlayerController {
     const sprintPressed = this.input.consume('sprint');
     const jumpPressed = this.input.consume('jump');
 
+    // Use both the input controller's pressed edge and the player's own state
+    // edge. This makes slide entry robust even if Ctrl and Shift arrive in the
+    // same browser frame.
+    const crouchJustPressed = crouchDown && !this.crouching;
+    let startedSlide = false;
+
     if (
-      crouchPressed &&
+      (crouchPressed || crouchJustPressed) &&
       !this.sliding &&
       this.grounded &&
       this.horizontalSpeed() >= cfg.slideMinStartSpeed
     ) {
       this.beginSlide(move);
+      startedSlide = true;
     }
 
     this.crouching = crouchDown;
@@ -118,7 +125,7 @@ export class PlayerController {
         this.sliding = false;
         this.velocity.y = cfg.jumpVelocity;
         this.grounded = false;
-      } else if (sprintPressed) {
+      } else if (sprintPressed && !startedSlide) {
         this.sliding = false;
       } else if (
         this.slideTimer <= 0 ||
