@@ -472,6 +472,7 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 }
 #crosshair .reticle-ring {
   display: none;
+  background: transparent;
   width: calc(var(--gap) * 2.0);
   height: calc(var(--gap) * 2.0);
   transform: translate(-50%, -50%);
