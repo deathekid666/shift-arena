@@ -280,11 +280,17 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
   add(nozzleLip, [0, 0.035, -0.945]);
 
   // === 4. PUMP HANDLE ===
-  // A single wooden/plastic cylinder underneath, wrapped with dirty cloth.
+  // This is a real moving assembly. The support-hand target is parented to it,
+  // so the left hand naturally racks with the pump.
+  const pumpRoot = new THREE.Group();
+  pumpRoot.name = 'BugSprayerPump';
+  group.add(pumpRoot);
+
   add(
     cylinder(0.074, 0.078, 0.25, 10, wood),
     [0, -0.105, -0.505],
-    [Math.PI / 2, 0, 0]
+    [Math.PI / 2, 0, 0],
+    pumpRoot
   );
 
   for (let i = 0; i < 4; i++) {
@@ -292,7 +298,12 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
       new THREE.TorusGeometry(0.080, 0.008, 5, 10),
       cream
     );
-    add(wrap, [0, -0.105, -0.585 + i * 0.055]);
+    add(
+      wrap,
+      [0, -0.105, -0.585 + i * 0.055],
+      null,
+      pumpRoot
+    );
   }
 
   // === 5. SIMPLE PISTOL GRIP ===
@@ -380,7 +391,7 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
     cfg.leftGripY ?? -0.095,
     cfg.foregripZ ?? -0.515
   );
-  group.add(leftGrip);
+  pumpRoot.add(leftGrip);
 
   const muzzle = new THREE.Object3D();
   muzzle.name = 'MuzzleSocket';
@@ -394,6 +405,7 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
     rightGrip,
     leftGrip,
     muzzle,
+    pumpRoot,
     barrelLength: 0.52,
     primaryMesh: group.children.find((child) => child.isMesh) ?? null
   };

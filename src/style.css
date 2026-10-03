@@ -2118,3 +2118,67 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
     transform: translate(-50%, -15px) scale(1.02);
   }
 }
+
+
+/* Build 010.15A — Bug-Sprayer shotgun reticle.
+   Four pellet-cone arcs track the same spread used by the 10 fixed pellets. */
+#crosshair[data-mode="gun"][data-type="pump"] > .arm,
+#crosshair[data-mode="gun"][data-type="pump"] > .weapon-shape {
+  display: none !important;
+}
+
+#crosshair[data-mode="gun"][data-type="pump"] > .reticle-ring {
+  display: block !important;
+  width: calc(var(--gap) * 2.08);
+  height: calc(var(--gap) * 2.08);
+  border: 0 !important;
+  border-radius: 50%;
+  opacity: .94;
+  background:
+    repeating-conic-gradient(
+      from 31deg,
+      rgba(255,255,255,.96) 0deg 25deg,
+      transparent 25deg 90deg
+    ) !important;
+  -webkit-mask:
+    radial-gradient(
+      circle,
+      transparent 0 68%,
+      #000 71% 84%,
+      transparent 87% 100%
+    );
+  mask:
+    radial-gradient(
+      circle,
+      transparent 0 68%,
+      #000 71% 84%,
+      transparent 87% 100%
+    );
+  transition:
+    width 55ms linear,
+    height 55ms linear,
+    opacity 65ms ease,
+    filter 65ms ease;
+}
+
+#crosshair[data-mode="gun"][data-type="pump"] > .reticle-dot {
+  display: block !important;
+  width: 2.5px !important;
+  height: 2.5px !important;
+  opacity: .82;
+}
+
+#crosshair[data-mode="gun"][data-type="pump"].shot > .reticle-ring {
+  filter: brightness(1.35);
+}
+
+/* Existing enemy-only targeting rule remains: white normally, red only when
+   the center ray is actually on a visible target. */
+#crosshair[data-mode="gun"][data-type="pump"].target-hot > .reticle-ring {
+  background:
+    repeating-conic-gradient(
+      from 31deg,
+      #ff4d48 0deg 25deg,
+      transparent 25deg 90deg
+    ) !important;
+}

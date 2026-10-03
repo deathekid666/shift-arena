@@ -58,6 +58,69 @@ export class WeaponAudio {
     osc.stop(now + p.duration);
   }
 
+  playPump() {
+    if (!this.ctx || !this.noiseBuffer) return;
+
+    const now = this.ctx.currentTime;
+
+    const clack = (delay, pitch, gainValue) => {
+      const start = now + delay;
+
+      const master = this.ctx.createGain();
+      master.gain.setValueAtTime(gainValue, start);
+      master.gain.exponentialRampToValueAtTime(
+        0.001,
+        start + 0.065
+      );
+      master.connect(this.ctx.destination);
+
+      const tone = this.ctx.createOscillator();
+      tone.type = 'square';
+      tone.frequency.setValueAtTime(pitch, start);
+      tone.frequency.exponentialRampToValueAtTime(
+        Math.max(45, pitch * 0.48),
+        start + 0.055
+      );
+
+      const toneGain = this.ctx.createGain();
+      toneGain.gain.setValueAtTime(0.34, start);
+      toneGain.gain.exponentialRampToValueAtTime(
+        0.001,
+        start + 0.060
+      );
+      tone.connect(toneGain).connect(master);
+      tone.start(start);
+      tone.stop(start + 0.065);
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = this.noiseBuffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1150;
+      filter.Q.value = 1.2;
+
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.26, start);
+      noiseGain.gain.exponentialRampToValueAtTime(
+        0.001,
+        start + 0.050
+      );
+
+      noise
+        .connect(filter)
+        .connect(noiseGain)
+        .connect(master);
+
+      noise.start(start);
+      noise.stop(start + 0.055);
+    };
+
+    // Slide back, then lock forward.
+    clack(0.00, 185, 0.085);
+    clack(0.22, 245, 0.070);
+  }
+
   playShot(profile) {
     if (!this.ctx || !profile) return;
 

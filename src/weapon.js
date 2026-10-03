@@ -3,6 +3,21 @@ import { GAME_CONFIG, WEAPON_ORDER } from './config.js';
 import { buildJunkWeaponVisual } from './junk-weapon-model.js';
 import { WeaponAudio } from './audio.js';
 
+const SHOTGUN_PATTERN_10 = [
+  [0.00, 0.00],
+
+  [0.38, 0.00],
+  [-0.19, 0.329],
+  [-0.19, -0.329],
+
+  [0.675, 0.390],
+  [0.00, 0.780],
+  [-0.675, 0.390],
+  [-0.675, -0.390],
+  [0.00, -0.780],
+  [0.675, -0.390]
+];
+
 export class WeaponSystem {
   constructor({ scene, camera, cameraRig, player, input, world, targets, onHit, onFire, onSwitch, onInventoryChange }) {
     this.scene = scene;
@@ -72,7 +87,8 @@ export class WeaponSystem {
         sustainedFire: 0,
         shotIndex: 0,
         sinceShot: 999,
-        bobTime: 0
+        bobTime: 0,
+        pumpSoundPlayed: true
       };
       return { key, cfg, model, state };
     });
@@ -274,6 +290,7 @@ export class WeaponSystem {
       );
 
       this.updateMuzzleFx(entry, dt);
+      this.updatePumpCycle(entry, dt);
 
       if (s.sinceShot > 0.6) s.shotIndex = 0;
 
@@ -307,6 +324,52 @@ export class WeaponSystem {
     }
 
     this.updateWeaponPose(dt);
+  }
+
+  updatePumpCycle(entry, dt) {
+    const { cfg, state, model } = entry;
+    const pump = model.pumpRoot;
+
+    if (!cfg.pumpAction || !pump) return;
+
+    const t = state.sinceShot;
+    const travel = cfg.pumpTravel ?? 0.15;
+
+    let targetZ = 0;
+    let targetPitch = 0;
+
+    // Let recoil read first, then rack the pump sharply back and return.
+    if (t >= 0.16 && t < 0.36) {
+      const p = THREE.MathUtils.smoothstep(t, 0.16, 0.36);
+      targetZ = travel * p;
+      targetPitch = -0.045 * p;
+    } else if (t >= 0.36 && t < 0.68) {
+      const p = THREE.MathUtils.smoothstep(t, 0.36, 0.68);
+      targetZ = travel * (1 - p);
+      targetPitch = -0.045 * (1 - p);
+    }
+
+    // Very high response: this is a mechanical slide, not soft weapon sway.
+    pump.position.z = THREE.MathUtils.damp(
+      pump.position.z,
+      targetZ,
+      42,
+      dt
+    );
+    pump.rotation.x = THREE.MathUtils.damp(
+      pump.rotation.x,
+      targetPitch,
+      38,
+      dt
+    );
+
+    if (
+      !state.pumpSoundPlayed &&
+      t >= 0.20
+    ) {
+      if (entry === this.active) this.audio.playPump?.();
+      state.pumpSoundPlayed = true;
+    }
   }
 
   updateWeaponPose(dt) {
@@ -352,9 +415,14 @@ export class WeaponSystem {
         // Fixed weapon orientation relative to the character.
         // No hand-relative bob/sway/lag is allowed here because that would
         // separate the pistol grip from the master hand.
+        const recoilPose =
+          cfg.recoilPoseScale
+            ? Math.max(0, state.visualKick) * cfg.recoilPoseScale
+            : 0;
+
         this.tmpDesiredLocalQ.setFromEuler(
           new THREE.Euler(
-            cfg.carryPitch ?? -0.11,
+            (cfg.carryPitch ?? -0.11) + recoilPose,
             cfg.carryYaw ?? 0,
             cfg.carryRoll ?? -0.055,
             'YXZ'
@@ -967,6 +1035,11 @@ export class WeaponSystem {
       entry.state.visualKick = 0;
       entry.state.shotIndex = 0;
       entry.state.sinceShot = 999;
+      entry.state.pumpSoundPlayed = true;
+      if (entry.model.pumpRoot) {
+        entry.model.pumpRoot.position.z = 0;
+        entry.model.pumpRoot.rotation.x = 0;
+      }
       entry.model.muzzleFlash.visible = false;
     }
     this.emitInventory();
@@ -982,6 +1055,7 @@ export class WeaponSystem {
     state.fireCooldown = 1 / cfg.fireRate;
     state.flashTimer = cfg.pellets > 1 ? 0.050 : cfg.scope ? 0.032 : 0.026;
     state.sinceShot = 0;
+    state.pumpSoundPlayed = !cfg.pumpAction;
     state.visualKick = Math.max(state.visualKick, cfg.visualKick);
 
     const pattern = cfg.recoilPattern[state.shotIndex % cfg.recoilPattern.length];
@@ -1053,9 +1127,20 @@ export class WeaponSystem {
     const tracerPoints = [];
 
     for (let i = 0; i < cfg.pellets; i++) {
-      const shot = this.traceShot(spread, cfg.range);
+      const pelletOffset =
+        SHOTGUN_PATTERN_10[i % SHOTGUN_PATTERN_10.length];
+
+      const shot = this.traceShot(
+        spread,
+        cfg.range,
+        pelletOffset
+      );
+
       if (!firstMuzzle) firstMuzzle = shot.muzzlePos.clone();
-      if (i % 3 === 0) tracerPoints.push(shot.impactPoint.clone());
+
+      if (!cfg.hidePelletTracers && i % 3 === 0) {
+        tracerPoints.push(shot.impactPoint.clone());
+      }
 
       if (!shot.actualHit?.object?.userData?.combatTarget) continue;
 
@@ -1098,11 +1183,22 @@ export class WeaponSystem {
     }
   }
 
-  traceShot(spread, range) {
+  traceShot(spread, range, spreadOffset = null) {
     this.cameraRay.setFromCamera(this.center, this.camera);
 
     const cameraDirection = this.cameraRay.ray.direction.clone();
-    applySpread(cameraDirection, this.camera, spread);
+
+    if (spreadOffset) {
+      applyPatternSpread(
+        cameraDirection,
+        this.camera,
+        spread,
+        spreadOffset
+      );
+    } else {
+      applySpread(cameraDirection, this.camera, spread);
+    }
+
     cameraDirection.normalize();
 
     const objects = [...this.targets.hitMeshes, ...this.world.cameraObstacles];
@@ -1301,6 +1397,23 @@ function applySpread(direction, camera, amount) {
   const radius = Math.sqrt(Math.random()) * amount;
   direction.addScaledVector(right, Math.cos(angle) * radius);
   direction.addScaledVector(up, Math.sin(angle) * radius);
+}
+
+function applyPatternSpread(
+  direction,
+  camera,
+  amount,
+  [x, y]
+) {
+  if (amount <= 0) return;
+
+  const right = new THREE.Vector3(1, 0, 0)
+    .applyQuaternion(camera.quaternion);
+  const up = new THREE.Vector3(0, 1, 0)
+    .applyQuaternion(camera.quaternion);
+
+  direction.addScaledVector(right, x * amount);
+  direction.addScaledVector(up, y * amount);
 }
 
 function damageFalloff(distance, cfg) {
