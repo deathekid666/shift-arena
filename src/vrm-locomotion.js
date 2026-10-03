@@ -201,6 +201,11 @@ export async function createVrmLocomotionController(character, vrm) {
 
   idle.weight = 1;
 
+  // Overall authored-locomotion strength is separate from relative clip
+  // weights. Without this, normalizing clip weights forces the first grounded
+  // frame after a jump straight back to 100% authored locomotion.
+  let masterWeight = 1;
+
   function applyWeights(intents, dt, lambda = 14) {
     let total = 0;
 
@@ -218,7 +223,8 @@ export async function createVrmLocomotionController(character, vrm) {
 
     for (const [key, action] of Object.entries(actionByKey)) {
       if (!action) continue;
-      action.weight = weights[key] * norm;
+      action.weight =
+        weights[key] * norm * masterWeight;
     }
   }
 
@@ -237,13 +243,63 @@ export async function createVrmLocomotionController(character, vrm) {
     weights,
     wasSliding: false,
     wasCrouching: false,
+    wasGrounded: true,
+    smoothedSpeed: 0,
+    movementAmount: 0,
+    smoothedSprintBlend: 0,
+    moveTimeScale: 1,
+    sprintTimeScale: 1,
+    crouchTimeScale: 1,
+    gaitDirection: 1,
     slideStage: 'none',
     slideExitActive: false,
 
     update(dt, state) {
-      const speed = Math.max(0, state.speed ?? 0);
-      const moving = speed > 0.28;
+      const rawSpeed = Math.max(0, state.speed ?? 0);
       const grounded = state.grounded !== false;
+      const justLanded =
+        grounded && !this.wasGrounded;
+      this.wasGrounded = grounded;
+
+      this.smoothedSpeed = THREE.MathUtils.damp(
+        this.smoothedSpeed,
+        rawSpeed,
+        rawSpeed > this.smoothedSpeed ? 17 : 11,
+        dt
+      );
+      const speed = this.smoothedSpeed;
+
+      const movementTarget = grounded
+        ? THREE.MathUtils.smoothstep(speed, 0.08, 0.82)
+        : 0;
+
+      this.movementAmount = THREE.MathUtils.damp(
+        this.movementAmount,
+        movementTarget,
+        movementTarget > this.movementAmount ? 15 : 10,
+        dt
+      );
+
+      const moving = this.movementAmount > 0.12;
+
+      if (!grounded) {
+        masterWeight = THREE.MathUtils.damp(
+          masterWeight,
+          0,
+          20,
+          dt
+        );
+      } else {
+        if (justLanded) {
+          masterWeight = Math.min(masterWeight, 0.18);
+        }
+        masterWeight = THREE.MathUtils.damp(
+          masterWeight,
+          1,
+          justLanded ? 10 : 16,
+          dt
+        );
+      }
 
       // Dedicated whole-body slide FSM:
       // physics owns movement; animation owns Start -> Loop -> Exit.
@@ -336,7 +392,7 @@ export async function createVrmLocomotionController(character, vrm) {
         1
       );
 
-      const sprintBlend = moving
+      const sprintTarget = moving
         ? THREE.MathUtils.clamp(
             state.sprintBlend ??
               (Boolean(state.sprinting)
@@ -347,47 +403,97 @@ export async function createVrmLocomotionController(character, vrm) {
           )
         : 0;
 
+      this.smoothedSprintBlend = THREE.MathUtils.damp(
+        this.smoothedSprintBlend,
+        sprintTarget,
+        sprintTarget > this.smoothedSprintBlend ? 12 : 15,
+        dt
+      );
+
+      const sprintBlend = this.smoothedSprintBlend;
+
       const standingBlend = 1 - crouchBlend;
       const backwards = (state.localZ ?? 0) > 0.10;
 
-      const moveScale =
-        THREE.MathUtils.clamp(speed / 3.55, 0.90, 1.62);
-      const sprintScale =
-        THREE.MathUtils.clamp(speed / 6.05, 0.92, 1.55);
-      const crouchScale =
-        THREE.MathUtils.clamp(speed / 2.8, 0.82, 1.30);
+      const moveTargetScale =
+        THREE.MathUtils.clamp(speed / 3.55, 0.82, 1.58);
+      const sprintTargetScale =
+        THREE.MathUtils.clamp(speed / 6.05, 0.86, 1.50);
+      const crouchTargetScale =
+        THREE.MathUtils.clamp(speed / 2.8, 0.76, 1.26);
+
+      this.moveTimeScale = THREE.MathUtils.damp(
+        this.moveTimeScale,
+        moveTargetScale,
+        12,
+        dt
+      );
+      this.sprintTimeScale = THREE.MathUtils.damp(
+        this.sprintTimeScale,
+        sprintTargetScale,
+        12,
+        dt
+      );
+      this.crouchTimeScale = THREE.MathUtils.damp(
+        this.crouchTimeScale,
+        crouchTargetScale,
+        12,
+        dt
+      );
+
+      this.gaitDirection = THREE.MathUtils.damp(
+        this.gaitDirection,
+        backwards ? -1 : 1,
+        10,
+        dt
+      );
+
+      // Crossing through zero briefly plants the feet instead of instantly
+      // reversing a forward cycle when the player changes direction.
+      const directionScale =
+        Math.abs(this.gaitDirection) < 0.06
+          ? 0
+          : this.gaitDirection;
 
       move.setEffectiveTimeScale(
-        backwards ? -moveScale : moveScale
+        this.moveTimeScale * directionScale
       );
       sprint.setEffectiveTimeScale(
-        backwards ? -sprintScale : sprintScale
+        this.sprintTimeScale * directionScale
       );
       crouchMove.setEffectiveTimeScale(
-        backwards ? -crouchScale : crouchScale
+        this.crouchTimeScale * directionScale
       );
 
-      let intents;
+      const movementBlend = this.movementAmount;
 
-      if (!moving) {
-        intents = {
-          idle: standingBlend,
-          crouchIdle: crouchBlend
-        };
-      } else {
-        intents = {
-          move: standingBlend * (1 - sprintBlend),
-          sprint: standingBlend * sprintBlend,
-          crouchMove: crouchBlend
-        };
+      const intents = {
+        idle:
+          standingBlend * (1 - movementBlend),
+        move:
+          standingBlend *
+          movementBlend *
+          (1 - sprintBlend),
+        sprint:
+          standingBlend *
+          movementBlend *
+          sprintBlend,
+        crouchIdle:
+          crouchBlend * (1 - movementBlend),
+        crouchMove:
+          crouchBlend * movementBlend
+      };
 
-        // Keep jog/sprint/crouch-walk on one shared foot phase. This is what
-        // makes repeated crouch-peeking look like one continuous movement
-        // instead of restarting the legs every time Ctrl changes.
+      if (movementBlend > 0.035) {
+        // All moving clips share one normalized foot phase. Because every
+        // non-source action is synchronized each frame, changing the dominant
+        // gait no longer causes a foot-pop when jog/sprint/crouch crossfade.
         const standingAction =
-          sprintBlend > 0.5 ? sprint : move;
+          sprintBlend > 0.56 ? sprint : move;
         const phaseSource =
-          crouchBlend >= 0.5 ? crouchMove : standingAction;
+          crouchBlend >= 0.56
+            ? crouchMove
+            : standingAction;
 
         const sourceDuration = Math.max(
           0.001,
@@ -416,7 +522,7 @@ export async function createVrmLocomotionController(character, vrm) {
       applyWeights(
         intents,
         dt,
-        state.combat ? 34 : 28
+        state.combat ? 20 : 16
       );
 
       if (crouchBlend > 0.72) {
