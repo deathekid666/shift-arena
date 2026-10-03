@@ -15,6 +15,14 @@ export class PlayerController {
     this.slideTimer = 0;
     this.slideElapsed = 0;
     this.slideConsumedForCrouchHold = false;
+    this.slideDebug = {
+      shift: false,
+      ctrl: false,
+      move: false,
+      groundReady: true,
+      eligible: false,
+      consumed: false
+    };
     this.slideDirection = new THREE.Vector3(0, 0, -1);
     this.localMotion = new THREE.Vector3();
 
@@ -62,6 +70,12 @@ export class PlayerController {
     this.slideTimer = 0;
     this.slideElapsed = 0;
     this.slideConsumedForCrouchHold = false;
+    this.slideDebug.shift = false;
+    this.slideDebug.ctrl = false;
+    this.slideDebug.move = false;
+    this.slideDebug.groundReady = true;
+    this.slideDebug.eligible = false;
+    this.slideDebug.consumed = false;
     this.slideDirection.set(0, 0, -1);
     this.body.scale.set(1, 1, 1);
     this.body.rotation.set(0, 0, 0);
@@ -104,19 +118,44 @@ export class PlayerController {
       this.slideConsumedForCrouchHold = false;
     }
 
+    const slideGroundReady =
+      this.grounded ||
+      (
+        supportY !== null &&
+        this.group.position.y <= supportY + cfg.slideGroundEntryTolerance &&
+        this.velocity.y <= 0.5
+      );
+
     const sprintSlideEligible =
       crouchDown &&
       sprintDown &&
-      movingIntent;
+      movingIntent &&
+      slideGroundReady;
+
+    this.slideDebug.shift = sprintDown;
+    this.slideDebug.ctrl = crouchDown;
+    this.slideDebug.move = movingIntent;
+    this.slideDebug.groundReady = slideGroundReady;
+    this.slideDebug.eligible = sprintSlideEligible;
+    this.slideDebug.consumed = this.slideConsumedForCrouchHold;
 
     if (
       !this.sliding &&
       !this.slideConsumedForCrouchHold &&
-      this.grounded &&
       sprintSlideEligible
     ) {
+      // Tiny stair/ramp contact gaps should not turn a requested slide into
+      // crouch. If the feet are within the slide-entry tolerance, snap back
+      // to the detected support before starting the slide.
+      if (!this.grounded && supportY !== null) {
+        this.group.position.y = supportY;
+        this.velocity.y = 0;
+        this.grounded = true;
+      }
+
       this.beginSlide(move);
       this.slideConsumedForCrouchHold = true;
+      this.slideDebug.consumed = true;
     }
 
     if (this.sliding) {
