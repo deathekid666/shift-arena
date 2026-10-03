@@ -61,6 +61,8 @@ export class WeaponSystem {
         isReloading: false,
         dynamicBloom: 0,
         visualKick: 0,
+        visualKickVelocity: 0,
+        sustainedFire: 0,
         shotIndex: 0,
         sinceShot: 999,
         bobTime: 0
@@ -187,14 +189,38 @@ export class WeaponSystem {
       const s = entry.state;
       s.fireCooldown = Math.max(0, s.fireCooldown - dt);
       s.sinceShot += dt;
-      s.dynamicBloom = THREE.MathUtils.damp(s.dynamicBloom, 0, entry.cfg.bloomDecay, dt);
-      s.visualKick = THREE.MathUtils.damp(s.visualKick, 0, 14 / entry.cfg.mass, dt);
+      s.dynamicBloom = THREE.MathUtils.damp(
+        s.dynamicBloom,
+        0,
+        entry.cfg.bloomDecay,
+        dt
+      );
+
+      // Critically damped-ish weapon recoil spring. The gun physically kicks
+      // rearward then settles instead of teleporting to a Z offset.
+      const kickStiffness = 92 / Math.max(0.55, entry.cfg.mass);
+      const kickDamping = 18 / Math.max(0.72, Math.sqrt(entry.cfg.mass));
+      s.visualKickVelocity += -s.visualKick * kickStiffness * dt;
+      s.visualKickVelocity *= Math.exp(-kickDamping * dt);
+      s.visualKick += s.visualKickVelocity * dt;
+      if (Math.abs(s.visualKick) < 0.0002 && Math.abs(s.visualKickVelocity) < 0.001) {
+        s.visualKick = 0;
+        s.visualKickVelocity = 0;
+      }
+
+      s.sustainedFire = THREE.MathUtils.damp(
+        s.sustainedFire,
+        0,
+        3.8,
+        dt
+      );
+
+      this.updateMuzzleFx(entry, dt);
 
       if (s.sinceShot > 0.6) s.shotIndex = 0;
 
       if (s.flashTimer > 0) {
-        s.flashTimer -= dt;
-        if (s.flashTimer <= 0) entry.model.muzzleFlash.visible = false;
+        s.flashTimer = Math.max(0, s.flashTimer - dt);
       }
     }
 
@@ -443,6 +469,119 @@ export class WeaponSystem {
     return this.gripPose;
   }
 
+  triggerMuzzleFx(entry) {
+    const fx = entry.model.muzzleFx;
+    if (!fx) return;
+
+    fx.group.visible = true;
+    fx.age = 0;
+    fx.seed = (fx.seed + 1) % 997;
+    fx.group.rotation.z = ((fx.seed * 1.618) % 1) * Math.PI * 2;
+
+    const shotgun = entry.cfg.pellets > 1;
+    const sniper = Boolean(entry.cfg.scope);
+    fx.life = shotgun ? 0.050 : sniper ? 0.032 : 0.026;
+
+    fx.core.scale.setScalar(shotgun ? 1.30 : sniper ? 1.10 : 0.92);
+    fx.flareA.scale.set(shotgun ? 1.35 : 1, shotgun ? 1.15 : 1, 1);
+    fx.flareB.scale.set(shotgun ? 1.20 : 0.88, shotgun ? 1.05 : 0.88, 1);
+    fx.cone.scale.set(shotgun ? 1.35 : 1, shotgun ? 1.18 : 1, shotgun ? 1.55 : 1);
+
+    fx.light.intensity = shotgun ? 4.8 : sniper ? 4.2 : 3.4;
+
+    for (let i = 0; i < fx.sparks.length; i++) {
+      const spark = fx.sparks[i];
+      const angle =
+        ((i / fx.sparks.length) * Math.PI * 2) +
+        (((fx.seed * 0.73) % 1) - 0.5) * 0.7;
+      const radius = shotgun ? 0.13 : 0.09;
+      spark.position.set(
+        Math.cos(angle) * radius,
+        Math.sin(angle) * radius,
+        -0.055 - i * 0.012
+      );
+      spark.rotation.z = angle;
+      spark.scale.setScalar(shotgun ? 1.15 : 0.92);
+      spark.visible = true;
+    }
+
+    const smokeOpacity =
+      entry.state.sustainedFire > 0.34
+        ? THREE.MathUtils.lerp(0.05, 0.18, entry.state.sustainedFire)
+        : 0;
+    fx.smoke.material.opacity = smokeOpacity;
+    fx.smoke.visible = smokeOpacity > 0.001;
+    fx.smoke.scale.setScalar(
+      THREE.MathUtils.lerp(0.78, 1.18, entry.state.sustainedFire)
+    );
+  }
+
+  updateMuzzleFx(entry, dt) {
+    const fx = entry.model.muzzleFx;
+    if (!fx) return;
+
+    if (entry.state.flashTimer > 0) {
+      fx.age += dt;
+      const t = THREE.MathUtils.clamp(
+        fx.age / Math.max(0.001, fx.life),
+        0,
+        1
+      );
+      const flash = 1 - t;
+
+      fx.core.material.opacity = flash;
+      fx.flareA.material.opacity = flash * 0.92;
+      fx.flareB.material.opacity = flash * 0.72;
+      fx.cone.material.opacity = flash * 0.74;
+      fx.light.intensity *= Math.exp(-28 * dt);
+
+      fx.core.scale.multiplyScalar(1 + dt * 7);
+      fx.cone.scale.z *= 1 + dt * 11;
+
+      for (const spark of fx.sparks) {
+        spark.material.opacity = flash * 0.9;
+        spark.position.z -= dt * 1.8;
+        spark.scale.multiplyScalar(1 + dt * 3);
+      }
+    } else {
+      fx.core.material.opacity = 0;
+      fx.flareA.material.opacity = 0;
+      fx.flareB.material.opacity = 0;
+      fx.cone.material.opacity = 0;
+      fx.light.intensity = THREE.MathUtils.damp(
+        fx.light.intensity,
+        0,
+        28,
+        dt
+      );
+      for (const spark of fx.sparks) spark.visible = false;
+    }
+
+    if (fx.smoke.visible) {
+      fx.smoke.position.z -= dt * 0.10;
+      fx.smoke.position.y += dt * 0.05;
+      fx.smoke.scale.multiplyScalar(1 + dt * 0.75);
+      fx.smoke.material.opacity = THREE.MathUtils.damp(
+        fx.smoke.material.opacity,
+        0,
+        5.5,
+        dt
+      );
+      if (fx.smoke.material.opacity < 0.005) {
+        fx.smoke.visible = false;
+        fx.smoke.position.set(0, 0, -0.03);
+      }
+    }
+
+    if (
+      entry.state.flashTimer <= 0 &&
+      !fx.smoke.visible &&
+      fx.light.intensity < 0.01
+    ) {
+      fx.group.visible = false;
+    }
+  }
+
   currentSpread() {
     const cfg = this.cfg;
     const state = this.state;
@@ -595,15 +734,31 @@ export class WeaponSystem {
     state.ammo -= 1;
     this.emitInventory();
     state.fireCooldown = 1 / cfg.fireRate;
-    state.flashTimer = cfg.pellets > 1 ? 0.07 : 0.045;
+    state.flashTimer = cfg.pellets > 1 ? 0.050 : cfg.scope ? 0.032 : 0.026;
     state.sinceShot = 0;
     state.visualKick = Math.max(state.visualKick, cfg.visualKick);
 
     const pattern = cfg.recoilPattern[state.shotIndex % cfg.recoilPattern.length];
     state.shotIndex += 1;
-    this.cameraRig.kick(pattern[0], pattern[1], cfg.recoilRecovery);
 
-    this.active.model.muzzleFlash.visible = true;
+    // ADS should feel steadier visually, not recoil-free.
+    const cameraRecoilMul = this.aiming ? 0.62 : 1;
+    this.cameraRig.kick(
+      pattern[0] * cameraRecoilMul,
+      pattern[1] * cameraRecoilMul,
+      cfg.recoilRecovery
+    );
+
+    state.visualKickVelocity +=
+      cfg.visualKick *
+      (this.aiming ? 13.5 : 17.5) /
+      Math.max(0.72, cfg.mass);
+    state.sustainedFire = Math.min(
+      1,
+      state.sustainedFire + (cfg.automatic ? 0.24 : 0.48)
+    );
+
+    this.triggerMuzzleFx(this.active);
     this.audio.playShot(cfg.sound);
     this.onFire?.({ name: cfg.name });
 
@@ -825,19 +980,119 @@ export class WeaponSystem {
     muzzle.position.set(0, 0, -(cfg.modelLength / 2 + barrelLength + 0.04));
     group.add(muzzle);
 
-    const muzzleFlash = new THREE.Mesh(
-      new THREE.SphereGeometry(cfg.pellets > 1 ? 0.12 : cfg.scope ? 0.10 : 0.075, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0xffd466 })
-    );
-    muzzleFlash.position.copy(muzzle.position);
-    muzzleFlash.visible = false;
-    group.add(muzzleFlash);
+    const muzzleFx = buildMuzzleFx(cfg);
+    muzzleFx.group.position.copy(muzzle.position);
+    muzzleFx.group.visible = false;
+    group.add(muzzleFx.group);
 
     group.position.set(0.34, 1.05, -0.48);
     group.rotation.x = -0.04;
 
-    return { group, muzzle, muzzleFlash, rightGrip, leftGrip };
+    return {
+      group,
+      muzzle,
+      muzzleFlash: muzzleFx.group,
+      muzzleFx,
+      rightGrip,
+      leftGrip
+    };
   }
+}
+
+function buildMuzzleFx(cfg) {
+  const group = new THREE.Group();
+
+  const additive = (color, opacity = 1) =>
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide
+    });
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.052, 8, 6),
+    additive(0xfff3b0, 1)
+  );
+  group.add(core);
+
+  const flareA = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.27, 0.050),
+    additive(0xffc24d, 0.92)
+  );
+  flareA.rotation.z = Math.PI * 0.25;
+  group.add(flareA);
+
+  const flareB = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.22, 0.040),
+    additive(0xff8f32, 0.72)
+  );
+  flareB.rotation.z = -Math.PI * 0.25;
+  group.add(flareB);
+
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(
+      cfg.pellets > 1 ? 0.13 : 0.085,
+      cfg.pellets > 1 ? 0.38 : 0.28,
+      8,
+      1,
+      true
+    ),
+    additive(0xffa33a, 0.74)
+  );
+  cone.rotation.x = -Math.PI / 2;
+  cone.position.z = -0.15;
+  group.add(cone);
+
+  const sparks = [];
+  for (let i = 0; i < 4; i++) {
+    const spark = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.075, 0.012),
+      additive(0xffd675, 0.9)
+    );
+    group.add(spark);
+    sparks.push(spark);
+  }
+
+  const smoke = new THREE.Mesh(
+    new THREE.SphereGeometry(0.075, 8, 6),
+    new THREE.MeshBasicMaterial({
+      color: 0x59606a,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    })
+  );
+  smoke.position.set(0, 0, -0.03);
+  smoke.visible = false;
+  group.add(smoke);
+
+  const light = new THREE.PointLight(
+    0xffb45a,
+    0,
+    cfg.pellets > 1 ? 2.2 : 1.5,
+    2
+  );
+  light.position.z = -0.06;
+  group.add(light);
+
+  group.visible = false;
+
+  return {
+    group,
+    core,
+    flareA,
+    flareB,
+    cone,
+    sparks,
+    smoke,
+    light,
+    age: 0,
+    life: 0.03,
+    seed: 1
+  };
 }
 
 function firstValidHit(raycaster, origin, direction, objects, maxDistance) {

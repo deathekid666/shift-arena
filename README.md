@@ -256,3 +256,24 @@ Browser-first third-person shooter prototype.
 - Release starts from that raised pose and whips the real arm forward toward the cursor before follow-through.
 - Low-ceiling compact throw keeps the same logic with a lower/tucked wind-up.
 - Tap-V slash remains its own melee pose and does not reuse the throw wind-up.
+
+
+## Build 010.7A — weapon feel: recoil + muzzle flash
+- Built on top of the newer Build 010.6 Tin Fang/jump-era main branch without touching jump, landing, climbing or traversal code.
+- Camera recoil is now spring-based rather than directly adding and damping an angle.
+- Each shot adds pitch/yaw velocity; spring stiffness and damping produce a fast kick followed by a controlled return.
+- ADS reduces visual camera recoil to 62% while keeping the weapon's gameplay spread/recoil model intact.
+- Weapon model recoil is now its own physical spring with velocity, stiffness and damping instead of a one-value Z kick.
+- Weapon mass changes how fast/strongly the model settles after recoil.
+- Replaced the old glowing muzzle sphere with a compact multi-part muzzle burst:
+  - bright core
+  - two crossed additive flare planes
+  - directional muzzle cone
+  - four tiny sparks
+  - short-lived local point light
+  - smoke only after sustained fire
+- Muzzle flash lifetime is now roughly 1–3 frames depending on weapon class instead of a lingering glow.
+- Shotguns get a wider/brighter flash; scoped heavy weapons get a compact but intense burst.
+- Sustained automatic fire gradually introduces a light smoke puff instead of smoke on every single shot.
+- Muzzle FX remain attached to the existing runtime muzzle anchor, so they follow all current weapon/IK poses.
+- Architecture was informed by Epic-style separation of camera shake/recoil from animation/VFX and by the open-source mshaheerz/fpp-tpp-shooter-starter separation of weapon stats, shooter logic, muzzle anchor, camera recoil and muzzle FX.
