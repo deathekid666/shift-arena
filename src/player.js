@@ -1,7 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG } from './config.js';
 import { buildRoachScoutCharacter, updateRoachScoutCharacter } from './character.js';
-import { loadRoachScoutVrmBase } from './vrm-character.js';
 
 export class PlayerController {
   constructor(world, input) {
@@ -35,6 +34,7 @@ export class PlayerController {
 
     this.weaponVisualActive = true;
     this.fangArmOverride = false;
+    this.fangAnimation = null;
 
     // Start the real anime/VRM pipeline immediately. The old geometry only
     // reappears if the external development avatar genuinely fails to load.
@@ -137,10 +137,11 @@ export class PlayerController {
     const characterState = {
       dt,
       speed: this.horizontalSpeed(),
-      combat: this.weaponVisualActive || combatFacing,
+      combat: this.weaponVisualActive && combatFacing,
       crouching: this.crouching,
       grounded: this.grounded,
-      rightArmOverride: this.fangArmOverride
+      rightArmOverride: this.fangArmOverride,
+      fangAnimation: this.fangAnimation
     };
 
     if (this.vrmCharacter) {
@@ -152,7 +153,16 @@ export class PlayerController {
 
   async loadVrmVisual() {
     try {
-      const avatar = await loadRoachScoutVrmBase();
+      // Dynamic import means a slow/failing external VRM dependency can never
+      // block the game itself from booting and rendering.
+      const avatar = await withTimeout(
+        (async () => {
+          const { loadRoachScoutVrmBase } = await import('./vrm-character.js');
+          return loadRoachScoutVrmBase();
+        })(),
+        12000,
+        'VRM character load timed out'
+      );
 
       if (this.vrmCharacter?.root?.parent) {
         this.vrmCharacter.root.parent.remove(this.vrmCharacter.root);
@@ -165,7 +175,6 @@ export class PlayerController {
       this.fallbackVisualRoot.visible = false;
       this.visualRoot = avatar.root;
       this.visualRoot.visible = true;
-      avatar.setRightArmHidden(this.fangArmOverride);
 
       this.characterLoadState = 'ready';
       this.characterLoadError = null;
@@ -368,16 +377,37 @@ export class PlayerController {
   }
 
   setFangArmOverride(active) {
+    // With a VRM character we animate the real arm instead of hiding it and
+    // spawning a duplicate. This flag is still used by the fallback model.
     this.fangArmOverride = Boolean(active);
 
-    if (this.vrmCharacter) {
-      this.vrmCharacter.setRightArmHidden(this.fangArmOverride);
-      return;
-    }
-
-    if (!active && this.fallbackCharacter?.rightArm?.root) {
+    if (!this.vrmCharacter && !active && this.fallbackCharacter?.rightArm?.root) {
       this.fallbackCharacter.rightArm.root.visible = true;
     }
+  }
+
+  setFangAnimation(animation) {
+    this.fangAnimation = animation ? { ...animation } : null;
+  }
+
+  getWeaponSocket() {
+    return this.vrmCharacter?.weaponSocket ?? null;
+  }
+
+  getFangSocket() {
+    return this.vrmCharacter?.fangSocket ?? null;
+  }
+
+  getHandWorldPosition(side = 'right', target = new THREE.Vector3()) {
+    const key = side === 'left' ? 'leftHand' : 'rightHand';
+    const hand = this.vrmCharacter?.bones?.[key];
+    if (!hand) return null;
+    hand.getWorldPosition(target);
+    return target;
+  }
+
+  getCharacterVisualRoot() {
+    return this.visualRoot ?? null;
   }
 
   setWeaponVisualActive(active) {
@@ -387,6 +417,22 @@ export class PlayerController {
   horizontalSpeed() {
     return Math.hypot(this.velocity.x, this.velocity.z);
   }
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function targetIsMoving(velocity) {

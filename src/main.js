@@ -59,7 +59,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 009.1 · REAL VRM CHARACTER PIPELINE</div>
+    <div id="damage-test-hint">BUILD 009.2 · REAL HANDS + AIM CAMERA</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -108,7 +108,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 009.1 · VRM PIPELINE</div>
+        <div class="build-tag">BUILD 009.2 · HANDS + AIM</div>
         <h1>SHIFT Arena</h1>
         <p>The primitive character has been replaced as the normal path by a real skinned anime VRM pipeline. This build uses a temporary VRoid rig base for pipeline validation, with Roach Scout antennae/shell attached to real humanoid bones. The final custom Roach Scout asset will replace this base without changing gameplay code.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
@@ -476,7 +476,7 @@ function loop(now) {
         ? (fang.compactAim ? fang.cfg.compactAimShoulderOffset : fang.cfg.aimShoulderOffset)
         : weapon.adsShoulderOffset,
       scoped: !fangAiming && weapon.scoped,
-      smartAimCollision: fangAiming,
+      smartAimCollision: fangAiming || weapon.aiming,
       compactAim: fangAiming && fang.compactAim
     });
 

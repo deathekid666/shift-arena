@@ -136,3 +136,18 @@ Browser-first third-person shooter prototype.
 - The old Build 009 primitive mesh remains fallback-only if VRM loading fails.
 - Final target remains a custom Roach Scout VRM/GLB matching the approved sketch; replacing the temporary base will require only swapping the asset URL/model, not rewriting movement/combat.
 - Open-source character-loader/VRM architecture references: pixiv/three-vrm (MIT), norio/vrm-game-starter (MIT), M3-org/CharacterStudio (MIT).
+
+
+## Build 009.2 — aim camera + real hands
+- VRM loading is now dynamically imported so a slow three-vrm CDN/model request cannot block SHIFT's initial render with a blank white page.
+- VRM loading has a 12-second timeout and falls back cleanly instead of hanging startup.
+- Smart obstacle-aware shoulder camera collision now applies to normal firearm ADS as well as Tin Fang aiming.
+- Character visuals hide earlier when geometry compresses the aim camera, preventing the camera from entering VRM face/clothing meshes and filling the screen white.
+- Collision camera minimum resolved distance increased from 0.72 to 0.96.
+- Firearms now follow the actual VRM right-hand world position instead of remaining at the old capsule-root coordinates.
+- Weapon pitch follows camera aim while the character faces the camera yaw; muzzle/crosshair trace logic remains camera-first.
+- Character combat pose is no longer permanently active just because a firearm is visible.
+- Tin Fang no longer spawns a second procedural arm when the VRM is loaded.
+- The Fang model is reparented to the actual VRM right-hand Fang socket.
+- Hold/release/slash animate the real VRM shoulder, forearm, hand and upper chest.
+- The improvised Tin Fang mesh was rebuilt with a tapered asymmetric metal shard, sharpened edge, spine, six cord wraps, guard and ring pommel.

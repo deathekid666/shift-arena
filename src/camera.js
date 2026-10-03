@@ -21,6 +21,7 @@ export class ThirdPersonCamera {
     this.hidePlayerBody = false;
     this.compressed = false;
     this.resolvedDistance = GAME_CONFIG.camera.distance;
+    this.aimFallbackSide = 1;
   }
 
   update(dt, options = {}) {
@@ -57,6 +58,10 @@ export class ThirdPersonCamera {
 
     const targetDistance = scoped ? 0.10 : aiming ? adsDistance : cfg.distance;
     const targetShoulder = scoped ? 0 : aiming ? adsShoulderOffset : cfg.shoulderOffset;
+
+    if (!aiming) {
+      this.aimFallbackSide = Math.sign(cfg.shoulderOffset) || 1;
+    }
     const targetFov = aiming ? (adsFov ?? 57) : cfg.normalFov;
 
     this.target.copy(this.player.group.position).add(new THREE.Vector3(0, cfg.height, 0));
@@ -110,9 +115,9 @@ export class ThirdPersonCamera {
     this.hidePlayerBody =
       !scoped &&
       aiming &&
-      this.resolvedDistance < 1.55;
+      this.resolvedDistance < 2.15;
 
-    const smooth = 1 - Math.exp(-(scoped ? 28 : smartAimCollision ? 24 : 18) * dt);
+    const smooth = 1 - Math.exp(-(scoped ? 28 : smartAimCollision ? 20 : 18) * dt);
     this.camera.position.lerp(desired, smooth);
     this.camera.fov = THREE.MathUtils.damp(
       this.camera.fov,
@@ -157,7 +162,7 @@ export class ThirdPersonCamera {
       };
     }
 
-    const distance = Math.max(0.72, hit.distance - padding);
+    const distance = Math.max(0.96, hit.distance - padding);
     return {
       position: this.target.clone().addScaledVector(direction, distance),
       collided: true,
@@ -166,19 +171,23 @@ export class ThirdPersonCamera {
   }
 
   findAimFallback({ viewYaw, targetDistance, targetShoulder, compactAim, padding }) {
-    // In cramped spaces, keep the fallback mostly horizontal so an overhead
-    // table/counter does not force the camera upward into its underside.
     const distances = compactAim
       ? [Math.min(2.25, targetDistance), 1.85, 1.45]
       : [Math.min(2.65, targetDistance), 2.15, 1.65];
 
     const shoulderMag = Math.max(0.58, Math.min(1.05, Math.abs(targetShoulder)));
+    const preferred = this.aimFallbackSide >= 0 ? shoulderMag : -shoulderMag;
+    const opposite = -preferred;
+
+    // Try the already-selected shoulder first. A bias below makes the camera
+    // stay there unless the other side is meaningfully clearer.
     const shoulderOffsets = [
+      preferred,
       targetShoulder,
-      -targetShoulder,
-      shoulderMag,
-      -shoulderMag,
-      0
+      preferred * 0.72,
+      0,
+      opposite * 0.72,
+      opposite
     ];
 
     let best = null;
@@ -198,18 +207,25 @@ export class ThirdPersonCamera {
         const clearance = requestedDistance > 0
           ? resolved.distance / requestedDistance
           : 0;
+        const side = Math.sign(shoulderOffset) || this.aimFallbackSide;
+        const sameSide = side === this.aimFallbackSide;
 
         const score =
           (resolved.collided ? 0 : 100) +
           clearance * 22 +
           resolved.distance * 4 +
+          (sameSide ? 8 : 0) +
           (shoulderOffset === targetShoulder ? 2 : 0);
 
         if (score > bestScore) {
           bestScore = score;
-          best = resolved;
+          best = { ...resolved, shoulderSide: side };
         }
       }
+    }
+
+    if (best && !best.collided) {
+      this.aimFallbackSide = best.shoulderSide;
     }
 
     return best;

@@ -27,6 +27,9 @@ export class WeaponSystem {
     this.ammoPool = { light: 90, medium: 90, shells: 24, heavy: 8 };
     this.ammoCaps = { light: 180, medium: 180, shells: 48, heavy: 20 };
     this.startingAmmo = { ...this.ammoPool };
+    this.handMounted = false;
+    this.tmpHandWorld = new THREE.Vector3();
+    this.tmpHandLocal = new THREE.Vector3();
 
     this.entries = WEAPON_ORDER.map((key) => {
       const cfg = GAME_CONFIG.weapons[key];
@@ -53,6 +56,11 @@ export class WeaponSystem {
     });
 
     this.player.setWeaponVisualActive?.(true);
+
+    this.player.characterReady?.then((avatar) => {
+      this.handMounted = Boolean(avatar);
+    });
+
     this.emitSwitch();
     this.emitInventory();
   }
@@ -199,14 +207,46 @@ export class WeaponSystem {
     const moving = Math.min(1, speed / 5.2);
 
     state.bobTime += dt * (3.5 + speed * 1.4);
-    const bobScale = cfg.bob * moving * (this.aiming ? 0.3 : 1);
+    const bobScale = cfg.bob * moving * (this.aiming ? 0.22 : 0.55);
     const bobX = Math.cos(state.bobTime) * bobScale;
-    const bobY = Math.abs(Math.sin(state.bobTime * 2)) * bobScale * 0.65;
+    const bobY = Math.abs(Math.sin(state.bobTime * 2)) * bobScale * 0.55;
 
-    const swayScale = cfg.sway * (this.aiming ? 0.42 : 1);
-    const swayX = THREE.MathUtils.clamp(-this.cameraRig.lookX * swayScale, -0.07, 0.07);
-    const swayY = THREE.MathUtils.clamp(this.cameraRig.lookY * swayScale * 0.5, -0.035, 0.035);
+    const swayScale = cfg.sway * (this.aiming ? 0.30 : 0.62);
+    const swayX = THREE.MathUtils.clamp(-this.cameraRig.lookX * swayScale, -0.045, 0.045);
+    const swayY = THREE.MathUtils.clamp(this.cameraRig.lookY * swayScale * 0.45, -0.025, 0.025);
 
+    const handWorld = this.handMounted
+      ? this.player.getHandWorldPosition?.('right', this.tmpHandWorld)
+      : null;
+
+    if (handWorld) {
+      // Weapon origin follows the real VRM hand. The firearm still aims along
+      // the character/camera forward direction, avoiding unpredictable hand
+      // bone local axes while visually staying in the hand.
+      this.tmpHandLocal.copy(handWorld);
+      this.player.group.worldToLocal(this.tmpHandLocal);
+
+      const targetX = this.tmpHandLocal.x + (this.aiming ? -0.015 : 0.018) + bobX + swayX;
+      const targetY = this.tmpHandLocal.y + 0.015 + bobY + swayY;
+      const targetZ = this.tmpHandLocal.z - (this.aiming ? 0.16 : 0.12) + state.visualKick;
+
+      model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 28 / cfg.mass, dt);
+      model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 28 / cfg.mass, dt);
+      model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 30 / cfg.mass, dt);
+
+      const targetPitch = THREE.MathUtils.clamp(this.camera.rotation.x * 0.78, -0.62, 0.58);
+      model.rotation.x = THREE.MathUtils.damp(
+        model.rotation.x,
+        targetPitch - 0.05 - state.visualKick * 0.70,
+        22 / cfg.mass,
+        dt
+      );
+      model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 24 / cfg.mass, dt);
+      model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -0.05 - swayX * 0.7, 20 / cfg.mass, dt);
+      return;
+    }
+
+    // Fallback positioning used only before/without the VRM hand.
     const targetX = (this.aiming ? 0.28 : 0.34) + bobX + swayX;
     const targetY = 1.05 + bobY + swayY;
     const targetZ = (this.aiming ? -0.60 : -0.48) + state.visualKick;
@@ -215,6 +255,7 @@ export class WeaponSystem {
     model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / cfg.mass, dt);
     model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 22 / cfg.mass, dt);
     model.rotation.x = THREE.MathUtils.damp(model.rotation.x, -0.04 - state.visualKick * 0.75, 18 / cfg.mass, dt);
+    model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 18 / cfg.mass, dt);
     model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / cfg.mass, dt);
   }
 

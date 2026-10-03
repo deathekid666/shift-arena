@@ -42,6 +42,12 @@ export class TinFangSystem {
 
     this.buildPlayerVisuals();
     this.buildTrajectory();
+    this.useRealHand = false;
+
+    this.player.characterReady?.then((avatar) => {
+      if (avatar) this.bindToRealHand();
+    });
+
     this.emitState();
   }
 
@@ -129,6 +135,19 @@ export class TinFangSystem {
     this.player.group.add(this.slashArc);
   }
 
+  bindToRealHand() {
+    const socket = this.player.getFangSocket?.();
+    if (!socket || !this.handFang) return;
+
+    this.useRealHand = true;
+    this.armRig.visible = false;
+    socket.add(this.handFang);
+    this.handFang.position.set(0.0, 0.015, -0.10);
+    this.handFang.rotation.set(-0.10, 0.0, Math.PI * 0.52);
+    this.handFang.scale.setScalar(0.64);
+    this.player.setFangArmOverride?.(false);
+  }
+
   buildTrajectory() {
     this.trajectoryGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(), new THREE.Vector3()
@@ -155,6 +174,7 @@ export class TinFangSystem {
     this.stuckPosition = null;
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
+    this.player.setFangAnimation?.(null);
     this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
@@ -217,8 +237,9 @@ export class TinFangSystem {
     this.state = 'PRIMING';
     this.holdTime = 0;
     this.actionTime = 0;
-    this.armRig.visible = true;
+    this.armRig.visible = !this.useRealHand;
     this.player.setFangArmOverride?.(true);
+    this.player.setFangAnimation?.({ mode: 'aim', t: 0, compact: false });
     this.handFang.visible = true;
     this.sheath.visible = false;
     this.trajectoryLine.visible = false;
@@ -257,7 +278,15 @@ export class TinFangSystem {
             hand: [-0.42, 0.10, 0.42]
           };
 
-    this.dampArmPose(target, aiming ? 16 : 20, dt);
+    if (this.useRealHand) {
+      this.player.setFangAnimation?.({
+        mode: 'aim',
+        t: charge,
+        compact: this.compactAim
+      });
+    } else {
+      this.dampArmPose(target, aiming ? 16 : 20, dt);
+    }
 
     this.player.body.rotation.z = THREE.MathUtils.damp(
       this.player.body.rotation.z,
@@ -308,6 +337,14 @@ export class TinFangSystem {
   updateRelease(dt) {
     this.actionTime += dt;
     const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
+
+    if (this.useRealHand) {
+      this.player.setFangAnimation?.({
+        mode: 'release',
+        t,
+        compact: this.releaseCompact
+      });
+    }
 
     if (this.releaseCompact) {
       if (t < 0.24) {
@@ -425,8 +462,9 @@ export class TinFangSystem {
     this.state = 'SLASH';
     this.actionTime = 0;
     this.actionDuration = 0.38;
-    this.armRig.visible = true;
+    this.armRig.visible = !this.useRealHand;
     this.player.setFangArmOverride?.(true);
+    this.player.setFangAnimation?.({ mode: 'slash', t: 0, compact: false });
     this.handFang.visible = true;
     this.sheath.visible = false;
     this.slashArc.visible = true;
@@ -439,6 +477,10 @@ export class TinFangSystem {
   updateSlash(dt) {
     this.actionTime += dt;
     const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
+
+    if (this.useRealHand) {
+      this.player.setFangAnimation?.({ mode: 'slash', t, compact: false });
+    }
 
     if (t < 0.20) {
       const k = easeOut(t / 0.20);
@@ -1018,6 +1060,7 @@ export class TinFangSystem {
     this.sheath.visible = true;
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
+    this.player.setFangAnimation?.(null);
     this.handFang.visible = true;
     this.resetBodyPose();
     this.audio?.playFang?.('recover');
@@ -1031,6 +1074,7 @@ export class TinFangSystem {
     this.sheath.visible = true;
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
+    this.player.setFangAnimation?.(null);
     this.handFang.visible = true;
     this.resetBodyPose();
     this.onToast?.('TIN FANG LOST · RETURNS ON RESPAWN');
@@ -1056,6 +1100,7 @@ export class TinFangSystem {
   finishHandAction() {
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
+    this.player.setFangAnimation?.(null);
     this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
@@ -1070,6 +1115,7 @@ export class TinFangSystem {
     const wasClaw = this.state === 'CLAW';
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
+    this.player.setFangAnimation?.(null);
     this.handFang.visible = true;
     this.sheath.visible = true;
     this.slashArc.visible = false;
@@ -1092,6 +1138,7 @@ export class TinFangSystem {
   }
 
   setArmPose(pose, blend = 1) {
+    if (this.useRealHand) return;
     this.armRig.rotation.set(
       pose.shoulder[0] * blend,
       pose.shoulder[1] * blend,
@@ -1110,6 +1157,7 @@ export class TinFangSystem {
   }
 
   dampArmPose(pose, lambda, dt) {
+    if (this.useRealHand) return;
     this.armRig.rotation.x = THREE.MathUtils.damp(this.armRig.rotation.x, pose.shoulder[0], lambda, dt);
     this.armRig.rotation.y = THREE.MathUtils.damp(this.armRig.rotation.y, pose.shoulder[1], lambda, dt);
     this.armRig.rotation.z = THREE.MathUtils.damp(this.armRig.rotation.z, pose.shoulder[2], lambda, dt);
@@ -1168,64 +1216,123 @@ function buildFangModel() {
   group.add(spinRoot);
 
   const bladeMat = new THREE.MeshStandardMaterial({
-    color: 0xdce8ee,
-    roughness: 0.28,
-    metalness: 0.72,
-    emissive: 0x000000
+    color: 0xd8dde1,
+    roughness: 0.22,
+    metalness: 0.92
   });
   const edgeMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.20,
-    metalness: 0.82,
-    emissive: 0x000000
+    color: 0xf7fbff,
+    roughness: 0.12,
+    metalness: 1.0
+  });
+  const spineMat = new THREE.MeshStandardMaterial({
+    color: 0x7e858a,
+    roughness: 0.34,
+    metalness: 0.86
   });
   const wrapMat = new THREE.MeshStandardMaterial({
-    color: 0x6f4028,
-    roughness: 0.86,
+    color: 0x66402d,
+    roughness: 0.90,
     metalness: 0.02
   });
+  const threadMat = new THREE.MeshStandardMaterial({
+    color: 0xb78455,
+    roughness: 0.95,
+    metalness: 0
+  });
 
+  // Improvised cockroach-scale can shard: asymmetric, tapered and visibly
+  // sharpened rather than a generic triangular game knife.
   const bladeShape = new THREE.Shape();
-  bladeShape.moveTo(-0.095, 0);
-  bladeShape.lineTo(0.095, 0);
-  bladeShape.lineTo(0.02, -0.56);
-  bladeShape.lineTo(-0.055, -0.45);
+  bladeShape.moveTo(-0.075, 0.03);
+  bladeShape.lineTo(0.080, 0.01);
+  bladeShape.lineTo(0.058, -0.30);
+  bladeShape.lineTo(0.018, -0.53);
+  bladeShape.lineTo(-0.018, -0.62);
+  bladeShape.lineTo(-0.060, -0.42);
+  bladeShape.lineTo(-0.090, -0.16);
   bladeShape.closePath();
 
   const blade = new THREE.Mesh(
     new THREE.ExtrudeGeometry(bladeShape, {
-      depth: 0.035,
+      depth: 0.028,
       bevelEnabled: true,
-      bevelSize: 0.012,
-      bevelThickness: 0.01,
-      bevelSegments: 1
+      bevelSize: 0.010,
+      bevelThickness: 0.008,
+      bevelSegments: 2
     }),
     bladeMat
   );
   blade.rotation.x = Math.PI / 2;
-  blade.position.set(0, 0.18, -0.12);
+  blade.position.set(0, 0.17, -0.13);
   blade.castShadow = true;
   spinRoot.add(blade);
 
+  const edgeShape = new THREE.Shape();
+  edgeShape.moveTo(0.050, -0.03);
+  edgeShape.lineTo(0.073, -0.03);
+  edgeShape.lineTo(0.050, -0.32);
+  edgeShape.lineTo(0.015, -0.53);
+  edgeShape.lineTo(0.000, -0.49);
+  edgeShape.closePath();
+  const edge = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(edgeShape, {
+      depth: 0.032,
+      bevelEnabled: false
+    }),
+    edgeMat
+  );
+  edge.rotation.x = Math.PI / 2;
+  edge.position.set(0, 0.165, -0.13);
+  spinRoot.add(edge);
+
+  const spine = new THREE.Mesh(
+    new THREE.BoxGeometry(0.028, 0.035, 0.34),
+    spineMat
+  );
+  spine.position.set(-0.066, 0.0, -0.17);
+  spine.rotation.x = -0.08;
+  spinRoot.add(spine);
+
   const handle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.055, 0.065, 0.34, 8),
+    new THREE.CylinderGeometry(0.050, 0.058, 0.32, 10),
     wrapMat
   );
   handle.rotation.x = Math.PI / 2;
-  handle.position.z = 0.24;
+  handle.position.z = 0.25;
   handle.castShadow = true;
   spinRoot.add(handle);
 
+  // Individual cord wraps make the handle read like a physical improvised tool.
+  for (let i = 0; i < 6; i++) {
+    const wrap = new THREE.Mesh(
+      new THREE.TorusGeometry(0.057, 0.009, 5, 12),
+      threadMat
+    );
+    wrap.rotation.x = Math.PI / 2;
+    wrap.position.z = 0.12 + i * 0.052;
+    wrap.rotation.z = (i % 2 ? 1 : -1) * 0.10;
+    spinRoot.add(wrap);
+  }
+
   const guard = new THREE.Mesh(
-    new THREE.BoxGeometry(0.22, 0.04, 0.07),
-    edgeMat
+    new THREE.BoxGeometry(0.19, 0.035, 0.065),
+    spineMat
   );
   guard.position.z = 0.055;
   guard.castShadow = true;
   spinRoot.add(guard);
 
+  const pommel = new THREE.Mesh(
+    new THREE.TorusGeometry(0.048, 0.014, 6, 14),
+    spineMat
+  );
+  pommel.rotation.x = Math.PI / 2;
+  pommel.position.z = 0.43;
+  spinRoot.add(pommel);
+
   const hitbox = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18, 8, 6),
+    new THREE.SphereGeometry(0.16, 8, 6),
     new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0,
