@@ -333,7 +333,9 @@ function updateFangHud(state) {
     CLAW: 'CLAW'
   };
 
-  fangState.textContent = labels[state.state] ?? state.state;
+  fangState.textContent = state.state === 'AIMING' && state.compactAim
+    ? 'FANG AIM · LOW'
+    : (labels[state.state] ?? state.state);
   fangState.classList.toggle('missing', !state.hasFang);
 
   const aiming = state.state === 'AIMING' || state.state === 'RELEASE';
@@ -458,7 +460,9 @@ function loop(now) {
       aiming: fangAiming || weapon.aiming,
       adsFov: fangAiming ? fang.cfg.aimFov : weapon.adsFov,
       adsDistance: fangAiming ? fang.cfg.aimDistance : weapon.adsDistance,
-      adsShoulderOffset: fangAiming ? fang.cfg.aimShoulderOffset : weapon.adsShoulderOffset,
+      adsShoulderOffset: fangAiming
+        ? (fang.compactAim ? fang.cfg.compactAimShoulderOffset : fang.cfg.aimShoulderOffset)
+        : weapon.adsShoulderOffset,
       scoped: !fangAiming && weapon.scoped
     });
 

@@ -135,6 +135,8 @@ export const GAME_CONFIG = {
     aimFov: 54,
     aimDistance: 4.15,
     aimShoulderOffset: 0.96,
+    compactAimClearance: 0.95,
+    compactAimShoulderOffset: 0.82,
     fallGravity: 15,
     bounceRestitution: 0.30,
     recoveryRadius: 1.15,

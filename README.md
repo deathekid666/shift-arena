@@ -85,3 +85,13 @@ Browser-first third-person shooter prototype.
 - Knocked-loose Fang spins under gravity, collides with the kitchen, bounces, settles, then becomes recoverable.
 - HUD has states for AIMING, RELEASE, FALLING and DROPPED.
 - Fang lifecycle reset on elimination/respawn was corrected.
+
+
+## Build 008.3 — low-ceiling aim + floor settling
+- Tin Fang now detects low overhead clearance while aiming.
+- Under tables/counters it switches automatically to a compact side-throw animation instead of clipping the arm/Fang through furniture.
+- Compact throw keeps the same crosshair/ballistic targeting.
+- Fang camera shoulder offset tightens slightly in low-clearance aim mode.
+- HUD shows FANG AIM · LOW when the compact pose is active.
+- Settled Fang now uses the actual collision surface point plus the model's world bounding box.
+- After bounce/fall animation, the blade is lifted until its lowest geometry sits above the floor, preventing visual sinking.

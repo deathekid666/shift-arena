@@ -30,6 +30,7 @@ export class TinFangSystem {
     this.center = new THREE.Vector2(0, 0);
     this.tmpA = new THREE.Vector3();
     this.tmpB = new THREE.Vector3();
+    this.compactAim = false;
 
     this.shotProxy = {
       alive: true,
@@ -231,32 +232,42 @@ export class TinFangSystem {
 
   updateAimPose(dt) {
     const aiming = this.state === 'AIMING';
-    const charge = aiming ? this.chargeRatio : THREE.MathUtils.clamp(this.holdTime / this.cfg.primeThreshold, 0, 1);
-    const breath = aiming ? Math.sin(performance.now() * 0.006) * 0.035 : 0;
+    const charge = aiming
+      ? this.chargeRatio
+      : THREE.MathUtils.clamp(this.holdTime / this.cfg.primeThreshold, 0, 1);
 
-    const target = aiming
+    this.compactAim = aiming && this.hasLowOverheadClearance();
+    const breath = aiming ? Math.sin(performance.now() * 0.006) * 0.028 : 0;
+
+    const target = !aiming
       ? {
-          shoulder: [-1.58 + breath, -0.18, -0.48],
-          elbow: [1.48 - breath * 0.5, 0.10, 0.30],
-          hand: [-0.42, 0.10, 0.42]
-        }
-      : {
           shoulder: [-0.72, -0.10, -0.28],
           elbow: [0.78, 0.02, 0.20],
           hand: [-0.18, 0.04, 0.24]
-        };
+        }
+      : this.compactAim
+        ? {
+            shoulder: [-0.62 + breath * 0.25, -0.30, -0.66],
+            elbow: [1.02, 0.02, -0.48],
+            hand: [-0.30, -0.05, 0.18]
+          }
+        : {
+            shoulder: [-1.58 + breath, -0.18, -0.48],
+            elbow: [1.48 - breath * 0.5, 0.10, 0.30],
+            hand: [-0.42, 0.10, 0.42]
+          };
 
     this.dampArmPose(target, aiming ? 16 : 20, dt);
 
     this.player.body.rotation.z = THREE.MathUtils.damp(
       this.player.body.rotation.z,
-      aiming ? -0.065 : -0.025,
+      aiming ? (this.compactAim ? -0.025 : -0.065) : -0.025,
       14,
       dt
     );
     this.player.body.rotation.y = THREE.MathUtils.damp(
       this.player.body.rotation.y,
-      aiming ? 0.10 : 0.03,
+      aiming ? (this.compactAim ? 0.045 : 0.10) : 0.03,
       14,
       dt
     );
@@ -267,6 +278,17 @@ export class TinFangSystem {
     else this.trajectoryLine.visible = false;
   }
 
+  hasLowOverheadClearance() {
+    const origin = this.player.group.position.clone().add(new THREE.Vector3(0, 1.42, 0));
+    this.raycaster.set(origin, new THREE.Vector3(0, 1, 0));
+    this.raycaster.near = 0;
+    this.raycaster.far = this.cfg.compactAimClearance;
+
+    const hit = this.raycaster.intersectObjects(this.world.cameraObstacles, false)
+      .find((entry) => !entry.object.userData.disabled);
+
+    return Boolean(hit);
+  }
   beginRelease() {
     this.releaseCharge = THREE.MathUtils.clamp(
       (this.holdTime - this.cfg.primeThreshold) /
@@ -275,6 +297,7 @@ export class TinFangSystem {
       1
     );
     this.releaseAimPoint = this.computeAimPoint();
+    this.releaseCompact = this.compactAim;
     this.releaseLaunched = false;
     this.actionTime = 0;
     this.actionDuration = this.cfg.releaseDuration;
@@ -286,53 +309,99 @@ export class TinFangSystem {
     this.actionTime += dt;
     const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
 
-    if (t < 0.24) {
-      const k = easeInOut(t / 0.24);
-      this.setArmPose({
-        shoulder: [
-          THREE.MathUtils.lerp(-1.58, -1.92, k),
-          THREE.MathUtils.lerp(-0.18, -0.24, k),
-          THREE.MathUtils.lerp(-0.48, -0.58, k)
-        ],
-        elbow: [
-          THREE.MathUtils.lerp(1.48, 1.62, k),
-          0.08,
-          THREE.MathUtils.lerp(0.30, 0.38, k)
-        ],
-        hand: [-0.48, 0.10, 0.50]
-      }, 1);
-      this.player.body.rotation.z = THREE.MathUtils.lerp(-0.065, -0.10, k);
-    } else if (t < 0.68) {
-      const k = easeInOut((t - 0.24) / 0.44);
-      this.setArmPose({
-        shoulder: [
-          THREE.MathUtils.lerp(-1.92, 0.34, k),
-          THREE.MathUtils.lerp(-0.24, 0.10, k),
-          THREE.MathUtils.lerp(-0.58, 0.24, k)
-        ],
-        elbow: [
-          THREE.MathUtils.lerp(1.62, -0.55, k),
-          THREE.MathUtils.lerp(0.08, -0.06, k),
-          THREE.MathUtils.lerp(0.38, -0.18, k)
-        ],
-        hand: [
-          THREE.MathUtils.lerp(-0.48, 0.22, k),
-          0,
-          THREE.MathUtils.lerp(0.50, -0.18, k)
-        ]
-      }, 1);
-
-      this.player.body.rotation.z = THREE.MathUtils.lerp(-0.10, 0.055, k);
-      this.player.body.rotation.y = THREE.MathUtils.lerp(0.10, -0.08, k);
+    if (this.releaseCompact) {
+      if (t < 0.24) {
+        const k = easeInOut(t / 0.24);
+        this.setArmPose({
+          shoulder: [
+            THREE.MathUtils.lerp(-0.62, -0.78, k),
+            THREE.MathUtils.lerp(-0.30, -0.36, k),
+            THREE.MathUtils.lerp(-0.66, -0.78, k)
+          ],
+          elbow: [
+            THREE.MathUtils.lerp(1.02, 1.16, k),
+            0.02,
+            THREE.MathUtils.lerp(-0.48, -0.58, k)
+          ],
+          hand: [-0.34, -0.06, 0.22]
+        }, 1);
+      } else if (t < 0.68) {
+        const k = easeInOut((t - 0.24) / 0.44);
+        this.setArmPose({
+          shoulder: [
+            THREE.MathUtils.lerp(-0.78, 0.46, k),
+            THREE.MathUtils.lerp(-0.36, 0.06, k),
+            THREE.MathUtils.lerp(-0.78, -0.08, k)
+          ],
+          elbow: [
+            THREE.MathUtils.lerp(1.16, -0.58, k),
+            THREE.MathUtils.lerp(0.02, -0.05, k),
+            THREE.MathUtils.lerp(-0.58, -0.14, k)
+          ],
+          hand: [
+            THREE.MathUtils.lerp(-0.34, 0.24, k),
+            -0.04,
+            THREE.MathUtils.lerp(0.22, -0.18, k)
+          ]
+        }, 1);
+        this.player.body.rotation.y = THREE.MathUtils.lerp(0.045, -0.045, k);
+      } else {
+        const k = easeOut((t - 0.68) / 0.32);
+        this.setArmPose({
+          shoulder: [THREE.MathUtils.lerp(0.46, 0.58, k), 0.08, -0.04],
+          elbow: [THREE.MathUtils.lerp(-0.58, -0.72, k), -0.04, -0.16],
+          hand: [0.22, -0.03, -0.20]
+        }, 1);
+        this.player.body.rotation.y = THREE.MathUtils.lerp(-0.045, 0, k);
+      }
     } else {
-      const k = easeOut((t - 0.68) / 0.32);
-      this.setArmPose({
-        shoulder: [THREE.MathUtils.lerp(0.34, 0.72, k), 0.12, 0.18],
-        elbow: [THREE.MathUtils.lerp(-0.55, -0.78, k), -0.08, -0.20],
-        hand: [0.26, 0, -0.22]
-      }, 1);
-      this.player.body.rotation.z = THREE.MathUtils.lerp(0.055, 0, k);
-      this.player.body.rotation.y = THREE.MathUtils.lerp(-0.08, 0, k);
+      if (t < 0.24) {
+        const k = easeInOut(t / 0.24);
+        this.setArmPose({
+          shoulder: [
+            THREE.MathUtils.lerp(-1.58, -1.92, k),
+            THREE.MathUtils.lerp(-0.18, -0.24, k),
+            THREE.MathUtils.lerp(-0.48, -0.58, k)
+          ],
+          elbow: [
+            THREE.MathUtils.lerp(1.48, 1.62, k),
+            0.08,
+            THREE.MathUtils.lerp(0.30, 0.38, k)
+          ],
+          hand: [-0.48, 0.10, 0.50]
+        }, 1);
+        this.player.body.rotation.z = THREE.MathUtils.lerp(-0.065, -0.10, k);
+      } else if (t < 0.68) {
+        const k = easeInOut((t - 0.24) / 0.44);
+        this.setArmPose({
+          shoulder: [
+            THREE.MathUtils.lerp(-1.92, 0.34, k),
+            THREE.MathUtils.lerp(-0.24, 0.10, k),
+            THREE.MathUtils.lerp(-0.58, 0.24, k)
+          ],
+          elbow: [
+            THREE.MathUtils.lerp(1.62, -0.55, k),
+            THREE.MathUtils.lerp(0.08, -0.06, k),
+            THREE.MathUtils.lerp(0.38, -0.18, k)
+          ],
+          hand: [
+            THREE.MathUtils.lerp(-0.48, 0.22, k),
+            0,
+            THREE.MathUtils.lerp(0.50, -0.18, k)
+          ]
+        }, 1);
+        this.player.body.rotation.z = THREE.MathUtils.lerp(-0.10, 0.055, k);
+        this.player.body.rotation.y = THREE.MathUtils.lerp(0.10, -0.08, k);
+      } else {
+        const k = easeOut((t - 0.68) / 0.32);
+        this.setArmPose({
+          shoulder: [THREE.MathUtils.lerp(0.34, 0.72, k), 0.12, 0.18],
+          elbow: [THREE.MathUtils.lerp(-0.55, -0.78, k), -0.08, -0.20],
+          hand: [0.26, 0, -0.22]
+        }, 1);
+        this.player.body.rotation.z = THREE.MathUtils.lerp(0.055, 0, k);
+        this.player.body.rotation.y = THREE.MathUtils.lerp(-0.08, 0, k);
+      }
     }
 
     if (!this.releaseLaunched && t >= this.cfg.releaseMoment) {
@@ -351,7 +420,6 @@ export class TinFangSystem {
       this.state = this.stateFromProjectile();
     }
   }
-
   beginSlash() {
     this.state = 'SLASH';
     this.actionTime = 0;
@@ -817,7 +885,7 @@ export class TinFangSystem {
         this.audio?.playFang?.('hit');
 
         if (p.bounces >= 3 || p.velocity.length() < 1.0) {
-          this.settleProjectile(normal);
+          this.settleProjectile(normal, hit.point);
           return;
         }
       } else {
@@ -842,7 +910,7 @@ export class TinFangSystem {
     }
   }
 
-  settleProjectile(normal) {
+  settleProjectile(normal, surfacePoint) {
     const p = this.projectile;
     if (!p) return;
 
@@ -851,13 +919,39 @@ export class TinFangSystem {
     p.stuckNormal.copy(normal);
     p.stuckTarget = null;
     p.stuckObject = null;
-    p.model.rotation.x += 0.35;
+
+    const tangent = Math.abs(normal.y) > 0.7
+      ? new THREE.Vector3(1, 0, 0)
+      : new THREE.Vector3(0, 1, 0).cross(normal).normalize();
+
+    const bitangent = normal.clone().cross(tangent).normalize();
+    const basis = new THREE.Matrix4().makeBasis(tangent, normal, bitangent);
+    p.model.quaternion.setFromRotationMatrix(basis);
+    p.model.rotateZ(0.32);
+
+    this.fitModelAboveSurface(p.model, normal, surfacePoint, 0.025);
+
     this.registerShootable();
     this.updateStuckProjectile();
 
     if (this.state !== 'RELEASE' && this.state !== 'CLAW') this.state = 'DROPPED';
   }
 
+  fitModelAboveSurface(model, normal, surfacePoint, margin = 0.02) {
+    model.updateWorldMatrix(true, true);
+
+    if (normal.y > 0.65) {
+      const bounds = new THREE.Box3().setFromObject(model);
+      if (Number.isFinite(bounds.min.y)) {
+        const desiredMinY = surfacePoint.y + margin;
+        const lift = desiredMinY - bounds.min.y;
+        if (lift > 0) model.position.y += lift;
+      }
+      return;
+    }
+
+    model.position.copy(surfacePoint).addScaledVector(normal, margin + 0.06);
+  }
   registerShootable() {
     const p = this.projectile;
     if (!p?.hitbox) return;
@@ -1055,6 +1149,7 @@ export class TinFangSystem {
       hasFang: this.hasFang,
       blocksWeapons: this.blocksWeapons,
       aiming: this.aiming,
+      compactAim: this.compactAim,
       distance,
       bearing
     });
