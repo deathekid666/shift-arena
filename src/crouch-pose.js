@@ -67,6 +67,8 @@ export function createCrouchPoseLayer(character) {
     tmp.right.set(1, 0, 0).applyQuaternion(tmp.rootQ).normalize();
 
     const authoredState = character.authoredLocomotion?.state;
+    if (String(authoredState ?? '').startsWith('SLIDE_')) return;
+
     const authoredCrouch =
       character.authoredLocomotion?.ready &&
       character.authoredLocomotion?.active &&

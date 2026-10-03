@@ -307,8 +307,12 @@ function buildCharacterInterface({
         dt
       );
 
-      this.slidePoseLayer ??= createSlidePoseLayer(this);
-      this.slidePoseLayer.apply(state, dt);
+      // A real UAL2 slide state owns the whole body. The old procedural
+      // slide is retained only as a network/CDN fallback.
+      if (!this.authoredLocomotion?.hasAuthoredSlide) {
+        this.slidePoseLayer ??= createSlidePoseLayer(this);
+        this.slidePoseLayer.apply(state, dt);
+      }
 
       vrm?.update?.(dt);
     },

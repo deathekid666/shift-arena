@@ -2,10 +2,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMHumanBoneParentMap } from '@pixiv/three-vrm';
 
-// CC0 source: Quaternius Universal Animation Library, repacked by the MIT
-// norio/vrm-game-starter project. Pinned for deterministic production behavior.
-const ANIMATION_LIBRARY_URL =
+// Real animation-state pipeline.
+// UAL1 owns base locomotion/crouch; UAL2 owns advanced movement, including
+// the authored three-part slide. Both packs are CC0 and pinned for stability.
+const BASE_ANIMATION_LIBRARY_URL =
   'https://cdn.jsdelivr.net/gh/norio/vrm-game-starter@b14c236fd8150855348ad085b7820c298eac4b30/src/assets/AnimationLibrary.glb';
+
+const SLIDE_ANIMATION_LIBRARY_URL =
+  'https://cdn.jsdelivr.net/gh/Barbatos6669/elderforge@bb2ce469f0ab2ccfc487faef55550ba07fae2483/assets/animations/universal_animation_library_2/UAL2_Standard.glb';
 
 const REST_POSE_CLIP = 'A_TPose';
 const CLIPS = {
@@ -13,10 +17,27 @@ const CLIPS = {
   MOVE: 'Jog_Fwd_Loop',
   SPRINT: 'Sprint_Loop',
   CROUCH_IDLE: 'Crouch_Idle_Loop',
-  CROUCH_MOVE: 'Crouch_Fwd_Loop'
+  CROUCH_MOVE: 'Crouch_Fwd_Loop',
+  SLIDE_START: 'Slide_Start',
+  SLIDE_LOOP: 'Slide_Loop',
+  SLIDE_EXIT: 'Slide_Exit'
 };
 
-const SOURCE_BONE_TO_HUMAN = {
+const BASE_CLIP_NAMES = [
+  CLIPS.IDLE,
+  CLIPS.MOVE,
+  CLIPS.SPRINT,
+  CLIPS.CROUCH_IDLE,
+  CLIPS.CROUCH_MOVE
+];
+
+const SLIDE_CLIP_NAMES = [
+  CLIPS.SLIDE_START,
+  CLIPS.SLIDE_LOOP,
+  CLIPS.SLIDE_EXIT
+];
+
+const UAL1_SOURCE_BONE_TO_HUMAN = {
   'DEF-hips': 'hips',
   'DEF-spine001': 'spine',
   'DEF-spine002': 'chest',
@@ -41,27 +62,92 @@ const SOURCE_BONE_TO_HUMAN = {
   'DEF-toeR': 'rightToes'
 };
 
-let libraryPromise = null;
+// UAL2 uses the original Quaternius / UE5 mannequin-style bone names.
+const UAL2_SOURCE_BONE_TO_HUMAN = {
+  pelvis: 'hips',
+  spine_01: 'spine',
+  spine_02: 'chest',
+  spine_03: 'upperChest',
+  neck_01: 'neck',
+  Head: 'head',
+  clavicle_l: 'leftShoulder',
+  upperarm_l: 'leftUpperArm',
+  lowerarm_l: 'leftLowerArm',
+  hand_l: 'leftHand',
+  clavicle_r: 'rightShoulder',
+  upperarm_r: 'rightUpperArm',
+  lowerarm_r: 'rightLowerArm',
+  hand_r: 'rightHand',
+  thigh_l: 'leftUpperLeg',
+  calf_l: 'leftLowerLeg',
+  foot_l: 'leftFoot',
+  ball_l: 'leftToes',
+  thigh_r: 'rightUpperLeg',
+  calf_r: 'rightLowerLeg',
+  foot_r: 'rightFoot',
+  ball_r: 'rightToes'
+};
+
+let baseLibraryPromise = null;
+let slideLibraryPromise = null;
 
 export async function createVrmLocomotionController(character, vrm) {
-  const library = await loadAnimationLibrary();
-  const clips = retargetHumanoidAnimationClips(
-    library.animations,
+  const baseLibrary = await loadBaseAnimationLibrary();
+
+  let slideLibrary = null;
+  try {
+    slideLibrary = await loadSlideAnimationLibrary();
+  } catch (error) {
+    console.warn(
+      'UAL2 slide library failed to load; keeping procedural slide fallback.',
+      error
+    );
+  }
+
+  const baseClips = retargetHumanoidAnimationClips(
+    baseLibrary.animations,
     vrm,
-    Object.values(CLIPS)
+    BASE_CLIP_NAMES,
+    UAL1_SOURCE_BONE_TO_HUMAN,
+    {
+      sourcePelvisName: 'DEF-hips',
+      useAnimatedRoot: true
+    }
   );
 
+  const slideClips = slideLibrary
+    ? retargetHumanoidAnimationClips(
+        slideLibrary.animations,
+        vrm,
+        SLIDE_CLIP_NAMES,
+        UAL2_SOURCE_BONE_TO_HUMAN,
+        {
+          sourcePelvisName: 'pelvis',
+          useAnimatedRoot: false
+        }
+      )
+    : [];
+
+  const clips = [...baseClips, ...slideClips];
   const mixer = new THREE.AnimationMixer(character.root);
   const actions = new Map();
 
   for (const clip of clips) {
     const action = mixer.clipAction(clip);
+    const oneShot =
+      clip.name === CLIPS.SLIDE_START ||
+      clip.name === CLIPS.SLIDE_EXIT;
+
     action.enabled = true;
-    action.setLoop(THREE.LoopRepeat, Infinity);
-    action.clampWhenFinished = false;
+    action.setLoop(
+      oneShot ? THREE.LoopOnce : THREE.LoopRepeat,
+      oneShot ? 1 : Infinity
+    );
+    action.clampWhenFinished = oneShot;
     action.setEffectiveWeight(0);
     action.setEffectiveTimeScale(1);
-    action.play();
+
+    if (!oneShot) action.play();
     actions.set(clip.name, action);
   }
 
@@ -70,106 +156,197 @@ export async function createVrmLocomotionController(character, vrm) {
   const sprint = actions.get(CLIPS.SPRINT);
   const crouchIdle = actions.get(CLIPS.CROUCH_IDLE);
   const crouchMove = actions.get(CLIPS.CROUCH_MOVE);
+  const slideStart = actions.get(CLIPS.SLIDE_START) ?? null;
+  const slideLoop = actions.get(CLIPS.SLIDE_LOOP) ?? null;
+  const slideExit = actions.get(CLIPS.SLIDE_EXIT) ?? null;
 
   if (!idle || !move || !sprint || !crouchIdle || !crouchMove) {
-    throw new Error('Authored locomotion clips missing from animation library.');
+    throw new Error('Authored base locomotion clips missing from UAL1.');
   }
 
+  const hasAuthoredSlide = Boolean(
+    slideStart && slideLoop && slideExit
+  );
+
+  const actionByKey = {
+    idle,
+    move,
+    sprint,
+    crouchIdle,
+    crouchMove,
+    slideStart,
+    slideLoop,
+    slideExit
+  };
+
+  const weights = {
+    idle: 1,
+    move: 0,
+    sprint: 0,
+    crouchIdle: 0,
+    crouchMove: 0,
+    slideStart: 0,
+    slideLoop: 0,
+    slideExit: 0
+  };
+
   idle.weight = 1;
+
+  function applyWeights(intents, dt, lambda = 14) {
+    let total = 0;
+
+    for (const key of Object.keys(weights)) {
+      weights[key] = THREE.MathUtils.damp(
+        weights[key],
+        intents[key] ?? 0,
+        lambda,
+        dt
+      );
+      total += weights[key];
+    }
+
+    const norm = total > 0.0001 ? 1 / total : 1;
+
+    for (const [key, action] of Object.entries(actionByKey)) {
+      if (!action) continue;
+      action.weight = weights[key] * norm;
+    }
+  }
+
+  function zeroWeights(dt) {
+    applyWeights({}, dt, 18);
+  }
 
   const controller = {
     ready: true,
     active: true,
+    hasAuthoredSlide,
     state: 'IDLE',
     phase: 0,
     mixer,
     actions,
-    weights: {
-      idle: 1,
-      move: 0,
-      sprint: 0,
-      crouchIdle: 0,
-      crouchMove: 0
-    },
+    weights,
+    wasSliding: false,
+    slideStage: 'none',
+    slideExitActive: false,
 
     update(dt, state) {
-      // Airborne and slide states use their dedicated procedural layers.
-      // Crouch stays authored: the same Quaternius library already contains
-      // proper crouch-idle and crouch-forward loops, so do not fake it with IK.
-      if (state.grounded === false || state.sliding) {
+      const speed = Math.max(0, state.speed ?? 0);
+      const moving = speed > 0.28;
+      const grounded = state.grounded !== false;
+
+      // Dedicated whole-body slide FSM:
+      // physics owns movement; animation owns Start -> Loop -> Exit.
+      if (state.sliding) {
+        if (!hasAuthoredSlide) {
+          this.active = false;
+          this.state = 'PROCEDURAL';
+          zeroWeights(dt);
+          this.mixer.update(dt);
+          return;
+        }
+
+        if (!this.wasSliding) {
+          this.wasSliding = true;
+          this.slideExitActive = false;
+          this.slideStage = 'start';
+
+          slideExit.stop();
+          slideStart.reset().setEffectiveTimeScale(1).play();
+          slideLoop.reset().setEffectiveTimeScale(1).play();
+        }
+
+        if (
+          this.slideStage === 'start' &&
+          slideStart.time >=
+            Math.max(0.01, slideStart.getClip().duration - 0.045)
+        ) {
+          this.slideStage = 'loop';
+        }
+
+        this.active = true;
+
+        if (this.slideStage === 'start') {
+          this.state = 'SLIDE_START';
+          applyWeights({ slideStart: 1 }, dt, 24);
+        } else {
+          this.state = 'SLIDE_LOOP';
+          applyWeights({ slideLoop: 1 }, dt, 22);
+        }
+
+        this.mixer.update(dt);
+        return;
+      }
+
+      // On release, play a real authored exit instead of snapping to crouch.
+      if (this.wasSliding) {
+        this.wasSliding = false;
+        this.slideStage = 'none';
+
+        if (hasAuthoredSlide && grounded) {
+          this.slideExitActive = true;
+          slideExit.reset().setEffectiveTimeScale(1).play();
+        } else {
+          this.slideExitActive = false;
+        }
+      }
+
+      if (this.slideExitActive && hasAuthoredSlide) {
+        if (
+          slideExit.time >=
+          Math.max(0.01, slideExit.getClip().duration - 0.035)
+        ) {
+          this.slideExitActive = false;
+          slideExit.stop();
+        } else {
+          this.active = true;
+          this.state = 'SLIDE_EXIT';
+          applyWeights({ slideExit: 1 }, dt, 20);
+          this.mixer.update(dt);
+          return;
+        }
+      }
+
+      // Jump/fall still use the existing procedural air pose.
+      if (!grounded) {
         this.active = false;
         this.state = 'PROCEDURAL';
-
-        this.weights.idle = THREE.MathUtils.damp(this.weights.idle, 0, 14, dt);
-        this.weights.move = THREE.MathUtils.damp(this.weights.move, 0, 14, dt);
-        this.weights.sprint = THREE.MathUtils.damp(this.weights.sprint, 0, 14, dt);
-        this.weights.crouchIdle = THREE.MathUtils.damp(
-          this.weights.crouchIdle,
-          0,
-          14,
-          dt
-        );
-        this.weights.crouchMove = THREE.MathUtils.damp(
-          this.weights.crouchMove,
-          0,
-          14,
-          dt
-        );
-
-        idle.weight = this.weights.idle;
-        move.weight = this.weights.move;
-        sprint.weight = this.weights.sprint;
-        crouchIdle.weight = this.weights.crouchIdle;
-        crouchMove.weight = this.weights.crouchMove;
+        zeroWeights(dt);
         this.mixer.update(dt);
         return;
       }
 
       this.active = true;
 
-      const speed = Math.max(0, state.speed ?? 0);
-      const moving = speed > 0.28;
       const crouching =
-        Boolean(state.crouching) || (state.crouchBlend ?? 0) > 0.025;
+        Boolean(state.crouching) ||
+        (state.crouchBlend ?? 0) > 0.025;
 
       if (crouching) {
-        this.weights.idle = THREE.MathUtils.damp(this.weights.idle, 0, 14, dt);
-        this.weights.move = THREE.MathUtils.damp(this.weights.move, 0, 14, dt);
-        this.weights.sprint = THREE.MathUtils.damp(this.weights.sprint, 0, 14, dt);
-        this.weights.crouchIdle = THREE.MathUtils.damp(
-          this.weights.crouchIdle,
-          moving ? 0 : 1,
-          12,
-          dt
+        applyWeights(
+          moving ? { crouchMove: 1 } : { crouchIdle: 1 },
+          dt,
+          14
         );
-        this.weights.crouchMove = THREE.MathUtils.damp(
-          this.weights.crouchMove,
-          moving ? 1 : 0,
-          12,
-          dt
-        );
-
-        const total =
-          this.weights.idle +
-          this.weights.move +
-          this.weights.sprint +
-          this.weights.crouchIdle +
-          this.weights.crouchMove;
-        const norm = total > 0.0001 ? 1 / total : 1;
-
-        idle.weight = this.weights.idle * norm;
-        move.weight = this.weights.move * norm;
-        sprint.weight = this.weights.sprint * norm;
-        crouchIdle.weight = this.weights.crouchIdle * norm;
-        crouchMove.weight = this.weights.crouchMove * norm;
 
         const backwards = (state.localZ ?? 0) > 0.08;
-        const crouchScale = THREE.MathUtils.clamp(speed / 2.8, 0.82, 1.30);
-        crouchMove.setEffectiveTimeScale(backwards ? -crouchScale : crouchScale);
+        const crouchScale = THREE.MathUtils.clamp(
+          speed / 2.8,
+          0.82,
+          1.30
+        );
+
+        crouchMove.setEffectiveTimeScale(
+          backwards ? -crouchScale : crouchScale
+        );
 
         if (moving) {
-          const duration = Math.max(0.001, crouchMove.getClip().duration);
-          const normalized = ((crouchMove.time / duration) % 1 + 1) % 1;
+          const duration = Math.max(
+            0.001,
+            crouchMove.getClip().duration
+          );
+          const normalized =
+            ((crouchMove.time / duration) % 1 + 1) % 1;
           this.phase = normalized * Math.PI * 2;
         }
 
@@ -179,43 +356,13 @@ export async function createVrmLocomotionController(character, vrm) {
       }
 
       const sprinting = Boolean(state.sprinting) && speed > 5.9;
-      const idleIntent = moving ? 0 : 1;
-      const moveIntent = moving && !sprinting ? 1 : 0;
-      const sprintIntent = sprinting ? 1 : 0;
+      const intents = !moving
+        ? { idle: 1 }
+        : sprinting
+          ? { sprint: 1 }
+          : { move: 1 };
 
-      this.weights.idle = THREE.MathUtils.damp(this.weights.idle, idleIntent, 12, dt);
-      this.weights.move = THREE.MathUtils.damp(this.weights.move, moveIntent, 10, dt);
-      this.weights.sprint = THREE.MathUtils.damp(
-        this.weights.sprint,
-        sprintIntent,
-        10,
-        dt
-      );
-      this.weights.crouchIdle = THREE.MathUtils.damp(
-        this.weights.crouchIdle,
-        0,
-        14,
-        dt
-      );
-      this.weights.crouchMove = THREE.MathUtils.damp(
-        this.weights.crouchMove,
-        0,
-        14,
-        dt
-      );
-
-      const total =
-        this.weights.idle +
-        this.weights.move +
-        this.weights.sprint +
-        this.weights.crouchIdle +
-        this.weights.crouchMove;
-      const norm = total > 0.0001 ? 1 / total : 1;
-      idle.weight = this.weights.idle * norm;
-      move.weight = this.weights.move * norm;
-      sprint.weight = this.weights.sprint * norm;
-      crouchIdle.weight = this.weights.crouchIdle * norm;
-      crouchMove.weight = this.weights.crouchMove * norm;
+      applyWeights(intents, dt, 12);
 
       move.setEffectiveTimeScale(
         THREE.MathUtils.clamp(speed / 3.55, 0.90, 1.62)
@@ -228,8 +375,14 @@ export async function createVrmLocomotionController(character, vrm) {
       const follower = dominant === sprint ? move : sprint;
 
       if (moving) {
-        const dominantDuration = Math.max(0.001, dominant.getClip().duration);
-        const followerDuration = Math.max(0.001, follower.getClip().duration);
+        const dominantDuration = Math.max(
+          0.001,
+          dominant.getClip().duration
+        );
+        const followerDuration = Math.max(
+          0.001,
+          follower.getClip().duration
+        );
         const normalized =
           ((dominant.time / dominantDuration) % 1 + 1) % 1;
 
@@ -254,20 +407,48 @@ export async function createVrmLocomotionController(character, vrm) {
   return controller;
 }
 
-function loadAnimationLibrary() {
-  libraryPromise ??= new GLTFLoader().loadAsync(ANIMATION_LIBRARY_URL);
-  return libraryPromise;
+function loadBaseAnimationLibrary() {
+  baseLibraryPromise ??= new GLTFLoader().loadAsync(
+    BASE_ANIMATION_LIBRARY_URL
+  );
+  return baseLibraryPromise;
 }
 
-function retargetHumanoidAnimationClips(clips, vrm, clipNames) {
-  const targetMap = createTargetMap(vrm);
-  const restPose = createSourceRestPoseMap(clips);
-  const sourceBones = createSourceBoneOrder(targetMap, restPose);
+function loadSlideAnimationLibrary() {
+  slideLibraryPromise ??= new GLTFLoader().loadAsync(
+    SLIDE_ANIMATION_LIBRARY_URL
+  );
+  return slideLibraryPromise;
+}
+
+function retargetHumanoidAnimationClips(
+  clips,
+  vrm,
+  clipNames,
+  sourceBoneToHuman,
+  {
+    sourcePelvisName,
+    useAnimatedRoot = true
+  } = {}
+) {
+  const targetMap = createTargetMap(vrm, sourceBoneToHuman);
+  const restPose = createSourceRestPoseMap(
+    clips,
+    sourceBoneToHuman
+  );
+  const sourceBones = createSourceBoneOrder(
+    targetMap,
+    restPose,
+    sourceBoneToHuman
+  );
   const targetSceneRotation = getTargetSceneRotation(vrm);
 
   const context = {
     restPose,
     sourceBones,
+    sourceBoneToHuman,
+    sourcePelvisName,
+    useAnimatedRoot,
     sourceRestWorld: createSourceRestWorldMap(sourceBones, restPose),
     targetMap,
     targetRestPose: createTargetRestPoseMap(vrm, sourceBones, targetMap),
@@ -285,12 +466,7 @@ function retargetClip(clip, context) {
   const tracks = retargetQuaternionTracks(clip, context);
 
   for (const track of clip.tracks) {
-    const retargeted = retargetPositionTrack(
-      track,
-      context.targetMap,
-      context.restPose,
-      context.targetSceneRotationInverse
-    );
+    const retargeted = retargetPositionTrack(track, context);
     if (retargeted) tracks.push(retargeted);
   }
 
@@ -301,22 +477,20 @@ function retargetClip(clip, context) {
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
-function retargetPositionTrack(
-  track,
-  targetMap,
-  restPose,
-  targetSceneRotationInverse
-) {
+function retargetPositionTrack(track, context) {
   const parsed = THREE.PropertyBinding.parseTrackName(track.name);
+
   if (
     parsed.propertyName !== 'position' ||
-    parsed.nodeName !== 'DEF-hips'
+    parsed.nodeName !== context.sourcePelvisName
   ) {
     return null;
   }
 
-  const target = targetMap.get('DEF-hips');
-  const sourceRestPosition = restPose.positions.get('DEF-hips');
+  const target = context.targetMap.get(context.sourcePelvisName);
+  const sourceRestPosition =
+    context.restPose.positions.get(context.sourcePelvisName);
+
   if (!target || !sourceRestPosition) return null;
 
   const values = new Float32Array(track.values.length);
@@ -327,11 +501,9 @@ function retargetPositionTrack(
     sourceDelta
       .fromArray(track.values, i)
       .sub(sourceRestPosition)
-      .applyQuaternion(restPose.rootQuaternion)
-      .applyQuaternion(targetSceneRotationInverse);
+      .applyQuaternion(context.restPose.rootQuaternion)
+      .applyQuaternion(context.targetSceneRotationInverse);
 
-    // Controller physics owns horizontal translation. Keep only authored
-    // vertical weight transfer/bounce from the animation.
     sourceDelta.x = 0;
     sourceDelta.z = 0;
 
@@ -346,6 +518,7 @@ function retargetPositionTrack(
     track.times,
     values
   );
+
   result.setInterpolation(track.getInterpolation());
   return result;
 }
@@ -355,7 +528,9 @@ function retargetQuaternionTracks(clip, context) {
   if (!trackMap.size) return [];
 
   const firstTrack = trackMap.values().next().value;
-  const rootTrack = findRootQuaternionTrack(clip);
+  const rootTrack = context.useAnimatedRoot
+    ? findRootQuaternionTrack(clip)
+    : null;
 
   const sourceFrameWorld = createQuaternionMap(context.sourceBones);
   const targetFrameWorld = createQuaternionMap(context.sourceBones);
@@ -467,11 +642,11 @@ function retargetQuaternionTracks(clip, context) {
   return tracks;
 }
 
-function createTargetMap(vrm) {
+function createTargetMap(vrm, sourceBoneToHuman) {
   const targetMap = new Map();
 
   for (const [sourceName, humanBoneName] of Object.entries(
-    SOURCE_BONE_TO_HUMAN
+    sourceBoneToHuman
   )) {
     const node = vrm.humanoid.getNormalizedBoneNode(humanBoneName);
     const rawNode = vrm.humanoid.getRawBoneNode(humanBoneName);
@@ -486,16 +661,20 @@ function createTargetMap(vrm) {
     });
   }
 
+  const mappedHumanBones = new Set(
+    [...targetMap.values()].map((item) => item.humanBoneName)
+  );
+
   for (const required of [
-    'DEF-hips',
-    'DEF-thighL',
-    'DEF-shinL',
-    'DEF-footL',
-    'DEF-thighR',
-    'DEF-shinR',
-    'DEF-footR'
+    'hips',
+    'leftUpperLeg',
+    'leftLowerLeg',
+    'leftFoot',
+    'rightUpperLeg',
+    'rightLowerLeg',
+    'rightFoot'
   ]) {
-    if (!targetMap.has(required)) {
+    if (!mappedHumanBones.has(required)) {
       throw new Error(`VRM missing locomotion target: ${required}`);
     }
   }
@@ -534,10 +713,14 @@ function findRootQuaternionTrack(clip) {
   return null;
 }
 
-function createSourceBoneOrder(targetMap, restPose) {
+function createSourceBoneOrder(
+  targetMap,
+  restPose,
+  sourceBoneToHuman
+) {
   const sourceNameByHumanBone = new Map();
   for (const [sourceName, humanBoneName] of Object.entries(
-    SOURCE_BONE_TO_HUMAN
+    sourceBoneToHuman
   )) {
     sourceNameByHumanBone.set(humanBoneName, sourceName);
   }
@@ -637,7 +820,10 @@ function createSourceRestWorldMap(sourceBones, restPose) {
   return map;
 }
 
-function createSourceRestPoseMap(clips) {
+function createSourceRestPoseMap(
+  clips,
+  sourceBoneToHuman
+) {
   const clip = clips.find((item) => item.name === REST_POSE_CLIP);
   if (!clip) {
     throw new Error(`Animation library missing ${REST_POSE_CLIP}`);
@@ -662,7 +848,7 @@ function createSourceRestPoseMap(clips) {
 
     if (
       !parsed.nodeName ||
-      !(parsed.nodeName in SOURCE_BONE_TO_HUMAN)
+      !(parsed.nodeName in sourceBoneToHuman)
     ) {
       continue;
     }
