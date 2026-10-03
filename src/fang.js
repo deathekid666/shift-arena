@@ -126,9 +126,14 @@ export class TinFangSystem {
     this.handRoot.add(this.handFang);
 
     this.sheath = buildSheath();
+    this.holsteredFang = this.sheath.userData.holsteredFang ?? null;
     this.sheath.position.set(0.46, -0.22, 0.18);
     this.sheath.rotation.set(-0.15, 0.05, 0.42);
     this.player.body.add(this.sheath);
+
+    // READY means holstered. The real knife must not remain rendered in-hand.
+    this.handFang.visible = false;
+    if (this.holsteredFang) this.holsteredFang.visible = true;
 
     this.slashArc = buildSlashArc();
     this.slashArc.visible = false;
@@ -146,6 +151,32 @@ export class TinFangSystem {
     this.handFang.rotation.set(-0.10, 0.0, Math.PI * 0.52);
     this.handFang.scale.setScalar(0.64);
     this.player.setFangArmOverride?.(false);
+    this.syncFangVisuals();
+  }
+
+  syncFangVisuals() {
+    const stored =
+      this.state === 'READY' &&
+      !this.projectile;
+
+    const inHand =
+      (
+        this.state === 'PRIMING' ||
+        this.state === 'AIMING' ||
+        this.state === 'SLASH' ||
+        (this.state === 'RELEASE' && !this.releaseLaunched)
+      ) &&
+      !this.projectile;
+
+    // The scabbard belongs to the outfit and never disappears just because
+    // the knife is drawn. Only the inserted handle/guard toggles.
+    if (this.sheath) this.sheath.visible = true;
+    if (this.holsteredFang) this.holsteredFang.visible = stored;
+    if (this.handFang) this.handFang.visible = inHand;
+
+    if (!inHand && this.handFang) {
+      setFangGlow(this.handFang, 0);
+    }
   }
 
   buildTrajectory() {
@@ -175,11 +206,10 @@ export class TinFangSystem {
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
     this.player.setFangAnimation?.(null);
-    this.handFang.visible = true;
-    this.sheath.visible = true;
     this.slashArc.visible = false;
     this.trajectoryLine.visible = false;
     this.resetBodyPose();
+    this.syncFangVisuals();
     this.emitState();
   }
 
@@ -191,6 +221,7 @@ export class TinFangSystem {
         this.cancelHandAction();
       }
       this.trajectoryLine.visible = false;
+      this.syncFangVisuals();
       this.emitState();
       return;
     }
@@ -230,6 +261,7 @@ export class TinFangSystem {
     if (this.state === 'SLASH') this.updateSlash(dt);
     if (this.state === 'CLAW') this.updateClaw(dt);
 
+    this.syncFangVisuals();
     this.emitState();
   }
 
@@ -247,7 +279,6 @@ export class TinFangSystem {
       aimYaw: angleDelta(this.player.group.rotation.y, this.cameraRig.yaw)
     });
     this.handFang.visible = true;
-    this.sheath.visible = false;
     this.trajectoryLine.visible = false;
     this.setArmPose({
       shoulder: [0.18, -0.12, -0.18],
@@ -461,10 +492,10 @@ export class TinFangSystem {
     if (t >= 1) {
       this.armRig.visible = false;
       this.player.setFangArmOverride?.(false);
-      this.handFang.visible = true;
       this.resetBodyPose();
       this.player.setFangAnimation?.(null);
       this.state = this.stateFromProjectile();
+      this.syncFangVisuals();
     }
   }
 
@@ -491,7 +522,6 @@ export class TinFangSystem {
     this.player.setFangArmOverride?.(true);
     this.player.setFangAnimation?.({ mode: 'slash', t: 0, compact: false });
     this.handFang.visible = true;
-    this.sheath.visible = false;
     this.slashArc.visible = true;
     this.slashArc.material.opacity = 0;
     this.trajectoryLine.visible = false;
@@ -1086,8 +1116,8 @@ export class TinFangSystem {
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
     this.player.setFangAnimation?.(null);
-    this.handFang.visible = true;
     this.resetBodyPose();
+    this.syncFangVisuals();
     this.audio?.playFang?.('recover');
     this.onToast?.('TIN FANG RECOVERED');
   }
@@ -1100,8 +1130,8 @@ export class TinFangSystem {
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
     this.player.setFangAnimation?.(null);
-    this.handFang.visible = true;
     this.resetBodyPose();
+    this.syncFangVisuals();
     this.onToast?.('TIN FANG LOST · RETURNS ON RESPAWN');
   }
 
@@ -1126,14 +1156,12 @@ export class TinFangSystem {
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
     this.player.setFangAnimation?.(null);
-    this.handFang.visible = true;
-    this.sheath.visible = true;
     this.slashArc.visible = false;
     this.trajectoryLine.visible = false;
-    setFangGlow(this.handFang, 0);
     this.resetBodyPose();
     this.state = 'READY';
     this.holdTime = 0;
+    this.syncFangVisuals();
   }
 
   cancelHandAction() {
@@ -1141,15 +1169,13 @@ export class TinFangSystem {
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
     this.player.setFangAnimation?.(null);
-    this.handFang.visible = true;
-    this.sheath.visible = true;
     this.slashArc.visible = false;
     this.trajectoryLine.visible = false;
-    setFangGlow(this.handFang, 0);
     this.resetBodyPose();
 
     this.state = wasClaw ? this.stateFromProjectile() : 'READY';
     this.holdTime = 0;
+    this.syncFangVisuals();
   }
 
   stateFromProjectile() {
@@ -1384,27 +1410,108 @@ function buildFangModel() {
 
 function buildSheath() {
   const group = new THREE.Group();
+  group.name = 'TinFangSheath';
 
+  const leatherMat = new THREE.MeshStandardMaterial({
+    color: 0x382b24,
+    roughness: 0.90,
+    metalness: 0.02
+  });
+  const wrapMat = new THREE.MeshStandardMaterial({
+    color: 0xb47b4b,
+    roughness: 0.78,
+    metalness: 0.02
+  });
+  const metalMat = new THREE.MeshStandardMaterial({
+    color: 0x777d80,
+    roughness: 0.34,
+    metalness: 0.86
+  });
+  const gripMat = new THREE.MeshStandardMaterial({
+    color: 0x62402f,
+    roughness: 0.92,
+    metalness: 0.01
+  });
+  const cordMat = new THREE.MeshStandardMaterial({
+    color: 0xba8654,
+    roughness: 0.96,
+    metalness: 0
+  });
+
+  // Slightly tapered scabbard reads as a real sheath instead of a floating box.
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.16, 0.42, 0.10),
-    new THREE.MeshStandardMaterial({
-      color: 0x382b24,
-      roughness: 0.88
-    })
+    new THREE.CylinderGeometry(0.070, 0.092, 0.46, 6),
+    leatherMat
   );
+  body.scale.z = 0.62;
   body.castShadow = true;
   group.add(body);
 
-  const wrap = new THREE.Mesh(
-    new THREE.BoxGeometry(0.20, 0.075, 0.12),
-    new THREE.MeshStandardMaterial({
-      color: 0xb47b4b,
-      roughness: 0.75
-    })
+  const mouth = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.092, 0.092, 0.045, 6),
+    metalMat
   );
-  wrap.position.y = 0.08;
+  mouth.scale.z = 0.68;
+  mouth.position.y = 0.225;
+  group.add(mouth);
+
+  const wrap = new THREE.Mesh(
+    new THREE.BoxGeometry(0.19, 0.075, 0.11),
+    wrapMat
+  );
+  wrap.position.y = 0.06;
+  wrap.rotation.z = 0.08;
   group.add(wrap);
 
+  const lowerBand = new THREE.Mesh(
+    new THREE.BoxGeometry(0.17, 0.055, 0.10),
+    wrapMat
+  );
+  lowerBand.position.y = -0.12;
+  lowerBand.rotation.z = -0.07;
+  group.add(lowerBand);
+
+  // Only the part of the knife that should protrude from the sheath is modeled
+  // here. It is toggled independently from the real hand/projectile knife.
+  const holsteredFang = new THREE.Group();
+  holsteredFang.name = 'HolsteredFangInsert';
+  group.add(holsteredFang);
+
+  const guard = new THREE.Mesh(
+    new THREE.BoxGeometry(0.19, 0.035, 0.065),
+    metalMat
+  );
+  guard.position.y = 0.265;
+  holsteredFang.add(guard);
+
+  const handle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.050, 0.058, 0.25, 10),
+    gripMat
+  );
+  handle.position.y = 0.405;
+  handle.castShadow = true;
+  holsteredFang.add(handle);
+
+  for (let i = 0; i < 5; i++) {
+    const cord = new THREE.Mesh(
+      new THREE.TorusGeometry(0.057, 0.008, 5, 12),
+      cordMat
+    );
+    cord.rotation.x = Math.PI / 2;
+    cord.position.y = 0.315 + i * 0.048;
+    cord.rotation.z = (i % 2 ? 1 : -1) * 0.10;
+    holsteredFang.add(cord);
+  }
+
+  const pommel = new THREE.Mesh(
+    new THREE.TorusGeometry(0.047, 0.013, 6, 14),
+    metalMat
+  );
+  pommel.rotation.x = Math.PI / 2;
+  pommel.position.y = 0.535;
+  holsteredFang.add(pommel);
+
+  group.userData.holsteredFang = holsteredFang;
   return group;
 }
 
