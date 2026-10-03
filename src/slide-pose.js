@@ -105,13 +105,13 @@ export function createSlidePoseLayer(character) {
     // - right lower leg/foot trails backward
     // - left leg reaches forward-left with a strong but not locked knee bend
     const rightTarget = rightFootBase.clone()
-      .addScaledVector(forward, -0.30 * poseBlend)
-      .addScaledVector(right, 0.05 * poseBlend);
+      .addScaledVector(forward, -0.24 * poseBlend)
+      .addScaledVector(right, 0.055 * poseBlend);
     rightTarget.y += 0.018 * poseBlend;
 
     const leftTarget = leftFootBase.clone()
-      .addScaledVector(forward, 0.24 * poseBlend)
-      .addScaledVector(right, -0.10 * poseBlend);
+      .addScaledVector(forward, 0.11 * poseBlend)
+      .addScaledVector(right, -0.13 * poseBlend);
     leftTarget.y += 0.020 * poseBlend;
 
     solveLeg(
@@ -122,10 +122,10 @@ export function createSlidePoseLayer(character) {
       rightTarget,
       1,
       {
-        compression: 0.52,
-        poleForward: 0.52,
-        poleOut: 0.12,
-        poleDown: 0.18
+        compression: 0.58,
+        poleForward: 0.56,
+        poleOut: 0.14,
+        poleDown: 0.20
       }
     );
 
@@ -137,10 +137,10 @@ export function createSlidePoseLayer(character) {
       leftTarget,
       -1,
       {
-        compression: 0.26,
-        poleForward: 0.36,
-        poleOut: 0.18,
-        poleDown: 0.06
+        compression: 0.48,
+        poleForward: 0.50,
+        poleOut: 0.20,
+        poleDown: 0.12
       }
     );
 

@@ -343,3 +343,16 @@ Browser-first third-person shooter prototype.
 - Added phase shaping with slideProgress: fast drop-in, stable middle knee-slide, and softer recovery instead of a single frozen pose for the full slide.
 - Leg placement remains world-space IK based, so the pose does not depend on VRM bone-axis conventions.
 - Slide movement physics from Build 010.8 are unchanged.
+
+
+## Build 010.8B — slide speed, both-knee bend, crouch-walk gait
+- Fixed the tactical slide silhouette so BOTH knees visibly bend.
+- Kneeling leg compression increased from 0.52 to 0.58.
+- Lead leg compression increased substantially from 0.26 to 0.48 and its foot target was moved closer to the body so the knee cannot visually lock straight.
+- Increased both knee pole strength so the forward leg also reads as a bent combat knee rather than an extended straight leg.
+- SHIFT-specific slide speed now targets sprint speed on flat ground (8.4) instead of normal running speed (5.2), per user direction.
+- Slide entry push increased from 9.4 to 10.2 and flat braking reduced, while downhill can still accelerate above sprint speed up to 13.5.
+- Crouch-walk no longer uses near-invisible foot motion.
+- Crouch stride increased from 0.055 m to 0.125 m and step lift from 0.020 m to 0.052 m.
+- Added alternating foot lift/plant timing, lateral weight transfer and pelvis step bob/sway so crouch movement visibly reads as walking rather than gliding.
+- Existing crouch depth, planted-foot IK, slide physics, gun IK, Tin Fang, and jump systems remain intact.

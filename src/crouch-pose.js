@@ -76,15 +76,22 @@ export function createCrouchPoseLayer(character) {
 
     // Short crouch-walk foot targets. Much smaller than standing stride.
     if (moving) {
-      const stride = 0.055 * blend;
-      const lift = 0.020 * blend;
+      const stride = 0.125 * blend;
+      const lift = 0.052 * blend;
       const s = Math.sin(phase);
       const leftForward = s * stride;
       const rightForward = -s * stride;
       tmp.leftFoot.addScaledVector(tmp.forward, leftForward);
       tmp.rightFoot.addScaledVector(tmp.forward, rightForward);
+
+      // Clear alternating crouch steps: one foot lifts while the other plants.
       tmp.leftFoot.y += Math.max(0, -s) * lift;
       tmp.rightFoot.y += Math.max(0, s) * lift;
+
+      // Small lateral weight transfer makes the step readable from behind.
+      const weightShift = Math.cos(phase) * 0.018 * blend;
+      tmp.leftFoot.addScaledVector(tmp.right, -weightShift);
+      tmp.rightFoot.addScaledVector(tmp.right, -weightShift);
       tmp.leftFoot.addScaledVector(tmp.right, localStrafe * 0.018 * blend);
       tmp.rightFoot.addScaledVector(tmp.right, localStrafe * 0.018 * blend);
     }
@@ -92,8 +99,18 @@ export function createCrouchPoseLayer(character) {
     // Lower pelvis substantially, but feet remain planted by IK.
     const baseHipPos = underlyingP.get(b.hips);
     b.hips.position.copy(baseHipPos);
+
+    const crouchStepBob = moving
+      ? Math.abs(Math.sin(phase * 2)) * 0.014 * blend
+      : 0;
+    const crouchHipSway = moving
+      ? Math.sin(phase) * 0.018 * blend
+      : 0;
+
     b.hips.position.y -= 0.325 * blend;
+    b.hips.position.y += crouchStepBob;
     b.hips.position.z += 0.070 * blend;
+    b.hips.position.x += crouchHipSway;
 
     // Slight pelvis tuck and torso counter-lean for balance.
     rotateLocal(b.hips, underlyingQ.get(b.hips), -0.10 * blend, 0, 0);
