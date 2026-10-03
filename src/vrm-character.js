@@ -13,41 +13,21 @@ import { createJumpPoseLayer } from './jump-pose.js';
 export const FINAL_VRM_URL = '/assets/characters/roach-scout.vrm';
 export const FINAL_GLB_URL = '/assets/characters/roach-scout.glb';
 
-// Temporary rig remains the safety fallback only.
+// Current working main-character source. When a local production VRM/GLB is
+// actually added to assets/characters, this can switch back to the local URL.
 export const DEVELOPMENT_VRM_URL =
   'https://cdn.jsdelivr.net/gh/norio/vrm-game-starter@b14c236fd8150855348ad085b7820c298eac4b30/src/assets/sample2.vrm';
 
 export async function loadRoachScoutVrmBase() {
-  const candidates = [
-    { type: 'vrm', url: FINAL_VRM_URL, final: true },
-    { type: 'glb', url: FINAL_GLB_URL, final: true },
-    { type: 'vrm', url: DEVELOPMENT_VRM_URL, final: false }
-  ];
-
-  let lastError = null;
-
-  for (const candidate of candidates) {
-    try {
-      const avatar = candidate.type === 'vrm'
-        ? await loadVrmAvatar(candidate.url)
-        : await loadHumanoidGlb(candidate.url);
-
-      avatar.sourceUrl = candidate.url;
-      avatar.finalAsset = candidate.final;
-      avatar.assetType = candidate.type;
-      return avatar;
-    } catch (error) {
-      lastError = error;
-      if (candidate.final) {
-        console.info(
-          `Roach Scout final ${candidate.type.toUpperCase()} unavailable; trying next source.`,
-          error
-        );
-      }
-    }
-  }
-
-  throw lastError ?? new Error('No character source could be loaded.');
+  // Fast-start path: the repository currently has no local roach-scout.vrm
+  // or roach-scout.glb, so probing those URLs only adds two failed requests.
+  // Load the actual working main character immediately.
+  const avatar = await loadVrmAvatar(DEVELOPMENT_VRM_URL);
+  avatar.sourceUrl = DEVELOPMENT_VRM_URL;
+  avatar.finalAsset = false;
+  avatar.activeMainCharacter = true;
+  avatar.assetType = 'vrm';
+  return avatar;
 }
 
 async function loadVrmAvatar(url) {

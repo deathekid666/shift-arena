@@ -71,7 +71,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.18C · MAIN CHARACTER DEFAULT</div>
+    <div id="damage-test-hint">BUILD 010.18D · FAST CHARACTER START</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -284,62 +284,45 @@ let startupReady = false;
 
 async function prewarmGameBeforeEntry() {
   button.disabled = true;
+  characterLoadStatus.textContent =
+    'MAIN CHARACTER · LOADING…';
 
+  // Only the visible main character is part of the critical path.
   const avatar = await player.characterReady;
 
-  if (avatar) {
-    characterLoadStatus.textContent = avatar.finalAsset
-      ? `CHARACTER · FINAL ${avatar.assetType.toUpperCase()} LOADED · PREWARMING…`
-      : 'CHARACTER · DEVELOPMENT VRM LOADED · PREWARMING…';
-
-    // Let authored locomotion finish creating its clips/controllers before
-    // gameplay starts. Failure is already handled by the avatar controller.
-    if (avatar.authoredLocomotionReady) {
-      await avatar.authoredLocomotionReady;
-    }
-  } else {
+  if (!avatar) {
     characterLoadStatus.textContent =
-      'CHARACTER · FINAL LOAD FAILED · FALLBACK MODE · PREWARMING…';
+      'MAIN CHARACTER FAILED · FALLBACK READY';
+    startupReady = true;
+    button.disabled = false;
+    return;
   }
 
-  // Compile the character, all hero weapons, pickup models and world materials
-  // while the opaque start overlay is still covering the game.
-  try {
-    if (typeof renderer.compileAsync === 'function') {
-      await renderer.compileAsync(scene, camera);
-    } else {
-      renderer.compile(scene, camera);
-    }
-  } catch (error) {
-    console.warn('Scene prewarm compile failed; continuing with normal render.', error);
-  }
+  characterLoadStatus.textContent =
+    'MAIN CHARACTER · READY';
 
-  // Force completed matrices/material upload behind the start screen.
-  scene.updateMatrixWorld(true);
-  renderer.render(scene, camera);
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  renderer.render(scene, camera);
-
-  const controller = avatar?.authoredLocomotion ?? null;
-  if (avatar) {
-    const base = avatar.finalAsset
-      ? `CHARACTER · FINAL ${avatar.assetType.toUpperCase()} READY`
-      : 'CHARACTER · DEVELOPMENT VRM READY';
-
-    characterLoadStatus.textContent = controller?.hasAuthoredSlide
-      ? `${base} · UAL2 SLIDE READY`
-      : `${base} · GAME READY`;
-
-    showToast('CHARACTER + WEAPONS READY');
-  } else {
-    characterLoadStatus.textContent =
-      'CHARACTER · FALLBACK MODE READY';
-  }
+  // The normal render loop is already running behind the start overlay.
+  // One frame is enough to touch the freshly attached avatar materials without
+  // blocking on the full world, weapon shaders, or remote animation packs.
+  await new Promise((resolve) =>
+    requestAnimationFrame(resolve)
+  );
 
   startupReady = true;
   button.disabled = false;
-}
+  showToast('MAIN CHARACTER READY');
 
+  // Authored locomotion continues loading in the background. It is deliberately
+  // not awaited here because its remote animation libraries are much larger
+  // than the startup UI should ever block on.
+  avatar.authoredLocomotionReady?.then((controller) => {
+    if (!controller) return;
+    characterLoadStatus.textContent =
+      controller.hasAuthoredSlide
+        ? 'MAIN CHARACTER · READY · ANIMATIONS READY'
+        : 'MAIN CHARACTER · READY';
+  });
+}
 prewarmGameBeforeEntry().catch((error) => {
   console.error('Startup prewarm failed:', error);
   characterLoadStatus.textContent =
