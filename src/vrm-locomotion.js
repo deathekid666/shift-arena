@@ -364,20 +364,36 @@ export async function createVrmLocomotionController(character, vrm) {
         return;
       }
 
-      const sprinting = Boolean(state.sprinting) && speed > 5.9;
+      const sprintBlend = moving
+        ? THREE.MathUtils.clamp(
+            state.sprintBlend ??
+              (Boolean(state.sprinting)
+                ? THREE.MathUtils.smoothstep(speed, 4.8, 8.4)
+                : 0),
+            0,
+            1
+          )
+        : 0;
+
       const intents = !moving
         ? { idle: 1 }
-        : sprinting
-          ? { sprint: 1 }
+        : sprintBlend > 0.001
+          ? { move: 1 - sprintBlend, sprint: sprintBlend }
           : { move: 1 };
 
-      applyWeights(intents, dt, 12);
+      applyWeights(intents, dt, 14);
+
+      const backwards = (state.localZ ?? 0) > 0.10;
+      const moveScale =
+        THREE.MathUtils.clamp(speed / 3.55, 0.90, 1.62);
+      const sprintScale =
+        THREE.MathUtils.clamp(speed / 6.05, 0.92, 1.55);
 
       move.setEffectiveTimeScale(
-        THREE.MathUtils.clamp(speed / 3.55, 0.90, 1.62)
+        backwards ? -moveScale : moveScale
       );
       sprint.setEffectiveTimeScale(
-        THREE.MathUtils.clamp(speed / 6.05, 0.92, 1.55)
+        backwards ? -sprintScale : sprintScale
       );
 
       const dominant = sprint.weight > move.weight ? sprint : move;
@@ -402,7 +418,13 @@ export async function createVrmLocomotionController(character, vrm) {
         this.phase = normalized * Math.PI * 2;
       }
 
-      this.state = !moving ? 'IDLE' : sprinting ? 'SPRINT' : 'JOG';
+      this.state = !moving
+        ? 'IDLE'
+        : (state.braking && speed > 4.8)
+          ? 'BRAKE'
+          : sprintBlend > 0.58
+            ? 'SPRINT'
+            : 'JOG';
       this.mixer.update(dt);
     },
 

@@ -35,7 +35,9 @@ export class ThirdPersonCamera {
       adsShoulderOffset = 0.92,
       scoped = false,
       smartAimCollision = false,
-      compactAim = false
+      compactAim = false,
+      sprintBlend = 0,
+      sliding = false
     } = options;
 
     const look = this.input.consumeLook();
@@ -71,13 +73,30 @@ export class ThirdPersonCamera {
     this.recoilPitch += this.recoilPitchVelocity * dt;
     this.recoilYaw += this.recoilYawVelocity * dt;
 
-    const targetDistance = scoped ? 0.10 : aiming ? adsDistance : cfg.distance;
+    const movementBlend = aiming || scoped
+      ? 0
+      : Math.max(
+          THREE.MathUtils.clamp(sprintBlend, 0, 1),
+          sliding ? cfg.slideFovBlend : 0
+        );
+
+    const targetDistance = scoped
+      ? 0.10
+      : aiming
+        ? adsDistance
+        : cfg.distance + cfg.sprintDistanceBoost * movementBlend;
     const targetShoulder = scoped ? 0 : aiming ? adsShoulderOffset : cfg.shoulderOffset;
 
     if (!aiming) {
       this.aimFallbackSide = Math.sign(cfg.shoulderOffset) || 1;
     }
-    const targetFov = aiming ? (adsFov ?? 57) : cfg.normalFov;
+    const targetFov = aiming
+      ? (adsFov ?? 57)
+      : THREE.MathUtils.lerp(
+          cfg.normalFov,
+          cfg.sprintFov,
+          movementBlend
+        );
 
     this.target.copy(this.player.group.position).add(new THREE.Vector3(0, cfg.height, 0));
 
@@ -137,7 +156,13 @@ export class ThirdPersonCamera {
     this.camera.fov = THREE.MathUtils.damp(
       this.camera.fov,
       targetFov,
-      scoped ? 20 : smartAimCollision ? 17 : 13,
+      scoped
+        ? 20
+        : smartAimCollision
+          ? 17
+          : movementBlend > 0.01
+            ? cfg.motionFovResponse
+            : 13,
       dt
     );
     this.camera.updateProjectionMatrix();

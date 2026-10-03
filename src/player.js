@@ -15,6 +15,9 @@ export class PlayerController {
     this.slideTimer = 0;
     this.slideDirection = new THREE.Vector3(0, 0, -1);
     this.localMotion = new THREE.Vector3();
+    this.sprintBlend = 0;
+    this.braking = false;
+    this.turnLean = 0;
 
     // The gameplay capsule remains implicit in movement/collision values.
     // This pivot contains only the visible character and animation attachments.
@@ -59,6 +62,9 @@ export class PlayerController {
     this.sliding = false;
     this.slideTimer = 0;
     this.slideDirection.set(0, 0, -1);
+    this.sprintBlend = 0;
+    this.braking = false;
+    this.turnLean = 0;
     this.body.scale.set(1, 1, 1);
     this.body.rotation.set(0, 0, 0);
     this.body.position.y = GAME_CONFIG.movement.standingHeight / 2;
@@ -79,7 +85,8 @@ export class PlayerController {
     const strafe = (this.input.down('right') ? 1 : 0) - (this.input.down('left') ? 1 : 0);
     const move = new THREE.Vector3(strafe, 0, -forward);
     if (move.lengthSq() > 1) move.normalize();
-    move.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
+    move.applyAxisAngle(Y_AXIS, cameraYaw);
+    const movingIntent = move.lengthSq() > 0.01;
 
     const crouchDown = this.input.down('crouch');
     const crouchPressed = this.input.consume('crouch');
@@ -103,6 +110,11 @@ export class PlayerController {
     }
 
     this.crouching = crouchDown;
+    const sprintRequested =
+      this.input.down('sprint') &&
+      movingIntent &&
+      !this.crouching &&
+      !this.sliding;
 
     // Visual crouch remains separate from slide; the slide gets its own pose layer.
     const crouchTarget = this.crouching && !this.sliding ? 1 : 0;
@@ -135,15 +147,73 @@ export class PlayerController {
         this.sliding = false;
       }
     } else {
-      const targetSpeed = this.crouching
-        ? cfg.crouchSpeed
-        : (this.input.down('sprint') ? cfg.sprintSpeed : cfg.walkSpeed);
-      const target = move.multiplyScalar(targetSpeed);
-      const accel = this.grounded
-        ? (target.lengthSq() > 0 ? cfg.acceleration : cfg.deceleration)
-        : cfg.airAcceleration;
-      this.velocity.x = THREE.MathUtils.damp(this.velocity.x, target.x, accel, dt);
-      this.velocity.z = THREE.MathUtils.damp(this.velocity.z, target.z, accel, dt);
+      let targetSpeed = cfg.walkSpeed;
+
+      if (this.crouching) {
+        targetSpeed = cfg.crouchSpeed;
+      } else if (sprintRequested) {
+        targetSpeed = cfg.sprintSpeed;
+      } else if (forward < -0.01) {
+        targetSpeed = cfg.walkSpeed * cfg.backpedalMultiplier;
+      } else if (Math.abs(strafe) > 0.01 && Math.abs(forward) < 0.01) {
+        targetSpeed = cfg.walkSpeed * cfg.strafeMultiplier;
+      }
+
+      const target = move.clone().multiplyScalar(targetSpeed);
+      const currentSpeed = this.horizontalSpeed();
+      const targetMoving = target.lengthSq() > 0.0001;
+
+      let accel = cfg.deceleration;
+      this.braking =
+        this.grounded &&
+        !targetMoving &&
+        currentSpeed >= cfg.sprintSkidMinSpeed;
+
+      if (!this.grounded) {
+        accel = cfg.airAcceleration;
+      } else if (this.braking) {
+        accel = cfg.sprintBrakeDeceleration;
+      } else if (targetMoving) {
+        const currentDir = new THREE.Vector3(
+          this.velocity.x,
+          0,
+          this.velocity.z
+        );
+        const targetDir = target.clone().normalize();
+
+        let alignment = 1;
+        if (currentDir.lengthSq() > 0.04) {
+          currentDir.normalize();
+          alignment = THREE.MathUtils.clamp(
+            currentDir.dot(targetDir),
+            -1,
+            1
+          );
+        }
+
+        const baseAccel = sprintRequested
+          ? cfg.sprintAcceleration
+          : cfg.acceleration;
+
+        accel = THREE.MathUtils.lerp(
+          cfg.turnAcceleration,
+          baseAccel,
+          THREE.MathUtils.clamp((alignment + 0.2) / 1.2, 0, 1)
+        );
+      }
+
+      this.velocity.x = THREE.MathUtils.damp(
+        this.velocity.x,
+        target.x,
+        accel,
+        dt
+      );
+      this.velocity.z = THREE.MathUtils.damp(
+        this.velocity.z,
+        target.z,
+        accel,
+        dt
+      );
     }
 
     if (jumpPressed && this.grounded && !this.sliding) {
@@ -151,6 +221,24 @@ export class PlayerController {
       this.grounded = false;
     }
     if (!this.grounded) this.velocity.y -= cfg.gravity * dt;
+
+    const sprintBlendTarget =
+      sprintRequested && this.grounded
+        ? THREE.MathUtils.smoothstep(
+            this.horizontalSpeed(),
+            cfg.sprintBlendStartSpeed,
+            cfg.sprintSpeed
+          )
+        : 0;
+
+    this.sprintBlend = THREE.MathUtils.damp(
+      this.sprintBlend,
+      sprintBlendTarget,
+      sprintBlendTarget > this.sprintBlend
+        ? cfg.sprintBlendIn
+        : cfg.sprintBlendOut,
+      dt
+    );
 
     const displacement = this.velocity.clone().multiplyScalar(dt);
     this.moveHorizontal(displacement.x, 0);
@@ -186,13 +274,69 @@ export class PlayerController {
         );
       }
     } else if (moving && Number.isFinite(movementFacing)) {
+      const turnResponse =
+        this.horizontalSpeed() > cfg.sprintBlendStartSpeed
+          ? cfg.sprintTurnResponse
+          : cfg.turnResponse;
+
       this.group.rotation.y = dampAngle(
         this.group.rotation.y,
         movementFacing,
-        14,
+        turnResponse,
         dt
       );
     }
+
+    const leanAllowed =
+      this.grounded &&
+      moving &&
+      !this.sliding &&
+      !this.crouching &&
+      !combatFacing;
+
+    const turnError =
+      leanAllowed && Number.isFinite(movementFacing)
+        ? angleDelta(this.group.rotation.y, movementFacing)
+        : 0;
+
+    const speedRatio = THREE.MathUtils.clamp(
+      this.horizontalSpeed() / cfg.sprintSpeed,
+      0,
+      1
+    );
+
+    const leanTarget = leanAllowed
+      ? THREE.MathUtils.clamp(
+          -turnError * cfg.turnLeanAmount * speedRatio,
+          -cfg.maxTurnLean,
+          cfg.maxTurnLean
+        )
+      : 0;
+
+    this.turnLean = THREE.MathUtils.damp(
+      this.turnLean,
+      leanTarget,
+      cfg.turnLeanResponse,
+      dt
+    );
+
+    const sprintPitchTarget =
+      leanAllowed
+        ? -cfg.sprintBodyLean * this.sprintBlend
+        : 0;
+
+    this.body.rotation.z = THREE.MathUtils.damp(
+      this.body.rotation.z,
+      this.turnLean,
+      cfg.turnLeanResponse,
+      dt
+    );
+    this.body.rotation.x = THREE.MathUtils.damp(
+      this.body.rotation.x,
+      sprintPitchTarget,
+      cfg.turnLeanResponse,
+      dt
+    );
 
     this.aimYawOffset = combatFacing
       ? THREE.MathUtils.clamp(
@@ -219,7 +363,9 @@ export class PlayerController {
       localX: this.localMotion.x,
       localZ: this.localMotion.z,
       verticalSpeed: this.velocity.y,
-      sprinting: this.input.down('sprint') && !this.crouching && !this.sliding,
+      sprinting: sprintRequested,
+      sprintBlend: this.sprintBlend,
+      braking: this.braking,
       sliding: this.sliding,
       slideProgress: this.sliding
         ? 1 - THREE.MathUtils.clamp(this.slideTimer / cfg.slideDuration, 0, 1)
