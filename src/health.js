@@ -1,5 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG } from './config.js';
+import { resolveShieldedDamage } from './damage-model.js';
 
 export class PlayerHealth {
   constructor({ player, world, cameraRig, onChange, onDamage, onShieldBreak, onEliminated, onRespawn }) {
@@ -48,37 +49,23 @@ export class PlayerHealth {
   takeDamage(amount, sourcePosition = null) {
     if (!this.alive || amount <= 0) return null;
 
-    const shieldBefore = this.shield;
-    const healthBefore = this.health;
-    let remaining = amount;
-
-    const shieldDamage = Math.min(this.shield, remaining);
-    this.shield -= shieldDamage;
-    remaining -= shieldDamage;
-
-    const healthDamage = Math.min(this.health, remaining);
-    this.health -= healthDamage;
-
-    const shieldBroken = shieldBefore > 0 && this.shield === 0;
-    const direction = sourcePosition ? this.directionFromSource(sourcePosition) : 0;
-
-    const result = {
-      requestedDamage: amount,
-      shieldDamage,
-      healthDamage,
-      shieldBefore,
-      healthBefore,
-      shield: this.shield,
+    const result = resolveShieldedDamage({
       health: this.health,
-      shieldBroken,
-      direction
-    };
+      shield: this.shield,
+      amount
+    });
+
+    this.health = result.health;
+    this.shield = result.shield;
+    result.direction = sourcePosition
+      ? this.directionFromSource(sourcePosition)
+      : 0;
 
     this.emitChange();
     this.onDamage?.(result);
-    if (shieldBroken) this.onShieldBreak?.(result);
+    if (result.shieldBroken) this.onShieldBreak?.(result);
 
-    if (this.health <= 0) this.eliminate();
+    if (result.eliminated) this.eliminate();
     return result;
   }
 

@@ -265,6 +265,7 @@ export const GAME_CONFIG = {
   },
   bot: {
     maxHealth: 100,
+    maxShield: 100,
     moveSpeed: 3.4,
     detectionRange: 28,
     attackRange: 15,

@@ -69,8 +69,8 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.12A · DISTINCT TARGET-AWARE RETICLES</div>
-    <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
+    <div id="damage-test-hint">BUILD 010.13 · FORTNITE DAMAGE MODEL</div>
+    <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
     <div id="pickup-prompt">
@@ -118,7 +118,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.12A · DISTINCT TARGET-AWARE RETICLES</div>
+        <div class="build-tag">BUILD 010.13 · FORTNITE DAMAGE MODEL</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
@@ -182,6 +182,7 @@ const shieldBreak = document.querySelector('#shield-break');
 const elimination = document.querySelector('#elimination');
 const respawnCountdown = document.querySelector('#respawn-countdown');
 const botState = document.querySelector('#bot-state');
+const botShield = document.querySelector('#bot-shield');
 const botHealth = document.querySelector('#bot-health');
 const botToggle = document.querySelector('#bot-enabled');
 const botToggleLabel = document.querySelector('#bot-toggle-label');
@@ -466,7 +467,24 @@ function showShieldBreak() {
 }
 
 function showHit(result) {
-  hitMarker.className = result.headshot ? 'show headshot' : 'show';
+  const shieldDamage = Math.max(
+    0,
+    Math.round(result.shieldDamage ?? 0)
+  );
+  const healthDamage = Math.max(
+    0,
+    Math.round(result.healthDamage ?? 0)
+  );
+  const totalDamage = Math.max(
+    0,
+    Math.round(result.damage ?? shieldDamage + healthDamage)
+  );
+
+  const markerClasses = ['show'];
+  if (result.headshot) markerClasses.push('headshot');
+  else if (shieldDamage > 0) markerClasses.push('shield-hit');
+  if (result.shieldBroken) markerClasses.push('shield-break-hit');
+  hitMarker.className = markerClasses.join(' ');
 
   if (Number.isFinite(result.pelletsHit) && Number.isFinite(result.pelletsTotal)) {
     const pelletRatio = Math.max(
@@ -486,15 +504,57 @@ function showHit(result) {
       150
     );
   }
-  damagePop.textContent = result.tinFang && result.headshot
-    ? 'FANG HEAD · DOWN'
-    : `${Math.round(result.damage)}${result.headshot ? ' HEAD' : ''}${result.eliminated ? ' · DOWN' : ''}`;
-  damagePop.className = result.headshot ? 'show headshot' : 'show';
+
+  if (result.tinFang && result.headshot) {
+    damagePop.textContent = 'FANG HEAD · DOWN';
+    damagePop.className = 'show headshot';
+  } else {
+    const parts = [];
+
+    if (shieldDamage > 0 && healthDamage > 0) {
+      parts.push(
+        `<span class="shield-damage">${shieldDamage}</span>`
+      );
+      parts.push(
+        `<span class="${result.headshot ? 'critical-damage' : 'health-damage'}">${healthDamage}</span>`
+      );
+    } else if (result.headshot) {
+      parts.push(
+        `<span class="critical-damage">${totalDamage}</span>`
+      );
+    } else if (shieldDamage > 0) {
+      parts.push(
+        `<span class="shield-damage">${shieldDamage}</span>`
+      );
+    } else {
+      parts.push(
+        `<span class="health-damage">${healthDamage || totalDamage}</span>`
+      );
+    }
+
+    if (result.shieldBroken && !result.eliminated) {
+      parts.push('<small class="enemy-crack">CRACK</small>');
+    }
+    if (result.eliminated) {
+      parts.push('<small class="enemy-down">DOWN</small>');
+    }
+
+    damagePop.innerHTML = parts.join('');
+    damagePop.className =
+      'show fortnite-damage' +
+      (result.headshot ? ' headshot' : '') +
+      (result.shieldBroken ? ' cracked' : '');
+  }
 
   clearTimeout(showHit.markerTimer);
   clearTimeout(showHit.damageTimer);
-  showHit.markerTimer = setTimeout(() => { hitMarker.className = ''; }, 95);
-  showHit.damageTimer = setTimeout(() => { damagePop.className = ''; }, 420);
+  showHit.markerTimer = setTimeout(() => {
+    hitMarker.className = '';
+  }, 105);
+  showHit.damageTimer = setTimeout(() => {
+    damagePop.className = '';
+    damagePop.textContent = '';
+  }, 520);
 }
 
 function pulse(element, className) {
@@ -632,6 +692,7 @@ function loop(now) {
           : '';
 
   botState.textContent = bot.enabled ? bot.state : 'OFF';
+  botShield.textContent = bot.enabled ? String(Math.round(bot.shield)) : '—';
   botHealth.textContent = bot.enabled ? String(Math.round(bot.health)) : '—';
   if (!health.alive) respawnCountdown.textContent = health.respawnTimer.toFixed(1);
 

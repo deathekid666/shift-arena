@@ -884,6 +884,10 @@ export class WeaponSystem {
     const cfg = this.cfg;
     const pelletDamage = cfg.damage / cfg.pellets;
     let totalDamage = 0;
+    let shieldDamage = 0;
+    let healthDamage = 0;
+    let shieldBroken = false;
+    let startedOnShield = false;
     let pelletsHit = 0;
     let anyHeadshot = false;
     let eliminated = false;
@@ -907,6 +911,12 @@ export class WeaponSystem {
       if (!result) continue;
       pelletsHit += 1;
       totalDamage += result.damage;
+      shieldDamage += result.shieldDamage ?? 0;
+      healthDamage += result.healthDamage ?? 0;
+      shieldBroken = shieldBroken || Boolean(result.shieldBroken);
+      startedOnShield =
+        startedOnShield ||
+        Boolean(result.startedOnShield);
       anyHeadshot = anyHeadshot || result.headshot;
       eliminated = eliminated || result.eliminated;
     }
@@ -918,6 +928,10 @@ export class WeaponSystem {
     if (totalDamage > 0) {
       this.onHit?.({
         damage: Math.round(totalDamage),
+        shieldDamage: Math.round(shieldDamage),
+        healthDamage: Math.round(healthDamage),
+        shieldBroken,
+        startedOnShield,
         headshot: anyHeadshot,
         eliminated,
         pelletsHit,

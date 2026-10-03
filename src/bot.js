@@ -1,5 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG } from './config.js';
+import { resolveShieldedDamage } from './damage-model.js';
 
 export class CombatBot {
   constructor({ scene, world, player, playerHealth, targets }) {
@@ -13,6 +14,7 @@ export class CombatBot {
     this.spawnPoint = world.botSpawnPoint?.clone() ?? new THREE.Vector3(-10, 0, 12);
     this.group = new THREE.Group();
     this.health = this.cfg.maxHealth;
+    this.shield = this.cfg.maxShield;
     this.alive = true;
     this.enabled = true;
     this.state = 'IDLE';
@@ -84,11 +86,27 @@ export class CombatBot {
     bg.renderOrder = 10;
     this.group.add(bg);
 
-    this.healthBar = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.10, 0.075),
-      new THREE.MeshBasicMaterial({ color: 0x58d26f, side: THREE.DoubleSide, depthTest: false })
+    this.shieldBar = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.10, 0.034),
+      new THREE.MeshBasicMaterial({
+        color: 0x4ea8ff,
+        side: THREE.DoubleSide,
+        depthTest: false
+      })
     );
-    this.healthBar.position.set(0, 2.35, -0.01);
+    this.shieldBar.position.set(0, 2.385, -0.012);
+    this.shieldBar.renderOrder = 11;
+    this.group.add(this.shieldBar);
+
+    this.healthBar = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.10, 0.034),
+      new THREE.MeshBasicMaterial({
+        color: 0xf2f2f2,
+        side: THREE.DoubleSide,
+        depthTest: false
+      })
+    );
+    this.healthBar.position.set(0, 2.315, -0.01);
     this.healthBar.renderOrder = 11;
     this.group.add(this.healthBar);
 
@@ -115,6 +133,7 @@ export class CombatBot {
     }
 
     this.health = this.cfg.maxHealth;
+    this.shield = this.cfg.maxShield;
     this.alive = true;
     this.state = 'IDLE';
     this.respawnTimer = 0;
@@ -342,24 +361,37 @@ export class CombatBot {
     if (!this.enabled || !this.alive) return null;
 
     const headshot = hitZone === 'head';
-    const damage = Math.round(baseDamage * (headshot ? headshotMultiplier : 1));
-    this.health = Math.max(0, this.health - damage);
+    const incomingDamage =
+      baseDamage *
+      (headshot ? headshotMultiplier : 1);
+
+    const result = resolveShieldedDamage({
+      health: this.health,
+      shield: this.shield,
+      amount: incomingDamage
+    });
+
+    this.health = result.health;
+    this.shield = result.shield;
     this.flashTimer = 0.09;
-    this.bodyMaterial.emissive.setHex(headshot ? 0xff8a42 : 0xffffff);
-    this.headMaterial.emissive.setHex(headshot ? 0xff8a42 : 0xffffff);
+
+    const flashColor = result.shieldDamage > 0
+      ? 0x55aaff
+      : headshot
+        ? 0xffb04b
+        : 0xffffff;
+    this.bodyMaterial.emissive.setHex(flashColor);
+    this.headMaterial.emissive.setHex(flashColor);
     this.updateHealthBar();
 
-    let eliminated = false;
-    if (this.health <= 0) {
-      eliminated = true;
-      this.die();
-    }
+    if (result.eliminated) this.die();
 
     return {
-      damage,
-      headshot,
-      eliminated,
-      health: this.health
+      ...result,
+      damage: Math.round(result.damage),
+      shieldDamage: Math.round(result.shieldDamage),
+      healthDamage: Math.round(result.healthDamage),
+      headshot
     };
   }
 
@@ -375,6 +407,7 @@ export class CombatBot {
 
   respawn() {
     this.health = this.cfg.maxHealth;
+    this.shield = this.cfg.maxShield;
     this.alive = true;
     this.state = 'IDLE';
     this.respawnTimer = 0;
@@ -389,9 +422,20 @@ export class CombatBot {
   }
 
   updateHealthBar() {
-    const ratio = Math.max(0, this.health / this.cfg.maxHealth);
-    this.healthBar.scale.x = Math.max(0.001, ratio);
-    this.healthBar.position.x = -(1 - ratio) * 0.55;
+    const healthRatio = Math.max(
+      0,
+      this.health / this.cfg.maxHealth
+    );
+    const shieldRatio = Math.max(
+      0,
+      this.shield / this.cfg.maxShield
+    );
+
+    this.healthBar.scale.x = Math.max(0.001, healthRatio);
+    this.healthBar.position.x = -(1 - healthRatio) * 0.55;
+
+    this.shieldBar.scale.x = Math.max(0.001, shieldRatio);
+    this.shieldBar.position.x = -(1 - shieldRatio) * 0.55;
   }
 
   updateVisuals(dt, camera) {
@@ -411,7 +455,12 @@ export class CombatBot {
     if (camera && this.group.visible) {
       const q = camera.quaternion;
       this.healthBar.parent.children
-        .filter((child) => child === this.healthBar || child.geometry?.type === 'PlaneGeometry')
+        .filter(
+          (child) =>
+            child === this.healthBar ||
+            child === this.shieldBar ||
+            child.geometry?.type === 'PlaneGeometry'
+        )
         .forEach((child) => child.quaternion.copy(q));
     }
   }

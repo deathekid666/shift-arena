@@ -1,4 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import { resolveShieldedDamage } from './damage-model.js';
 
 export class TargetRange {
   constructor(scene) {
@@ -55,6 +56,8 @@ export class TargetRange {
       head,
       health: 100,
       maxHealth: 100,
+      shield: 100,
+      maxShield: 100,
       alive: true,
       flashTimer: 0,
       respawnTimer: 0
@@ -124,21 +127,39 @@ export class TargetRange {
     if (!target) return null;
 
     if (typeof target.takeWeaponDamage === 'function') {
-      return target.takeWeaponDamage(mesh.userData.hitZone, baseDamage, headshotMultiplier);
+      return target.takeWeaponDamage(
+        mesh.userData.hitZone,
+        baseDamage,
+        headshotMultiplier
+      );
     }
 
     if (!target.alive) return null;
 
     const headshot = mesh.userData.hitZone === 'head';
-    const damage = Math.round(baseDamage * (headshot ? headshotMultiplier : 1));
-    target.health = Math.max(0, target.health - damage);
-    target.flashTimer = 0.09;
-    target.body.material.emissive.setHex(headshot ? 0xff7a2f : 0xffffff);
-    target.head.material.emissive.setHex(headshot ? 0xff7a2f : 0xffffff);
+    const incomingDamage =
+      baseDamage *
+      (headshot ? headshotMultiplier : 1);
 
-    let eliminated = false;
-    if (target.health <= 0) {
-      eliminated = true;
+    const result = resolveShieldedDamage({
+      health: target.health,
+      shield: target.shield ?? 0,
+      amount: incomingDamage
+    });
+
+    target.health = result.health;
+    target.shield = result.shield;
+    target.flashTimer = 0.09;
+
+    const flashColor = result.shieldDamage > 0
+      ? 0x55aaff
+      : headshot
+        ? 0xffb04b
+        : 0xffffff;
+    target.body.material.emissive.setHex(flashColor);
+    target.head.material.emissive.setHex(flashColor);
+
+    if (result.eliminated) {
       target.alive = false;
       target.respawnTimer = 1.35;
       target.body.userData.disabled = true;
@@ -147,10 +168,11 @@ export class TargetRange {
     }
 
     return {
-      damage,
-      headshot,
-      eliminated,
-      health: target.health
+      ...result,
+      damage: Math.round(result.damage),
+      shieldDamage: Math.round(result.shieldDamage),
+      healthDamage: Math.round(result.healthDamage),
+      headshot
     };
   }
 
@@ -168,6 +190,7 @@ export class TargetRange {
         target.respawnTimer -= dt;
         if (target.respawnTimer <= 0) {
           target.health = target.maxHealth;
+          target.shield = target.maxShield ?? 100;
           target.alive = true;
           target.body.userData.disabled = false;
           target.head.userData.disabled = false;
