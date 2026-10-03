@@ -18,6 +18,10 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
     return buildStapleSlingerAR(cfg, mats, scale);
   }
 
+  if (style === 'tapeRattler') {
+    return buildTapeRattlerSMG(cfg, mats, scale);
+  }
+
   if (style === 'bugSprayer') {
     return buildBugSprayerShotgun(cfg, mats, scale);
   }
@@ -455,6 +459,281 @@ function buildStapleSlingerAR(cfg, mats, scale) {
     leftGrip,
     muzzle,
     barrelLength: 0.54,
+    primaryMesh:
+      group.children.find((child) => child.isMesh) ?? null
+  };
+}
+
+function buildTapeRattlerSMG(cfg, mats, scale) {
+  const group = new THREE.Group();
+  group.name = 'JunkWeapon_TapeRattlerSMG';
+
+  const add = (mesh, pos, rot = null, parent = group) => {
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    parent.add(mesh);
+    mesh.castShadow = true;
+    return mesh;
+  };
+
+  // Palette taken from the supplied concept sheet.
+  const orange = mat(0xd8892f, 0.88, 0.12);
+  const orangeDark = mat(0x9c5528, 0.92, 0.16);
+  const creamTape = mat(0xd9c99b, 0.94, 0.02);
+  const creamEdge = mat(0xbba979, 0.92, 0.04);
+  const steel = mat(0x6c706c, 0.62, 0.72);
+  const blackMetal = mat(0x252a29, 0.82, 0.58);
+  const wrap = mat(0xb29a69, 0.98, 0.01);
+  const redWire = mat(0x9d4937, 0.88, 0.18);
+
+  // === 1. TAPE-DISPENSER BODY ===
+  // One chunky orange plastic shell is the main receiver.
+  add(
+    box(0.25, 0.23, 0.48, orange),
+    [0, 0.035, -0.02]
+  );
+
+  // Lower dark insert and front clamp keep the body readable from distance.
+  add(
+    box(0.19, 0.10, 0.36, blackMetal),
+    [0, -0.030, -0.055]
+  );
+  add(
+    box(0.27, 0.18, 0.070, steel),
+    [0, 0.040, -0.275]
+  );
+
+  // Slanted top cap approximates the dispenser silhouette.
+  add(
+    box(0.255, 0.075, 0.34, orangeDark),
+    [0, 0.170, 0.015],
+    [-0.10, 0, 0]
+  );
+
+  // Big exposed body screws.
+  for (const x of [-0.135, 0.135]) {
+    for (const z of [-0.14, 0.12]) {
+      add(
+        cylinder(0.020, 0.020, 0.028, 8, mats.bolt),
+        [x, 0.065, z],
+        [0, 0, Math.PI / 2]
+      );
+    }
+  }
+
+  // === 2. SIGNATURE TAPE WHEEL ===
+  // Side-mounted moving tape roll. One assembly can spin during fire.
+  const tapeWheel = new THREE.Group();
+  tapeWheel.name = 'TapeRattlerWheel';
+  tapeWheel.position.set(0.145, 0.205, 0.085);
+  tapeWheel.rotation.y = Math.PI / 2;
+  group.add(tapeWheel);
+
+  const tapeRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.180, 0.055, 8, 18),
+    creamTape
+  );
+  tapeRing.castShadow = true;
+  tapeWheel.add(tapeRing);
+
+  const tapeHub = cylinder(
+    0.055,
+    0.055,
+    0.070,
+    10,
+    steel
+  );
+  tapeHub.rotation.x = Math.PI / 2;
+  tapeWheel.add(tapeHub);
+
+  // Three simple hub spokes.
+  for (let i = 0; i < 3; i++) {
+    const a = i / 3 * Math.PI * 2;
+    const spoke = box(0.028, 0.120, 0.030, steel);
+    spoke.position.set(
+      Math.cos(a) * 0.060,
+      Math.sin(a) * 0.060,
+      0
+    );
+    spoke.rotation.z = a;
+    tapeWheel.add(spoke);
+  }
+
+  // Slight outer tape edge gives the wheel a thick cartoon silhouette.
+  const outerEdge = new THREE.Mesh(
+    new THREE.TorusGeometry(0.182, 0.012, 5, 18),
+    creamEdge
+  );
+  outerEdge.castShadow = true;
+  tapeWheel.add(outerEdge);
+
+  // === 3. SHORT PEN / PIPE BARREL ===
+  add(
+    cylinder(0.045, 0.050, 0.42, 10, steel),
+    [0, 0.050, -0.480],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // Dark marker-tube section.
+  add(
+    cylinder(0.052, 0.052, 0.18, 10, blackMetal),
+    [0, 0.050, -0.740],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // === 4. CUTTER-LIKE MUZZLE ===
+  // Compact cylindrical end plus four chunky cutter teeth.
+  add(
+    cylinder(0.067, 0.067, 0.105, 10, blackMetal),
+    [0, 0.050, -0.885],
+    [Math.PI / 2, 0, 0]
+  );
+
+  for (let i = 0; i < 4; i++) {
+    const angle = i / 4 * Math.PI * 2;
+    const tooth = box(0.030, 0.065, 0.065, steel);
+    tooth.position.set(
+      Math.cos(angle) * 0.060,
+      0.050 + Math.sin(angle) * 0.060,
+      -0.935
+    );
+    tooth.rotation.z = angle;
+    group.add(tooth);
+  }
+
+  // Front tape-cutter strip under the pipe.
+  for (let i = 0; i < 5; i++) {
+    const tooth = box(0.030, 0.032, 0.028, steel);
+    tooth.position.set(
+      (i - 2) * 0.034,
+      -0.020,
+      -0.655
+    );
+    tooth.rotation.z = (i % 2 ? 0.18 : -0.18);
+    group.add(tooth);
+  }
+
+  // === 5. DISPENSER HANDLE / GRIP ===
+  add(
+    box(0.120, 0.32, 0.145, mats.rubber),
+    [0, -0.225, 0.150],
+    [-0.11, 0, 0]
+  );
+
+  for (let i = 0; i < 4; i++) {
+    add(
+      box(0.132, 0.038, 0.155, wrap),
+      [0, -0.135 - i * 0.058, 0.150 + i * 0.006],
+      [-0.11, 0, i % 2 ? 0.035 : -0.030]
+    );
+  }
+
+  // Minimal trigger guard.
+  const guard = new THREE.Mesh(
+    new THREE.TorusGeometry(
+      0.068,
+      0.010,
+      5,
+      10,
+      Math.PI * 1.45
+    ),
+    mats.bolt
+  );
+  add(
+    guard,
+    [0, -0.110, 0.060],
+    [Math.PI / 2, 0, -0.40]
+  );
+
+  // === 6. BENT-WIRE REAR BRACE ===
+  // Two simple rails with a wrapped rear pad, matching the supplied turnaround.
+  const stockRoot = new THREE.Group();
+  stockRoot.position.set(0, 0.010, 0.300);
+  group.add(stockRoot);
+
+  for (const x of [-0.072, 0.072]) {
+    add(
+      box(0.026, 0.026, 0.36, steel),
+      [x, 0.010, 0.180],
+      [0.02, 0, 0],
+      stockRoot
+    );
+  }
+
+  add(
+    box(0.19, 0.18, 0.065, steel),
+    [0, -0.005, 0.380],
+    [0.02, 0, 0],
+    stockRoot
+  );
+
+  for (let i = 0; i < 3; i++) {
+    add(
+      box(0.205, 0.035, 0.080, wrap),
+      [0, -0.050 + i * 0.050, 0.380],
+      [0, 0, i % 2 ? 0.035 : -0.025],
+      stockRoot
+    );
+  }
+
+  // Small spring/wire repair at the rear hinge.
+  for (let i = 0; i < 4; i++) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.032, 0.006, 5, 10),
+      redWire
+    );
+    add(
+      ring,
+      [0, 0.030, 0.300 + i * 0.018],
+      [0, Math.PI / 2, 0]
+    );
+  }
+
+  // === 7. SMALL SIDE DETAILS ===
+  // Simple switch and bottle-cap pivot; no military rails or scopes.
+  add(
+    box(0.035, 0.050, 0.060, blackMetal),
+    [0.142, 0.100, -0.055]
+  );
+  add(
+    cylinder(0.038, 0.038, 0.030, 10, mats.brass),
+    [-0.145, 0.090, 0.080],
+    [0, 0, Math.PI / 2]
+  );
+
+  // Gameplay sockets align to visible grip/support geometry.
+  const rightGrip = new THREE.Object3D();
+  rightGrip.name = 'RightGripSocket';
+  rightGrip.position.set(
+    cfg.rightGripX ?? 0,
+    cfg.rightGripY ?? -0.205,
+    cfg.rightGripZ ?? 0.165
+  );
+  group.add(rightGrip);
+
+  const leftGrip = new THREE.Object3D();
+  leftGrip.name = 'LeftForegripSocket';
+  leftGrip.position.set(
+    cfg.leftGripX ?? 0,
+    cfg.leftGripY ?? -0.040,
+    cfg.foregripZ ?? -0.285
+  );
+  group.add(leftGrip);
+
+  const muzzle = new THREE.Object3D();
+  muzzle.name = 'MuzzleSocket';
+  muzzle.position.set(0, 0.050, -0.955);
+  group.add(muzzle);
+
+  group.scale.setScalar(scale);
+
+  return {
+    group,
+    rightGrip,
+    leftGrip,
+    muzzle,
+    tapeWheel,
+    barrelLength: 0.42,
     primaryMesh:
       group.children.find((child) => child.isMesh) ?? null
   };
@@ -945,6 +1224,7 @@ function inferStyle(cfg) {
   if (cfg.scope) return 'antenna';
   if (name.includes('PUMP')) return 'drainPump';
   if (name.includes('SHOTGUN')) return 'doublePipe';
+  if (name.includes('TAPE-RATTLER')) return 'tapeRattler';
   if (name.includes('COMPACT')) return 'canSMG';
   if (name.includes('LONG')) return 'railSMG';
   if (name.includes('STAPLE')) return 'stapleSlinger';

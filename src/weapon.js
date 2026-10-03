@@ -291,6 +291,7 @@ export class WeaponSystem {
 
       this.updateMuzzleFx(entry, dt);
       this.updatePumpCycle(entry, dt);
+      this.updateTapeRattler(entry, dt);
 
       if (s.sinceShot > 0.6) s.shotIndex = 0;
 
@@ -370,6 +371,31 @@ export class WeaponSystem {
       if (entry === this.active) this.audio.playPump?.();
       state.pumpSoundPlayed = true;
     }
+  }
+
+  updateTapeRattler(entry, dt) {
+    const { cfg, state, model } = entry;
+    const wheel = model.tapeWheel;
+
+    if (!cfg.tapeWheelSpin || !wheel) return;
+
+    const active = entry === this.active;
+    const firingWindow =
+      active &&
+      !state.isReloading &&
+      state.sinceShot < 0.12;
+
+    const targetSpeed = firingWindow ? 24 : 0;
+    wheel.userData.spinSpeed = THREE.MathUtils.damp(
+      wheel.userData.spinSpeed ?? 0,
+      targetSpeed,
+      firingWindow ? 18 : 7,
+      dt
+    );
+
+    // Wheel plane is rotated to the side; local Z is its spin axis.
+    wheel.rotation.z +=
+      (wheel.userData.spinSpeed ?? 0) * dt;
   }
 
   updateWeaponPose(dt) {

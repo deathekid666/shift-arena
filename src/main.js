@@ -69,14 +69,14 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.16A · FORTNITE AR RETICLE</div>
+    <div id="damage-test-hint">BUILD 010.17 · TAPE-RATTLER SMG</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
     <div id="pickup-prompt">
       <span id="pickup-key">E</span>
       <div>
-        <strong id="pickup-title">TACTICAL AR</strong>
+        <strong id="pickup-title">STAPLE-SLINGER AR</strong>
         <small id="pickup-subtitle">MEDIUM AMMO</small>
       </div>
       <b id="pickup-action">SWAP ACTIVE SLOT</b>
@@ -100,14 +100,14 @@ root.innerHTML = `
         <span class="slot-accent"></span>
         <span class="slot-key">1</span>
         <small>PRIMARY</small>
-        <strong id="slot1-name">TACTICAL AR</strong>
+        <strong id="slot1-name">STAPLE-SLINGER AR</strong>
         <b id="slot1-ammo">30 / 90</b>
       </div>
       <div class="combat-slot gun-slot" data-loadout-slot="1">
         <span class="slot-accent"></span>
         <span class="slot-key">2</span>
         <small>SECONDARY</small>
-        <strong id="slot2-name">COMPACT SMG</strong>
+        <strong id="slot2-name">TAPE-RATTLER SMG</strong>
         <b id="slot2-ammo">30 / 90</b>
       </div>
     </div>
@@ -118,7 +118,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.16A · FORTNITE AR RETICLE</div>
+        <div class="build-tag">BUILD 010.17 · TAPE-RATTLER SMG</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
