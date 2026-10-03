@@ -25,6 +25,8 @@ export class InputController {
     this.pointerLocked = false;
     this.yawDelta = 0;
     this.pitchDelta = 0;
+    this.weaponWheelDirection = 0;
+    this.lastWeaponWheelAt = 0;
     this.isTouch = matchMedia('(pointer: coarse)').matches;
 
     window.addEventListener('keydown', this.onKeyDown);
@@ -34,6 +36,7 @@ export class InputController {
     window.addEventListener('blur', this.onBlur);
     document.addEventListener('mousemove', this.onMouseMove);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    canvas.addEventListener('wheel', this.onWheel, { passive: false });
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   }
 
@@ -74,6 +77,12 @@ export class InputController {
     return value;
   }
 
+  consumeWeaponWheel() {
+    const direction = this.weaponWheelDirection;
+    this.weaponWheelDirection = 0;
+    return direction;
+  }
+
   onKeyDown = (event) => {
     if (!this.keys.has(event.code)) this.pressed.add(event.code);
     this.keys.add(event.code);
@@ -106,11 +115,23 @@ export class InputController {
     this.pitchDelta += event.movementY;
   };
 
+  onWheel = (event) => {
+    if (!this.pointerLocked) return;
+    event.preventDefault();
+
+    const now = performance.now();
+    if (now - this.lastWeaponWheelAt < 115) return;
+
+    this.lastWeaponWheelAt = now;
+    this.weaponWheelDirection = event.deltaY > 0 ? 1 : -1;
+  };
+
   onPointerLockChange = () => {
     this.pointerLocked = document.pointerLockElement === this.canvas;
     if (!this.pointerLocked) {
       this.mouseButtons.clear();
       this.mousePressed.clear();
+      this.weaponWheelDirection = 0;
     }
   };
 }

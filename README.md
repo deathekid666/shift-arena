@@ -31,3 +31,16 @@ Browser-first third-person shooter prototype.
 - Shift: sprint
 - Ctrl: crouch / slide
 - Space: jump
+
+
+## Build 007.1 HUD/control correction
+- The main hotbar now shows exactly two firearm cards.
+- Weapon cards keep the bright, stylized Fortnite-inspired card treatment.
+- Armor is no longer an inventory card.
+- Armor is displayed as two separate plate segments above the health bar, inspired by Battlefield REDSEC's two-plate HUD model.
+- Each armor segment represents 50 armor.
+- Key 3 applies a reserve Shell Armor plate.
+- Tin Fang is a small status/control hint, not a third weapon card.
+- Mouse wheel switches between the two firearm slots.
+- Keys 1 and 2 still switch directly.
+- Mouse wheel input is debounced to prevent high-resolution wheels from toggling back and forth on one gesture.

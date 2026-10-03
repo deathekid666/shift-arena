@@ -32,11 +32,25 @@ root.innerHTML = `
     <div id="damage-direction">▲</div>
     <div id="shield-break">ARMOR BROKEN</div>
 
-    <div id="player-status">
-      <div class="status-row shield-row"><span>ARMOR</span><b id="shield-value">100</b></div>
-      <div class="status-bar shield-bar"><i id="shield-fill"></i></div>
-      <div class="status-row health-row"><span>HP</span><b id="health-value">100</b></div>
-      <div class="status-bar health-bar"><i id="health-fill"></i></div>
+    <div id="player-status" class="bf-status">
+      <div class="armor-line">
+        <span class="armor-label">ARMOR</span>
+        <div class="armor-plates" aria-label="Two armor plates">
+          <span class="armor-plate"><i id="armor-plate-1"></i></span>
+          <span class="armor-plate"><i id="armor-plate-2"></i></span>
+        </div>
+        <b id="shield-value">100</b>
+      </div>
+      <div class="health-line">
+        <span class="health-label">HP</span>
+        <div class="status-bar health-bar"><i id="health-fill"></i></div>
+        <b id="health-value">100</b>
+      </div>
+      <div class="status-actions">
+        <span><kbd>3</kbd> PLATE <b id="armor-count">×2</b></span>
+        <span><kbd>V</kbd> TIN FANG</span>
+      </div>
+      <i id="armor-progress"></i>
     </div>
 
     <div id="elimination">
@@ -44,7 +58,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 007 · 2-GUN LOADOUT · WORLD PICKUPS · FINITE AMMO · SHELL ARMOR</div>
+    <div id="damage-test-hint">BUILD 007.1 · 2 WEAPONS · MOUSE WHEEL SWITCH · 2-PLATE ARMOR</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -59,7 +73,7 @@ root.innerHTML = `
 
     <div id="pickup-toast"></div>
 
-    <div id="combat-hotbar">
+    <div id="combat-hotbar" class="two-slot-hotbar">
       <div class="combat-slot gun-slot active" data-loadout-slot="0">
         <span class="slot-accent"></span>
         <span class="slot-key">1</span>
@@ -74,30 +88,17 @@ root.innerHTML = `
         <strong id="slot2-name">COMPACT SMG</strong>
         <b id="slot2-ammo">30 / 90</b>
       </div>
-      <div class="combat-slot utility-slot armor-slot">
-        <span class="slot-key">3</span>
-        <small>SHELL ARMOR</small>
-        <strong>ARMOR PATCH</strong>
-        <b id="armor-count">×2</b>
-        <i id="armor-progress"></i>
-      </div>
-      <div class="combat-slot utility-slot fang-slot">
-        <span class="slot-key">V</span>
-        <small>MELEE</small>
-        <strong>TIN FANG</strong>
-        <b>NEXT BUILD</b>
-      </div>
     </div>
 
     <div id="reload-state"></div>
-    <div id="controls">1 / 2 guns · E swap · 3 armor · V Tin Fang · B bot · LMB fire · RMB ADS · R reload · WASD move</div>
+    <div id="controls">Mouse wheel / 1 / 2 switch guns · E swap · 3 armor plate · V Tin Fang · B bot · LMB fire · RMB ADS · R reload</div>
     <div id="touch-note">Touch controls will be added in the dedicated mobile-input phase.</div>
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 007</div>
+        <div class="build-tag">BUILD 007.1</div>
         <h1>SHIFT Arena</h1>
-        <p>Two-gun combat loadout. Pick up weapons from the kitchen test line, swap the active gun with E, manage finite ammunition, and restore armor with Shell Armor.</p>
+        <p>Two-firearm combat loadout with fast third-person weapon switching. Use the mouse wheel or 1/2 to swap guns; armor is shown as two Battlefield-style plate segments above health.</p>
         <label class="bot-toggle">
           <span class="bot-toggle-copy">
             <strong>COMBAT BOT</strong>
@@ -150,7 +151,8 @@ const reloadState = document.querySelector('#reload-state');
 const healthValue = document.querySelector('#health-value');
 const shieldValue = document.querySelector('#shield-value');
 const healthFill = document.querySelector('#health-fill');
-const shieldFill = document.querySelector('#shield-fill');
+const armorPlate1 = document.querySelector('#armor-plate-1');
+const armorPlate2 = document.querySelector('#armor-plate-2');
 const damageVignette = document.querySelector('#player-damage-vignette');
 const damageDirection = document.querySelector('#damage-direction');
 const shieldBreak = document.querySelector('#shield-break');
@@ -276,7 +278,7 @@ function updateArmorHud(state) {
   if (!state) return;
   armorCount.textContent = `×${state.charges}`;
   armorProgress.style.width = `${state.using ? state.progress * 100 : 0}%`;
-  document.querySelector('.armor-slot').classList.toggle('using', state.using);
+  document.querySelector('#player-status').classList.toggle('using-armor', state.using);
 }
 
 function updatePickupPrompt(info) {
@@ -302,7 +304,11 @@ function updateHealthHud(state) {
   healthValue.textContent = String(Math.round(state.health));
   shieldValue.textContent = String(Math.round(state.shield));
   healthFill.style.width = `${Math.max(0, state.health / state.maxHealth) * 100}%`;
-  shieldFill.style.width = `${Math.max(0, state.shield / state.maxShield) * 100}%`;
+  const armor = Math.max(0, Math.min(state.maxShield, state.shield));
+  const firstPlate = Math.min(1, armor / 50);
+  const secondPlate = Math.min(1, Math.max(0, armor - 50) / 50);
+  armorPlate1.style.width = `${firstPlate * 100}%`;
+  armorPlate2.style.width = `${secondPlate * 100}%`;
 }
 
 function showPlayerDamage(result) {

@@ -232,8 +232,16 @@ export class WeaponSystem {
       this.equipSlot(0);
       return;
     }
+
     if (this.input.consume('slot2')) {
       this.equipSlot(1);
+      return;
+    }
+
+    const wheel = this.input.consumeWeaponWheel();
+    if (wheel !== 0) {
+      // With exactly two firearm slots, next/previous both switch to the other gun.
+      this.equipSlot(this.activeSlot === 0 ? 1 : 0);
     }
   }
 
