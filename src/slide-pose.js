@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 
-// Deterministic two-knee combat slide for normalized VRM humanoid bones.
-// We intentionally do NOT solve the slide through foot-target IK: that solver
-// could re-straighten one leg depending on target distance. The normalized VRM
-// leg axes let us author the silhouette directly and guarantee both knees flex.
+// Absolute two-knee superhero slide.
+// The slide is authored from the humanoid neutral pose instead of adding offsets
+// on top of the current sprint frame. That prevents the sprint animation from
+// cancelling knee flex and guarantees both legs stay visibly compressed.
 export function createSlidePoseLayer(character) {
-  const { bones: b, root } = character;
+  const { bones: b, root, baseRotations, basePositions } = character;
+
   const nodes = [...new Set([
     b.hips, b.spine, b.chest,
     b.leftUpperLeg, b.leftLowerLeg, b.leftFoot,
@@ -25,10 +26,11 @@ export function createSlidePoseLayer(character) {
 
   function apply(state, dt) {
     const target = state?.sliding && state?.grounded !== false ? 1 : 0;
+
     blend = THREE.MathUtils.damp(
       blend,
       target,
-      target > blend ? 22 : 11,
+      target > blend ? 28 : 12,
       dt
     );
 
@@ -42,89 +44,142 @@ export function createSlidePoseLayer(character) {
     }
 
     restore();
+
     for (const node of nodes) {
       underlyingQ.set(node, node.quaternion.clone());
       underlyingP.set(node, node.position.clone());
     }
 
-    const progress = THREE.MathUtils.clamp(state?.slideProgress ?? 0, 0, 1);
-
-    // Snap into the readable silhouette quickly, hold it through the middle,
-    // then blend out only near the end of the skid.
-    const enter = smooth01(
-      THREE.MathUtils.clamp(progress / 0.085, 0, 1)
-    );
-    const exit = smooth01(
-      THREE.MathUtils.clamp((1 - progress) / 0.15, 0, 1)
-    );
-    const poseBlend = THREE.MathUtils.clamp(
-      blend * Math.min(enter, exit + 0.10),
+    const progress = THREE.MathUtils.clamp(
+      state?.slideProgress ?? 0,
       0,
       1
     );
 
-    const baseHip = underlyingP.get(b.hips);
-    b.hips.position.copy(baseHip);
-    b.hips.position.x += 0.025 * poseBlend;
-    b.hips.position.y -= 0.39 * poseBlend;
-    b.hips.position.z += 0.035 * poseBlend;
+    // Reach the full readable silhouette almost immediately, then hold it.
+    const enter = smooth01(
+      THREE.MathUtils.clamp(progress / 0.045, 0, 1)
+    );
+    const exit = smooth01(
+      THREE.MathUtils.clamp((1 - progress) / 0.13, 0, 1)
+    );
 
-    // Pelvis and torso stay compact but weapon-ready.
-    offsetLocal(b.hips, underlyingQ.get(b.hips), 0.13, 0, -0.045, poseBlend);
-    offsetLocal(b.spine, underlyingQ.get(b.spine), -0.085, 0, 0.035, poseBlend);
-    offsetLocal(b.chest, underlyingQ.get(b.chest), -0.035, 0, 0.020, poseBlend);
+    const poseBlend = THREE.MathUtils.clamp(
+      blend * Math.min(enter, exit + 0.12),
+      0,
+      1
+    );
 
-    // Lead / left leg: visibly bent, never near-locked.
-    // Upper leg comes forward while the shin folds back under the knee.
-    offsetLocal(
-      b.leftUpperLeg,
-      underlyingQ.get(b.leftUpperLeg),
-      -0.92,
-      -0.035,
-      -0.12,
+    // Pelvis uses the neutral rig position, not the sprint bob position.
+    const neutralHip =
+      basePositions?.get(b.hips) ??
+      underlyingP.get(b.hips);
+
+    const targetHip = neutralHip.clone();
+    targetHip.x += 0.035;
+    targetHip.y -= 0.475;
+    targetHip.z += 0.070;
+
+    b.hips.position
+      .copy(underlyingP.get(b.hips))
+      .lerp(targetHip, poseBlend);
+
+    // Compact superhero / Spider-Man-like body silhouette:
+    // very low pelvis, both knees strongly flexed, asymmetric but neither leg
+    // allowed to become a long straight support leg.
+    applyAbsolutePose(
+      b.hips,
+      baseRotations?.get(b.hips),
+      underlyingQ.get(b.hips),
+      0.20,
+      0.00,
+      -0.08,
       poseBlend
     );
-    offsetLocal(
-      b.leftLowerLeg,
-      underlyingQ.get(b.leftLowerLeg),
-      0.94,
-      0,
+
+    applyAbsolutePose(
+      b.spine,
+      baseRotations?.get(b.spine),
+      underlyingQ.get(b.spine),
+      -0.13,
+      0.00,
+      0.055,
+      poseBlend
+    );
+
+    applyAbsolutePose(
+      b.chest,
+      baseRotations?.get(b.chest),
+      underlyingQ.get(b.chest),
+      -0.06,
+      0.00,
       0.035,
       poseBlend
     );
-    offsetLocal(
-      b.leftFoot,
-      underlyingQ.get(b.leftFoot),
-      -0.08,
-      0.025,
-      -0.025,
+
+    // Lead / left leg:
+    // thigh lifted toward torso, knee around a deep right angle, foot kept
+    // relatively close instead of reaching out into a straight leg.
+    applyAbsolutePose(
+      b.leftUpperLeg,
+      baseRotations?.get(b.leftUpperLeg),
+      underlyingQ.get(b.leftUpperLeg),
+      -1.20,
+      -0.10,
+      -0.30,
       poseBlend
     );
 
-    // Rear / right leg: deep knee fold under the body. This is deliberately
-    // stronger than the lead knee so the side/front silhouette reads clearly.
-    offsetLocal(
+    applyAbsolutePose(
+      b.leftLowerLeg,
+      baseRotations?.get(b.leftLowerLeg),
+      underlyingQ.get(b.leftLowerLeg),
+      1.68,
+      0.00,
+      0.06,
+      poseBlend
+    );
+
+    applyAbsolutePose(
+      b.leftFoot,
+      baseRotations?.get(b.leftFoot),
+      underlyingQ.get(b.leftFoot),
+      -0.42,
+      0.04,
+      -0.05,
+      poseBlend
+    );
+
+    // Rear / right leg:
+    // knee tucked under and opened slightly to the side, with even stronger
+    // shin folding so it can never read as a straight trailing leg.
+    applyAbsolutePose(
       b.rightUpperLeg,
+      baseRotations?.get(b.rightUpperLeg),
       underlyingQ.get(b.rightUpperLeg),
-      -0.74,
-      0.045,
-      0.17,
+      -1.02,
+      0.16,
+      0.40,
       poseBlend
     );
-    offsetLocal(
+
+    applyAbsolutePose(
       b.rightLowerLeg,
+      baseRotations?.get(b.rightLowerLeg),
       underlyingQ.get(b.rightLowerLeg),
-      1.50,
-      0,
-      -0.055,
+      1.82,
+      0.00,
+      -0.09,
       poseBlend
     );
-    offsetLocal(
+
+    applyAbsolutePose(
       b.rightFoot,
+      baseRotations?.get(b.rightFoot),
       underlyingQ.get(b.rightFoot),
-      -0.58,
-      -0.055,
-      0.07,
+      -0.70,
+      -0.06,
+      0.09,
       poseBlend
     );
 
@@ -134,8 +189,18 @@ export function createSlidePoseLayer(character) {
   return { apply, restore };
 }
 
-function offsetLocal(node, baseQ, x, y, z, blend) {
-  if (!node || !baseQ) return;
+function applyAbsolutePose(
+  node,
+  neutralQ,
+  currentQ,
+  x,
+  y,
+  z,
+  blend
+) {
+  if (!node || !currentQ) return;
+
+  const baseQ = neutralQ ?? currentQ;
 
   const targetQ = baseQ.clone().multiply(
     new THREE.Quaternion().setFromEuler(
@@ -143,7 +208,7 @@ function offsetLocal(node, baseQ, x, y, z, blend) {
     )
   );
 
-  node.quaternion.copy(baseQ).slerp(targetQ, blend);
+  node.quaternion.copy(currentQ).slerp(targetQ, blend);
 }
 
 function smooth01(t) {
