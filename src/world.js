@@ -148,11 +148,11 @@ export class TestWorld {
     this.addRamp(0, 7, 3.2, 8, 3.2, '-z', 0xb78354);
 
     // Giant dining table: top is aligned with island high ground.
-    this.addBox(16, 2.55, 8, 12, 0.45, 8, 0x8f6846);
-    this.addBox(11.3, 0, 5.2, 0.9, 2.55, 0.9, 0x6d4f37);
-    this.addBox(20.7, 0, 5.2, 0.9, 2.55, 0.9, 0x6d4f37);
-    this.addBox(11.3, 0, 10.8, 0.9, 2.55, 0.9, 0x6d4f37);
-    this.addBox(20.7, 0, 10.8, 0.9, 2.55, 0.9, 0x6d4f37);
+    this.addBox(16, 2.55, 5, 12, 0.45, 8, 0x8f6846);
+    this.addBox(11.3, 0, 2.2, 0.9, 2.55, 0.9, 0x6d4f37);
+    this.addBox(20.7, 0, 2.2, 0.9, 2.55, 0.9, 0x6d4f37);
+    this.addBox(11.3, 0, 7.8, 0.9, 2.55, 0.9, 0x6d4f37);
+    this.addBox(20.7, 0, 7.8, 0.9, 2.55, 0.9, 0x6d4f37);
 
     // Spoon bridge: narrow high-risk route from island to table.
     this.addBox(8.55, 2.76, 1.2, 3.5, 0.24, 1.15, 0xb9bec3, { roughness: 0.28, metalness: 0.52 });

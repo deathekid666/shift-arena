@@ -11,7 +11,7 @@ export class TargetRange {
   build() {
     // Kitchen weapon-test targets: floor, table high ground, stove high ground.
     this.createDummy(-25.0, 0, 2.0);
-    this.createDummy(16.0, 3.0, 8.0);
+    this.createDummy(16.0, 3.0, 5.0);
     this.createDummy(2.0, 3.28, -20.0);
   }
 
