@@ -118,6 +118,7 @@ export class TestWorld {
       topY: height,
       axis,
       direction: dir,
+      thickness: 0.14,
       mesh
     });
 
@@ -205,22 +206,40 @@ export class TestWorld {
     this.scene.add(grid);
   }
 
-  rampHeightAt(x, z) {
-    let y = null;
+  rampSurfaceAt(x, z, padding = 0) {
+    let best = null;
 
     for (const r of this.ramps) {
-      if (x < r.minX || x > r.maxX || z < r.minZ || z > r.maxZ) continue;
+      if (
+        x < r.minX - padding || x > r.maxX + padding ||
+        z < r.minZ - padding || z > r.maxZ + padding
+      ) continue;
+
+      // When testing a capsule near an edge, clamp to the physical board so
+      // the player's radius cannot ghost through the side of the ramp.
+      const sampleX = THREE.MathUtils.clamp(x, r.minX, r.maxX);
+      const sampleZ = THREE.MathUtils.clamp(z, r.minZ, r.maxZ);
 
       const t = r.axis === 'z'
-        ? (z - r.minZ) / (r.maxZ - r.minZ)
-        : (x - r.minX) / (r.maxX - r.minX);
+        ? (sampleZ - r.minZ) / (r.maxZ - r.minZ)
+        : (sampleX - r.minX) / (r.maxX - r.minX);
 
       const k = r.direction === 1 ? t : 1 - t;
-      const rampY = r.baseY + (r.topY - r.baseY) * k;
-      y = y === null ? rampY : Math.max(y, rampY);
+      const height = r.baseY + (r.topY - r.baseY) * k;
+      const surface = {
+        height,
+        underside: Math.max(r.baseY, height - r.thickness),
+        ramp: r
+      };
+
+      if (!best || surface.height > best.height) best = surface;
     }
 
-    return y;
+    return best;
+  }
+
+  rampHeightAt(x, z) {
+    return this.rampSurfaceAt(x, z)?.height ?? null;
   }
 
   groundHeightAt(x, z) {

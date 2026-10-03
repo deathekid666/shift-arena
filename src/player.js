@@ -204,6 +204,21 @@ export class PlayerController {
     const oldHead = oldY + height;
     const newHead = newY + height;
 
+    const rampSurface = this.world.rampSurfaceAt(x, z, cfg.radius * 0.7);
+    if (rampSurface) {
+      const underside = rampSurface.underside;
+      const crossedRampUnderside =
+        oldHead <= underside + 0.04 &&
+        newHead >= underside;
+
+      if (crossedRampUnderside) {
+        this.group.position.y = Math.max(0, underside - height - 0.001);
+        this.velocity.y = 0;
+        this.grounded = false;
+        return;
+      }
+    }
+
     for (const c of this.world.colliders) {
       const b = c.box;
       const overlapsXZ =
@@ -234,6 +249,29 @@ export class PlayerController {
     p.x += dx;
     p.z += dz;
     const height = this.crouching ? cfg.crouchHeight : cfg.standingHeight;
+
+    // Ramps are thin boards rather than solid wedges. The player may travel
+    // underneath when the head clears the underside, may step onto the top
+    // from the low edge, but may never pass through the board itself.
+    const rampSurface = this.world.rampSurfaceAt(p.x, p.z, cfg.radius * 0.85);
+    if (rampSurface) {
+      const feetY = this.group.position.y;
+      const headY = feetY + height;
+      const travel = Math.hypot(dx, dz);
+      const stepAllowance = Math.max(0.14, travel * 0.85 + 0.05);
+      const canStepOntoTop =
+        feetY >= rampSurface.height - stepAllowance;
+      const fullyUnder =
+        headY <= rampSurface.underside - 0.025;
+      const fullyAbove =
+        feetY >= rampSurface.height - 0.035;
+
+      if (!fullyUnder && !fullyAbove && !canStepOntoTop) {
+        if (dx !== 0) this.velocity.x = 0;
+        if (dz !== 0) this.velocity.z = 0;
+        return;
+      }
+    }
 
     for (const c of this.world.colliders) {
       const b = c.box;
