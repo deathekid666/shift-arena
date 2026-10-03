@@ -1096,3 +1096,120 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
     width: 250px;
   }
 }
+
+
+/* Build 008 — Tin Fang combat feedback */
+.fang-action b {
+  color: #e6b26f;
+  transition: color 120ms ease;
+}
+.fang-action b.missing {
+  color: #9a8471;
+}
+
+#fang-charge {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 58px);
+  width: 154px;
+  transform: translateX(-50%) translateY(7px);
+  opacity: 0;
+  transition: opacity 100ms ease, transform 100ms ease;
+  pointer-events: none;
+}
+#fang-charge.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.fang-charge-track {
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid rgba(255,220,174,.35);
+  border-radius: 999px;
+  background: rgba(12,16,20,.7);
+}
+#fang-charge-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c77a37, #ffd293);
+  box-shadow: 0 0 12px rgba(255,178,93,.65);
+}
+#fang-charge span {
+  display: block;
+  margin-top: 5px;
+  color: #f0c896;
+  font-size: 8px;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: .09em;
+  text-shadow: 0 1px 3px rgba(0,0,0,.7);
+}
+
+#crosshair.fang-charging .arm {
+  background: rgba(255,207,142,.98);
+}
+#crosshair.fang-charging .reticle-dot {
+  width: 5px;
+  height: 5px;
+  background: #ffd59f;
+  box-shadow: 0 0 12px rgba(255,179,93,.8);
+}
+#crosshair.fang-charging .reticle-ring {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-color: rgba(255,201,133,.72);
+  animation: fangAimPulse .55s ease-in-out infinite alternate;
+}
+@keyframes fangAimPulse {
+  from { transform: translate(-50%,-50%) scale(.9); opacity: .45; }
+  to { transform: translate(-50%,-50%) scale(1.08); opacity: 1; }
+}
+
+#fang-marker {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%) translateY(-5px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(231,181,119,.24);
+  background: rgba(10,15,20,.7);
+  color: #c9a374;
+  opacity: 0;
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+}
+#fang-marker.show {
+  opacity: .9;
+  transform: translateX(-50%) translateY(0);
+}
+#fang-marker i {
+  display: inline-block;
+  color: #f0bc78;
+  font-style: normal;
+  font-size: 13px;
+  transform-origin: center;
+}
+#fang-marker b {
+  color: #e9c18e;
+  font-size: 8px;
+  letter-spacing: .1em;
+}
+#fang-marker span {
+  color: #8796a2;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+@media (pointer: coarse) {
+  #fang-charge,
+  #fang-marker {
+    display: none;
+  }
+}

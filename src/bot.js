@@ -311,6 +311,33 @@ export class CombatBot {
     }, 65);
   }
 
+  takeTinFangDamage(hitZone, bodyDamage) {
+    if (!this.enabled || !this.alive) return null;
+
+    const headshot = hitZone === 'head';
+    const healthBefore = this.health;
+    const damage = headshot ? healthBefore : Math.min(bodyDamage, healthBefore);
+    this.health = headshot ? 0 : Math.max(0, this.health - bodyDamage);
+    this.flashTimer = 0.12;
+    this.bodyMaterial.emissive.setHex(headshot ? 0xffb14d : 0xffffff);
+    this.headMaterial.emissive.setHex(headshot ? 0xffb14d : 0xffffff);
+    this.updateHealthBar();
+
+    let eliminated = false;
+    if (this.health <= 0) {
+      eliminated = true;
+      this.die();
+    }
+
+    return {
+      damage,
+      headshot,
+      instantElimination: headshot,
+      eliminated,
+      health: this.health
+    };
+  }
+
   takeWeaponDamage(hitZone, baseDamage, headshotMultiplier) {
     if (!this.enabled || !this.alive) return null;
 

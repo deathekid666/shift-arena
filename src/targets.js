@@ -76,6 +76,44 @@ export class TargetRange {
     }
   }
 
+  applyTinFangDamage(mesh, bodyDamage) {
+    const target = mesh.userData.combatTarget;
+    if (!target) return null;
+
+    const hitZone = mesh.userData.hitZone;
+    if (typeof target.takeTinFangDamage === 'function') {
+      return target.takeTinFangDamage(hitZone, bodyDamage);
+    }
+
+    if (!target.alive) return null;
+
+    const headshot = hitZone === 'head';
+    const healthBefore = target.health;
+    const damage = headshot ? healthBefore : Math.min(bodyDamage, healthBefore);
+    target.health = headshot ? 0 : Math.max(0, target.health - bodyDamage);
+    target.flashTimer = 0.12;
+    target.body.material.emissive.setHex(headshot ? 0xffb14d : 0xffffff);
+    target.head.material.emissive.setHex(headshot ? 0xffb14d : 0xffffff);
+
+    let eliminated = false;
+    if (target.health <= 0) {
+      eliminated = true;
+      target.alive = false;
+      target.respawnTimer = 1.35;
+      target.body.userData.disabled = true;
+      target.head.userData.disabled = true;
+      target.group.visible = false;
+    }
+
+    return {
+      damage,
+      headshot,
+      instantElimination: headshot,
+      eliminated,
+      health: target.health
+    };
+  }
+
   applyDamage(mesh, baseDamage, headshotMultiplier) {
     const target = mesh.userData.combatTarget;
     if (!target) return null;

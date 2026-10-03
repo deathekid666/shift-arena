@@ -24,6 +24,40 @@ export class WeaponAudio {
     return buffer;
   }
 
+  playFang(type) {
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const master = this.ctx.createGain();
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    const profiles = {
+      draw: { from: 520, to: 760, duration: 0.08, gain: 0.045, wave: 'triangle' },
+      slash: { from: 900, to: 180, duration: 0.11, gain: 0.08, wave: 'sawtooth' },
+      charge: { from: 180, to: 420, duration: 0.15, gain: 0.04, wave: 'sine' },
+      throw: { from: 760, to: 120, duration: 0.14, gain: 0.09, wave: 'triangle' },
+      hit: { from: 145, to: 70, duration: 0.09, gain: 0.08, wave: 'square' },
+      head: { from: 620, to: 115, duration: 0.18, gain: 0.12, wave: 'sawtooth' },
+      recover: { from: 360, to: 680, duration: 0.10, gain: 0.055, wave: 'triangle' },
+      claw: { from: 520, to: 150, duration: 0.08, gain: 0.05, wave: 'sawtooth' }
+    };
+
+    const p = profiles[type] ?? profiles.hit;
+    master.gain.setValueAtTime(p.gain, now);
+    master.gain.exponentialRampToValueAtTime(0.001, now + p.duration);
+    master.connect(this.ctx.destination);
+
+    osc.type = p.wave;
+    osc.frequency.setValueAtTime(p.from, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(30, p.to), now + p.duration);
+    gain.gain.setValueAtTime(0.8, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + p.duration);
+    osc.connect(gain).connect(master);
+    osc.start(now);
+    osc.stop(now + p.duration);
+  }
+
   playShot(profile) {
     if (!this.ctx || !profile) return;
 

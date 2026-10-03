@@ -118,6 +118,19 @@ export const GAME_CONFIG = {
       sound: { pitch: 174, duration: 0.052, noise: 0.36, gain: 0.16 }
     }
   },
+  tinFang: {
+    meleeDamage: 40,
+    clawDamage: 22,
+    throwBodyDamage: 90,
+    meleeRange: 1.85,
+    primeThreshold: 0.28,
+    fullChargeTime: 0.82,
+    minThrowSpeed: 21,
+    maxThrowSpeed: 29,
+    projectileGravity: 8.5,
+    projectileLifetime: 4.8,
+    recoveryRadius: 0.85
+  },
   playerCombat: {
     maxHealth: 100,
     maxShield: 100,

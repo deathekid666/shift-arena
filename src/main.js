@@ -9,6 +9,7 @@ import { PlayerHealth } from './health.js';
 import { CombatBot } from './bot.js';
 import { ShellArmorSystem } from './loadout.js';
 import { PickupSystem } from './pickups.js';
+import { TinFangSystem } from './fang.js';
 
 const root = document.querySelector('#app');
 root.innerHTML = `
@@ -48,7 +49,7 @@ root.innerHTML = `
       </div>
       <div class="status-actions">
         <span><kbd>3</kbd> PLATE <b id="armor-count">×2</b></span>
-        <span><kbd>V</kbd> TIN FANG</span>
+        <span class="fang-action"><kbd>V</kbd> <b id="fang-state">FANG READY</b></span>
       </div>
       <i id="armor-progress"></i>
     </div>
@@ -58,7 +59,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 007.1 · 2 WEAPONS · MOUSE WHEEL SWITCH · 2-PLATE ARMOR</div>
+    <div id="damage-test-hint">BUILD 008 · TIN FANG · MELEE + CHARGED THROW + RECOVERY</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -72,6 +73,17 @@ root.innerHTML = `
     </div>
 
     <div id="pickup-toast"></div>
+
+    <div id="fang-charge">
+      <div class="fang-charge-track"><i id="fang-charge-fill"></i></div>
+      <span>HOLD V · RELEASE TO THROW</span>
+    </div>
+
+    <div id="fang-marker">
+      <i id="fang-marker-arrow">▲</i>
+      <b>FANG</b>
+      <span id="fang-marker-distance"></span>
+    </div>
 
     <div id="combat-hotbar" class="two-slot-hotbar">
       <div class="combat-slot gun-slot active" data-loadout-slot="0">
@@ -91,14 +103,14 @@ root.innerHTML = `
     </div>
 
     <div id="reload-state"></div>
-    <div id="controls">Mouse wheel / 1 / 2 switch guns · E swap · 3 armor plate · V Tin Fang · B bot · LMB fire · RMB ADS · R reload</div>
+    <div id="controls">Wheel / 1 / 2 guns · V tap melee · hold V + release throw · 3 armor · E swap · B bot · LMB fire · RMB ADS</div>
     <div id="touch-note">Touch controls will be added in the dedicated mobile-input phase.</div>
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 007.1</div>
+        <div class="build-tag">BUILD 008</div>
         <h1>SHIFT Arena</h1>
-        <p>Two-firearm combat loadout with fast third-person weapon switching. Use the mouse wheel or 1/2 to swap guns; armor is shown as two Battlefield-style plate segments above health.</p>
+        <p>Tin Fang combat is live. Tap V for a fast melee slash; hold V to draw and charge, then release to throw. Body throws deal 90 damage and a thrown headshot is an instant elimination. Recover the Fang by physically reaching it.</p>
         <label class="bot-toggle">
           <span class="bot-toggle-copy">
             <strong>COMBAT BOT</strong>
@@ -176,9 +188,16 @@ const slot2Name = document.querySelector('#slot2-name');
 const slot2Ammo = document.querySelector('#slot2-ammo');
 const armorCount = document.querySelector('#armor-count');
 const armorProgress = document.querySelector('#armor-progress');
+const fangState = document.querySelector('#fang-state');
+const fangCharge = document.querySelector('#fang-charge');
+const fangChargeFill = document.querySelector('#fang-charge-fill');
+const fangMarker = document.querySelector('#fang-marker');
+const fangMarkerArrow = document.querySelector('#fang-marker-arrow');
+const fangMarkerDistance = document.querySelector('#fang-marker-distance');
 
 let weapon = null;
 let armor = null;
+let fang = null;
 let bot = null;
 
 const health = new PlayerHealth({
@@ -191,6 +210,8 @@ const health = new PlayerHealth({
     crosshair.classList.add('disabled');
     weapon?.reset();
     armor?.reset();
+    fang?.reset();
+    fang?.reset();
   },
   onRespawn: () => {
     elimination.classList.remove('show');
@@ -216,6 +237,20 @@ armor = new ShellArmorSystem({
   input,
   health,
   onChange: updateArmorHud
+});
+
+fang = new TinFangSystem({
+  scene,
+  camera,
+  cameraRig: thirdCam,
+  player,
+  input,
+  world,
+  targets,
+  audio: weapon.audio,
+  onHit: (result) => showHit(result),
+  onState: updateFangHud,
+  onToast: showToast
 });
 
 const pickups = new PickupSystem({
@@ -281,6 +316,36 @@ function updateArmorHud(state) {
   document.querySelector('#player-status').classList.toggle('using-armor', state.using);
 }
 
+function updateFangHud(state) {
+  if (!state) return;
+
+  const labels = {
+    READY: 'FANG READY',
+    PRIMING: 'DRAWING',
+    CHARGING: 'THROW CHARGING',
+    SLASH: 'MELEE',
+    THROWN: 'FANG THROWN',
+    STUCK: 'RECOVER FANG',
+    LOST: 'FANG LOST',
+    CLAW: 'CLAW'
+  };
+
+  fangState.textContent = labels[state.state] ?? state.state;
+  fangState.classList.toggle('missing', !state.hasFang);
+
+  const charging = state.state === 'CHARGING';
+  fangCharge.classList.toggle('show', charging);
+  fangChargeFill.style.width = `${Math.max(0, Math.min(1, state.charge)) * 100}%`;
+  crosshair.classList.toggle('fang-charging', charging);
+
+  const showMarker = state.state === 'STUCK' && Number.isFinite(state.distance);
+  fangMarker.classList.toggle('show', showMarker);
+  if (showMarker) {
+    fangMarkerArrow.style.transform = `rotate(${state.bearing}deg)`;
+    fangMarkerDistance.textContent = `${state.distance.toFixed(1)}m`;
+  }
+}
+
 function updatePickupPrompt(info) {
   pickupPrompt.classList.toggle('show', Boolean(info?.show));
   if (!info?.show) return;
@@ -338,7 +403,9 @@ function showShieldBreak() {
 
 function showHit(result) {
   hitMarker.className = result.headshot ? 'show headshot' : 'show';
-  damagePop.textContent = `${Math.round(result.damage)}${result.headshot ? ' HEAD' : ''}${result.eliminated ? ' · DOWN' : ''}`;
+  damagePop.textContent = result.tinFang && result.headshot
+    ? 'FANG HEAD · DOWN'
+    : `${Math.round(result.damage)}${result.headshot ? ' HEAD' : ''}${result.eliminated ? ' · DOWN' : ''}`;
   damagePop.className = result.headshot ? 'show headshot' : 'show';
 
   clearTimeout(showHit.markerTimer);
@@ -366,9 +433,16 @@ function loop(now) {
 
   if (health.alive) {
     armor.update(dt);
-    weapon.setBlocked(armor.using);
 
-    const combatFacing = input.pointerLocked && !armor.using && (input.mouseDown(2) || input.mouseDown(0));
+    const preFangBlock = armor.using || fang.blocksWeapons;
+    weapon.setBlocked(preFangBlock);
+    weapon.setVisualHidden(fang.blocksWeapons);
+
+    const combatFacing =
+      input.pointerLocked &&
+      !armor.using &&
+      (input.mouseDown(2) || input.mouseDown(0) || fang.blocksWeapons);
+
     player.update(dt, thirdCam.yaw, combatFacing);
     weapon.updateSelection();
 
@@ -380,8 +454,14 @@ function loop(now) {
       scoped: weapon.scoped
     });
 
+    fang.update(dt, !armor.using);
+
+    const fangBlocking = fang.blocksWeapons;
+    weapon.setBlocked(armor.using || fangBlocking);
+    weapon.setVisualHidden(fangBlocking);
     weapon.update(dt);
-    if (!armor.using) pickups.update(dt);
+
+    if (!armor.using && !fangBlocking) pickups.update(dt);
     else updatePickupPrompt({ show: false });
   }
 
@@ -406,7 +486,9 @@ function loop(now) {
     ? `RELOADING · ${Math.round(weapon.reloadProgress * 100)}%`
     : armor?.using
       ? `APPLYING SHELL ARMOR · ${Math.round(armor.progress * 100)}%`
-      : '';
+      : fang?.state === 'CHARGING'
+        ? `TIN FANG THROW · ${Math.round(fang.chargeRatio * 100)}%`
+        : '';
 
   botState.textContent = bot.enabled ? bot.state : 'OFF';
   botHealth.textContent = bot.enabled ? String(Math.round(bot.health)) : '—';
@@ -419,7 +501,7 @@ function loop(now) {
     frames = 0;
     fpsTimer = 0;
     const speed = Math.hypot(player.velocity.x, player.velocity.z);
-    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${!health.alive ? 'ELIMINATED' : armor?.using ? 'ARMOR' : weapon.scoped ? 'SCOPED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
+    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>State <b>${!health.alive ? 'ELIMINATED' : armor?.using ? 'ARMOR' : fang?.blocksWeapons ? fang.state : weapon.scoped ? 'SCOPED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
   }
 }
 requestAnimationFrame(loop);

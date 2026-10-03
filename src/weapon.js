@@ -23,6 +23,7 @@ export class WeaponSystem {
     this.activeSlot = 0;
     this.loadout = ['tacticalAR', 'compactSMG'];
     this.blocked = false;
+    this.visualHidden = false;
     this.ammoPool = { light: 90, medium: 90, shells: 24, heavy: 8 };
     this.ammoCaps = { light: 180, medium: 180, shells: 48, heavy: 20 };
     this.startingAmmo = { ...this.ammoPool };
@@ -90,6 +91,15 @@ export class WeaponSystem {
 
   setBlocked(blocked) {
     this.blocked = Boolean(blocked);
+  }
+
+  setVisualHidden(hidden) {
+    this.visualHidden = Boolean(hidden);
+    for (const entry of this.entries) {
+      entry.model.group.visible =
+        !this.visualHidden &&
+        entry.key === this.loadout[this.activeSlot];
+    }
   }
 
   getConfig(key) {
@@ -254,7 +264,7 @@ export class WeaponSystem {
     previous.state.reloadTimer = 0;
 
     this.activeSlot = index;
-    this.active.model.group.visible = true;
+    this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
     this.emitInventory();
   }
@@ -286,7 +296,7 @@ export class WeaponSystem {
     );
     newEntry.state.isReloading = false;
     newEntry.state.reloadTimer = 0;
-    newEntry.model.group.visible = true;
+    newEntry.model.group.visible = !this.visualHidden;
 
     this.emitSwitch();
     this.emitInventory();

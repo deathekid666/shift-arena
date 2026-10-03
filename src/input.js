@@ -20,6 +20,7 @@ export class InputController {
     this.canvas = canvas;
     this.keys = new Set();
     this.pressed = new Set();
+    this.released = new Set();
     this.mouseButtons = new Set();
     this.mousePressed = new Set();
     this.pointerLocked = false;
@@ -60,6 +61,15 @@ export class InputController {
     return true;
   }
 
+  consumeReleased(action) {
+    const codes = ACTION_CODES[action];
+    if (!codes) return false;
+    const code = codes.find((candidate) => this.released.has(candidate));
+    if (!code) return false;
+    codes.forEach((candidate) => this.released.delete(candidate));
+    return true;
+  }
+
   mouseDown(button) {
     return this.mouseButtons.has(button);
   }
@@ -89,6 +99,7 @@ export class InputController {
   };
 
   onKeyUp = (event) => {
+    if (this.keys.has(event.code)) this.released.add(event.code);
     this.keys.delete(event.code);
   };
 
@@ -105,6 +116,7 @@ export class InputController {
   onBlur = () => {
     this.keys.clear();
     this.pressed.clear();
+    this.released.clear();
     this.mouseButtons.clear();
     this.mousePressed.clear();
   };

@@ -44,3 +44,20 @@ Browser-first third-person shooter prototype.
 - Mouse wheel switches between the two firearm slots.
 - Keys 1 and 2 still switch directly.
 - Mouse wheel input is debounced to prevent high-resolution wheels from toggling back and forth on one gesture.
+
+
+## Build 008 — Tin Fang
+- Tap V for a fast animated Tin Fang melee slash (40 damage).
+- Hold V past 0.28 seconds to enter the throw wind-up; release V to throw.
+- Throw speed rises with charge from 21 to 29 world units/s.
+- Projectile has real travel time and gravity rather than hitscan.
+- Thrown body hit deals 90 damage.
+- Thrown headshot uses an explicit instant-elimination rule.
+- The Fang sticks into targets, walls, floors, ramps and other world geometry.
+- Recover it by moving within 0.85 world units of the stuck Fang.
+- A HUD marker shows direction and distance to a stuck Fang.
+- If the Fang leaves the arena or times out, it is LOST until respawn.
+- While Fang is thrown/stuck/lost, V performs a weaker 22-damage claw attack.
+- Death/respawn returns the Fang.
+- Procedural animation includes draw, wind-up, charge pose, slash arc, throw snap, spinning flight/trail, stuck pulse and recovery.
+- Guns are visually holstered and firing/switching is blocked during melee/throw wind-up.
