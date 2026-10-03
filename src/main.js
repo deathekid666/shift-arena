@@ -69,7 +69,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.18B · CLEAN CHARACTER START</div>
+    <div id="damage-test-hint">BUILD 010.18C · MAIN CHARACTER DEFAULT</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -121,7 +121,7 @@ root.innerHTML = `
         <div class="build-tag">BUILD 010.18B · CLEAN CHARACTER START</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
-        <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
+        <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
         <label class="bot-toggle">
           <span class="bot-toggle-copy">
             <strong>COMBAT BOT</strong>
@@ -131,7 +131,7 @@ root.innerHTML = `
           <span class="bot-toggle-track"><i></i></span>
           <b id="bot-toggle-label">ON</b>
         </label>
-        <button type="button" disabled>PREPARING CHARACTER…</button>
+        <button type="button" disabled>ENTER LOADOUT TEST</button>
       </div>
     </div>
   </div>`;
@@ -282,10 +282,8 @@ let startupReady = false;
 
 async function prewarmGameBeforeEntry() {
   button.disabled = true;
-  button.textContent = 'PREPARING CHARACTER…';
 
   const avatar = await player.characterReady;
-  const status = player.getCharacterStatus();
 
   if (avatar) {
     characterLoadStatus.textContent = avatar.finalAsset
@@ -338,7 +336,6 @@ async function prewarmGameBeforeEntry() {
 
   startupReady = true;
   button.disabled = false;
-  button.textContent = 'ENTER LOADOUT TEST';
 }
 
 prewarmGameBeforeEntry().catch((error) => {
