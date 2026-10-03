@@ -2276,3 +2276,110 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 #character-load-status {
   transition: opacity 120ms ease;
 }
+
+
+/* Build 010.19 — pre-match opponent configuration. */
+.opponent-setup {
+  margin: 16px 0 14px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+  text-align: left;
+}
+
+.opponent-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.opponent-heading strong {
+  color: #edf5fb;
+  font-size: 12px;
+  letter-spacing: .10em;
+}
+
+.opponent-heading small {
+  color: #8094a7;
+  font-size: 9px;
+}
+
+.opponent-choice,
+.setup-segments {
+  display: grid;
+  gap: 7px;
+}
+
+.opponent-choice {
+  grid-template-columns: 1fr 1fr;
+}
+
+.setup-choice,
+.setup-segments button {
+  min-height: 38px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 9px;
+  background: rgba(7,14,23,.74);
+  color: #aab9c7;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  cursor: pointer;
+}
+
+.setup-choice.selected,
+.setup-segments button.selected {
+  border-color: rgba(115,203,255,.72);
+  background: rgba(57,143,215,.24);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(115,203,255,.12);
+}
+
+.opponent-options {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.opponent-options[hidden] {
+  display: none;
+}
+
+.setup-row {
+  display: grid;
+  gap: 7px;
+}
+
+.setup-row > span {
+  color: #8195a7;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .10em;
+}
+
+#bot-count-options {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+#bot-difficulty-options {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.opponent-choice-status {
+  margin-top: 10px;
+  min-height: 14px;
+  color: #7fc9ff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-align: center;
+}
+
+#enter-arena:disabled {
+  opacity: .46;
+  cursor: default;
+}

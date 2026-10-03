@@ -3,22 +3,39 @@ import { GAME_CONFIG } from './config.js';
 import { resolveShieldedDamage } from './damage-model.js';
 
 export class CombatBot {
-  constructor({ scene, world, player, playerHealth, targets }) {
+  constructor({
+    scene,
+    world,
+    player,
+    playerHealth,
+    targets,
+    spawnPoint = null,
+    difficulty = 'normal',
+    index = 0
+  }) {
     this.scene = scene;
     this.world = world;
     this.player = player;
     this.playerHealth = playerHealth;
     this.targets = targets;
-    this.cfg = GAME_CONFIG.bot;
+    this.index = index;
+    this.difficulty = difficulty;
+    this.cfg = buildBotConfig(GAME_CONFIG.bot, difficulty);
 
-    this.spawnPoint = world.botSpawnPoint?.clone() ?? new THREE.Vector3(-10, 0, 12);
+    this.spawnPoint =
+      spawnPoint?.clone() ??
+      world.botSpawnPoint?.clone() ??
+      new THREE.Vector3(-10, 0, 12);
     this.group = new THREE.Group();
     this.health = this.cfg.maxHealth;
     this.shield = this.cfg.maxShield;
     this.alive = true;
-    this.enabled = true;
-    this.state = 'IDLE';
+    // Bots are always born OFF. The pre-match opponent setup explicitly
+    // decides which instances are allowed to become active.
+    this.enabled = false;
+    this.state = 'OFF';
     this.fireCooldown = 0;
+    this.reactionTimer = 0;
     this.respawnTimer = 0;
     this.searchTimer = 0;
     this.flashTimer = 0;
@@ -123,6 +140,7 @@ export class CombatBot {
     this.lastSeen = null;
     this.searchTimer = 0;
     this.fireCooldown = 0;
+    this.reactionTimer = 0;
 
     if (!this.enabled) {
       this.state = 'OFF';
@@ -189,8 +207,10 @@ export class CombatBot {
     if (hasSight) {
       this.lastSeen = playerPos.clone();
       this.searchTimer = this.cfg.searchDuration;
+      this.reactionTimer += dt;
     } else {
       this.searchTimer = Math.max(0, this.searchTimer - dt);
+      this.reactionTimer = 0;
     }
 
     if (hasSight && distance <= this.cfg.attackRange) {
@@ -203,7 +223,12 @@ export class CombatBot {
         this.moveAway(playerPos, dt, 0.42);
       }
 
-      if (this.fireCooldown <= 0) this.fire();
+      if (
+        this.fireCooldown <= 0 &&
+        this.reactionTimer >= this.cfg.reactionDelay
+      ) {
+        this.fire();
+      }
       return;
     }
 
@@ -312,9 +337,30 @@ export class CombatBot {
 
     const muzzlePos = new THREE.Vector3();
     this.muzzle.getWorldPosition(muzzlePos);
-    const target = this.player.group.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+
+    const target = this.player.group.position
+      .clone()
+      .add(new THREE.Vector3(0, 1.0, 0));
+
+    const hit = Math.random() <= this.cfg.hitChance;
+
+    if (!hit) {
+      // Visible miss instead of invisible RNG: tracer lands beside/above player.
+      const missRadius = this.cfg.missRadius;
+      const angle = Math.random() * Math.PI * 2;
+      target.x += Math.cos(angle) * missRadius;
+      target.y += (Math.random() - 0.35) * missRadius * 0.55;
+      target.z += Math.sin(angle) * missRadius;
+    }
+
     this.spawnTracer(muzzlePos, target);
-    this.playerHealth.takeDamage(this.cfg.damage, this.group.position);
+
+    if (hit) {
+      this.playerHealth.takeDamage(
+        this.cfg.damage,
+        this.group.position
+      );
+    }
   }
 
   spawnTracer(from, to) {
@@ -412,6 +458,7 @@ export class CombatBot {
     this.state = 'IDLE';
     this.respawnTimer = 0;
     this.searchTimer = 0;
+    this.reactionTimer = 0;
     this.lastSeen = null;
     this.body.userData.disabled = false;
     this.head.userData.disabled = false;
@@ -464,6 +511,49 @@ export class CombatBot {
         .forEach((child) => child.quaternion.copy(q));
     }
   }
+}
+
+const BOT_DIFFICULTY = {
+  easy: {
+    moveSpeed: 0.82,
+    fireRate: 0.68,
+    damage: 0.72,
+    reactionDelay: 0.72,
+    hitChance: 0.46,
+    missRadius: 1.35
+  },
+  normal: {
+    moveSpeed: 1.0,
+    fireRate: 1.0,
+    damage: 1.0,
+    reactionDelay: 0.30,
+    hitChance: 0.72,
+    missRadius: 0.82
+  },
+  hard: {
+    moveSpeed: 1.14,
+    fireRate: 1.24,
+    damage: 1.12,
+    reactionDelay: 0.12,
+    hitChance: 0.90,
+    missRadius: 0.42
+  }
+};
+
+function buildBotConfig(base, difficulty) {
+  const profile =
+    BOT_DIFFICULTY[difficulty] ??
+    BOT_DIFFICULTY.normal;
+
+  return {
+    ...base,
+    moveSpeed: base.moveSpeed * profile.moveSpeed,
+    fireRate: base.fireRate * profile.fireRate,
+    damage: base.damage * profile.damage,
+    reactionDelay: profile.reactionDelay,
+    hitChance: profile.hitChance,
+    missRadius: profile.missRadius
+  };
 }
 
 function flatDistance(a, b) {

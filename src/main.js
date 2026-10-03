@@ -10,6 +10,7 @@ import { CombatBot } from './bot.js';
 import { ShellArmorSystem } from './loadout.js';
 import { PickupSystem } from './pickups.js';
 import { TinFangSystem } from './fang.js';
+import { GAME_CONFIG } from './config.js';
 
 // Deploy trigger for Build 010.18C.
 
@@ -71,7 +72,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.18D · FAST CHARACTER START</div>
+    <div id="damage-test-hint">BUILD 010.19 · OPPONENT SETUP</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -115,25 +116,57 @@ root.innerHTML = `
     </div>
 
     <div id="reload-state"></div>
-    <div id="controls">Wheel / 1 / 2 guns · V tap melee · hold V aim / release throw · shoot stuck Fang loose · 3 armor · E swap · B bot</div>
+    <div id="controls">Wheel / 1 / 2 guns · V tap melee · hold V aim / release throw · shoot stuck Fang loose · 3 armor · E swap · B toggle selected bots</div>
     <div id="touch-note">Touch controls will be added in the dedicated mobile-input phase.</div>
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.18B · CLEAN CHARACTER START</div>
+        <div class="build-tag">BUILD 010.19 · OPPONENT SETUP</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
-        <label class="bot-toggle">
-          <span class="bot-toggle-copy">
-            <strong>COMBAT BOT</strong>
-            <small>Can also be toggled in-game with B</small>
-          </span>
-          <input id="bot-enabled" type="checkbox" checked>
-          <span class="bot-toggle-track"><i></i></span>
-          <b id="bot-toggle-label">ON</b>
-        </label>
-        <button type="button" disabled>ENTER LOADOUT TEST</button>
+        <div class="opponent-setup">
+          <div class="opponent-heading">
+            <strong>OPPONENTS</strong>
+            <small>Choose before entering the arena</small>
+          </div>
+
+          <div class="opponent-choice" role="group" aria-label="Opponent mode">
+            <button type="button" class="setup-choice" data-opponents="off">
+              NO OPPONENTS
+            </button>
+            <button type="button" class="setup-choice" data-opponents="on">
+              ADD OPPONENTS
+            </button>
+          </div>
+
+          <div id="opponent-options" class="opponent-options" hidden>
+            <div class="setup-row">
+              <span>BOT COUNT</span>
+              <div class="setup-segments" id="bot-count-options">
+                <button type="button" data-bot-count="1">1</button>
+                <button type="button" data-bot-count="2" class="selected">2</button>
+                <button type="button" data-bot-count="3">3</button>
+                <button type="button" data-bot-count="4">4</button>
+              </div>
+            </div>
+
+            <div class="setup-row">
+              <span>DIFFICULTY</span>
+              <div class="setup-segments" id="bot-difficulty-options">
+                <button type="button" data-bot-difficulty="easy">EASY</button>
+                <button type="button" data-bot-difficulty="normal" class="selected">NORMAL</button>
+                <button type="button" data-bot-difficulty="hard">HARD</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="opponent-choice-status" class="opponent-choice-status">
+            CHOOSE OPPONENTS: YES OR NO
+          </div>
+        </div>
+
+        <button id="enter-arena" type="button" disabled>ENTER LOADOUT TEST</button>
       </div>
     </div>
   </div>`;
@@ -186,9 +219,20 @@ const respawnCountdown = document.querySelector('#respawn-countdown');
 const botState = document.querySelector('#bot-state');
 const botShield = document.querySelector('#bot-shield');
 const botHealth = document.querySelector('#bot-health');
-const botToggle = document.querySelector('#bot-enabled');
-const botToggleLabel = document.querySelector('#bot-toggle-label');
 const botDebug = document.querySelector('#bot-debug');
+const opponentModeButtons = [
+  ...document.querySelectorAll('[data-opponents]')
+];
+const opponentOptions =
+  document.querySelector('#opponent-options');
+const opponentChoiceStatus =
+  document.querySelector('#opponent-choice-status');
+const botCountButtons = [
+  ...document.querySelectorAll('[data-bot-count]')
+];
+const botDifficultyButtons = [
+  ...document.querySelectorAll('[data-bot-difficulty]')
+];
 const pickupPrompt = document.querySelector('#pickup-prompt');
 const pickupKey = document.querySelector('#pickup-key');
 const pickupTitle = document.querySelector('#pickup-title');
@@ -213,7 +257,11 @@ const characterLoadStatus = document.querySelector('#character-load-status');
 let weapon = null;
 let armor = null;
 let fang = null;
-let bot = null;
+const bots = [];
+let opponentsChosen = false;
+let opponentsEnabled = false;
+let selectedBotCount = 2;
+let selectedBotDifficulty = 'normal';
 
 const health = new PlayerHealth({
   player, world, cameraRig: thirdCam,
@@ -236,9 +284,36 @@ const health = new PlayerHealth({
   }
 });
 
-bot = new CombatBot({ scene, world, player, playerHealth: health, targets });
-setBotEnabled(botToggle.checked);
-botToggle.addEventListener('change', () => setBotEnabled(botToggle.checked));
+const baseBotSpawn =
+  world.botSpawnPoint?.clone() ??
+  new THREE.Vector3(-10, 0, 12);
+
+const botSpawnOffsets = [
+  new THREE.Vector3(0, 0, 0),
+  new THREE.Vector3(5.5, 0, -1.5),
+  new THREE.Vector3(-4.5, 0, -4.5),
+  new THREE.Vector3(6.5, 0, -7.0)
+];
+
+for (let i = 0; i < 4; i++) {
+  const spawn = baseBotSpawn
+    .clone()
+    .add(botSpawnOffsets[i]);
+
+  const bot = new CombatBot({
+    scene,
+    world,
+    player,
+    playerHealth: health,
+    targets,
+    spawnPoint: spawn,
+    difficulty: selectedBotDifficulty,
+    index: i
+  });
+
+  bot.setEnabled(false);
+  bots.push(bot);
+}
 
 weapon = new WeaponSystem({
   scene, camera, cameraRig: thirdCam, player, input, world, targets,
@@ -279,8 +354,97 @@ const pickups = new PickupSystem({
 });
 
 const start = document.querySelector('#start');
-const button = start.querySelector('button');
+const button = document.querySelector('#enter-arena');
 let startupReady = false;
+
+function updateEnterAvailability() {
+  button.disabled = !(startupReady && opponentsChosen);
+}
+
+function selectOpponentMode(enabled) {
+  opponentsChosen = true;
+  opponentsEnabled = Boolean(enabled);
+
+  opponentModeButtons.forEach((choice) => {
+    const active =
+      (choice.dataset.opponents === 'on') ===
+      opponentsEnabled;
+    choice.classList.toggle('selected', active);
+  });
+
+  opponentOptions.hidden = !opponentsEnabled;
+
+  opponentChoiceStatus.textContent =
+    opponentsEnabled
+      ? `${selectedBotCount} BOT${selectedBotCount === 1 ? '' : 'S'} · ${selectedBotDifficulty.toUpperCase()}`
+      : 'NO OPPONENTS';
+
+  // Critical safety rule: pre-match selection never activates a bot.
+  setBotsEnabled(false);
+  updateEnterAvailability();
+}
+
+function selectBotCount(count) {
+  selectedBotCount = THREE.MathUtils.clamp(
+    Number(count) || 1,
+    1,
+    4
+  );
+
+  botCountButtons.forEach((choice) => {
+    choice.classList.toggle(
+      'selected',
+      Number(choice.dataset.botCount) === selectedBotCount
+    );
+  });
+
+  if (opponentsEnabled) {
+    opponentChoiceStatus.textContent =
+      `${selectedBotCount} BOT${selectedBotCount === 1 ? '' : 'S'} · ${selectedBotDifficulty.toUpperCase()}`;
+  }
+}
+
+function selectBotDifficulty(difficulty) {
+  selectedBotDifficulty =
+    ['easy', 'normal', 'hard'].includes(difficulty)
+      ? difficulty
+      : 'normal';
+
+  botDifficultyButtons.forEach((choice) => {
+    choice.classList.toggle(
+      'selected',
+      choice.dataset.botDifficulty ===
+        selectedBotDifficulty
+    );
+  });
+
+  if (opponentsEnabled) {
+    opponentChoiceStatus.textContent =
+      `${selectedBotCount} BOT${selectedBotCount === 1 ? '' : 'S'} · ${selectedBotDifficulty.toUpperCase()}`;
+  }
+}
+
+opponentModeButtons.forEach((choice) => {
+  choice.addEventListener('click', () => {
+    selectOpponentMode(
+      choice.dataset.opponents === 'on'
+    );
+  });
+});
+
+botCountButtons.forEach((choice) => {
+  choice.addEventListener('click', () => {
+    selectBotCount(choice.dataset.botCount);
+  });
+});
+
+botDifficultyButtons.forEach((choice) => {
+  choice.addEventListener('click', () => {
+    selectBotDifficulty(
+      choice.dataset.botDifficulty
+    );
+  });
+});
 
 async function prewarmGameBeforeEntry() {
   button.disabled = true;
@@ -294,7 +458,7 @@ async function prewarmGameBeforeEntry() {
     characterLoadStatus.textContent =
       'MAIN CHARACTER FAILED · FALLBACK READY';
     startupReady = true;
-    button.disabled = false;
+    updateEnterAvailability();
     return;
   }
 
@@ -309,7 +473,7 @@ async function prewarmGameBeforeEntry() {
   );
 
   startupReady = true;
-  button.disabled = false;
+  updateEnterAvailability();
   showToast('MAIN CHARACTER READY');
 
   // Authored locomotion continues loading in the background. It is deliberately
@@ -332,7 +496,9 @@ prewarmGameBeforeEntry().catch((error) => {
 });
 
 button.addEventListener('click', () => {
-  if (!startupReady) return;
+  if (!startupReady || !opponentsChosen) return;
+
+  applyOpponentSetup();
   weapon.unlockAudio();
   start.style.display = 'none';
   input.lockPointer();
@@ -348,13 +514,111 @@ let fps = 60;
 let frames = 0;
 let fpsTimer = 0;
 
-function setBotEnabled(enabled) {
-  bot.setEnabled(enabled);
-  botToggle.checked = enabled;
-  botToggleLabel.textContent = enabled ? 'ON' : 'OFF';
-  botDebug.classList.toggle('bot-off', !enabled);
-  botState.textContent = enabled ? bot.state : 'OFF';
-  botHealth.textContent = enabled ? String(Math.round(bot.health)) : '—';
+function rebuildBotDifficulty() {
+  // Difficulty is selected pre-match. Recreate the tiny procedural bot pool
+  // so each instance owns an independent config copy.
+  bots.forEach((bot, index) => {
+    bot.difficulty = selectedBotDifficulty;
+    const profile = {
+      easy: {
+        moveSpeed: 0.82,
+        fireRate: 0.68,
+        damage: 0.72,
+        reactionDelay: 0.72,
+        hitChance: 0.46,
+        missRadius: 1.35
+      },
+      normal: {
+        moveSpeed: 1,
+        fireRate: 1,
+        damage: 1,
+        reactionDelay: 0.30,
+        hitChance: 0.72,
+        missRadius: 0.82
+      },
+      hard: {
+        moveSpeed: 1.14,
+        fireRate: 1.24,
+        damage: 1.12,
+        reactionDelay: 0.12,
+        hitChance: 0.90,
+        missRadius: 0.42
+      }
+    }[selectedBotDifficulty];
+
+    const base = GAME_CONFIG.bot;
+    bot.cfg = {
+      ...base,
+      moveSpeed: base.moveSpeed * profile.moveSpeed,
+      fireRate: base.fireRate * profile.fireRate,
+      damage: base.damage * profile.damage,
+      reactionDelay: profile.reactionDelay,
+      hitChance: profile.hitChance,
+      missRadius: profile.missRadius
+    };
+  });
+}
+
+function applyOpponentSetup() {
+  rebuildBotDifficulty();
+
+  bots.forEach((bot, index) => {
+    bot.setEnabled(
+      opponentsEnabled &&
+      index < selectedBotCount
+    );
+  });
+
+  updateBotDebug();
+}
+
+function setBotsEnabled(enabled) {
+  bots.forEach((bot, index) => {
+    bot.setEnabled(
+      Boolean(enabled) &&
+      opponentsEnabled &&
+      index < selectedBotCount
+    );
+  });
+  updateBotDebug();
+}
+
+function updateBotDebug() {
+  const active = bots.filter((bot) => bot.enabled);
+  const living = active.filter((bot) => bot.alive);
+
+  botDebug.classList.toggle(
+    'bot-off',
+    active.length === 0
+  );
+
+  if (!active.length) {
+    botState.textContent = 'OFF';
+    botShield.textContent = '—';
+    botHealth.textContent = '—';
+    return;
+  }
+
+  const attacking = active.filter(
+    (bot) => bot.state === 'ATTACK'
+  ).length;
+
+  botState.textContent =
+    `${living.length}/${active.length} · ${selectedBotDifficulty.toUpperCase()}${attacking ? ` · ${attacking} ATK` : ''}`;
+
+  botShield.textContent = String(
+    Math.round(
+      active.reduce((sum, bot) => sum + bot.shield, 0) /
+      active.length
+    )
+  );
+
+  botHealth.textContent = String(
+    Math.round(
+      active.reduce((sum, bot) => sum + bot.health, 0) /
+      active.length
+    )
+  );
 }
 
 function updateWeaponPresentation(info) {
@@ -659,11 +923,14 @@ function loop(now) {
     else updatePickupPrompt({ show: false });
   }
 
-  if (input.consume('toggleBot')) setBotEnabled(!bot.enabled);
+  if (input.consume('toggleBot') && opponentsChosen) {
+    const anyEnabled = bots.some((bot) => bot.enabled);
+    setBotsEnabled(!anyEnabled);
+  }
 
   health.update(dt);
   targets.update(dt);
-  bot.update(dt, camera);
+  bots.forEach((bot) => bot.update(dt, camera));
 
   player.group.visible = health.alive && !weapon.scoped;
   player.setCameraBodyHidden(
@@ -719,9 +986,7 @@ function loop(now) {
           ? 'TIN FANG THROW'
           : '';
 
-  botState.textContent = bot.enabled ? bot.state : 'OFF';
-  botShield.textContent = bot.enabled ? String(Math.round(bot.shield)) : '—';
-  botHealth.textContent = bot.enabled ? String(Math.round(bot.health)) : '—';
+  updateBotDebug();
   if (!health.alive) respawnCountdown.textContent = health.respawnTimer.toFixed(1);
 
   frames += 1;
