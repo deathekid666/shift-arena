@@ -43,6 +43,7 @@ export class WeaponSystem {
     this.tmpParentWorldQInv = new THREE.Quaternion();
     this.tmpDesiredWorldQ = new THREE.Quaternion();
     this.tmpDesiredLocalQ = new THREE.Quaternion();
+    this.tmpCarryCorrectionQ = new THREE.Quaternion();
     this.tmpGripOffset = new THREE.Vector3();
     this.gripPose = {
       aiming: false,
@@ -50,7 +51,8 @@ export class WeaponSystem {
       leftGrip: new THREE.Vector3(),
       muzzle: new THREE.Vector3(),
       forward: new THREE.Vector3(),
-      weaponQuaternion: new THREE.Quaternion()
+      weaponQuaternion: new THREE.Quaternion(),
+      rightHandIK: false
     };
 
     this.entries = WEAPON_ORDER.map((key) => {
@@ -435,7 +437,7 @@ export class WeaponSystem {
         );
 
         model.updateWorldMatrix(true, true);
-        this.updateGripPose();
+        this.updateGripPose(true);
         return;
       }
     }
@@ -470,14 +472,36 @@ export class WeaponSystem {
         (cfg.carryGripZ ?? -0.015) +
         state.visualKick;
 
-      this.tmpDesiredLocalQ.setFromEuler(
-        new THREE.Euler(
-          cfg.carryPitch ?? -0.11,
-          cfg.carryYaw ?? 0,
-          (cfg.carryRoll ?? -0.055) - swayX * 0.45,
-          'YXZ'
-        )
-      );
+      if (weaponSocket && cfg.handOwnedCarry) {
+        weaponSocket.getWorldQuaternion(this.tmpDesiredWorldQ);
+        this.player.group.getWorldQuaternion(this.tmpParentWorldQ);
+        this.tmpParentWorldQInv
+          .copy(this.tmpParentWorldQ)
+          .invert();
+
+        this.tmpDesiredLocalQ
+          .copy(this.tmpParentWorldQInv)
+          .multiply(this.tmpDesiredWorldQ);
+
+        this.tmpCarryCorrectionQ.setFromEuler(
+          new THREE.Euler(
+            cfg.carrySocketPitch ?? 0,
+            cfg.carrySocketYaw ?? 0,
+            (cfg.carrySocketRoll ?? 0) - swayX * 0.18,
+            'YXZ'
+          )
+        );
+        this.tmpDesiredLocalQ.multiply(this.tmpCarryCorrectionQ);
+      } else {
+        this.tmpDesiredLocalQ.setFromEuler(
+          new THREE.Euler(
+            cfg.carryPitch ?? -0.11,
+            cfg.carryYaw ?? 0,
+            (cfg.carryRoll ?? -0.055) - swayX * 0.45,
+            'YXZ'
+          )
+        );
+      }
 
       this.tmpGripOffset
         .copy(modelData.rightGrip.position)
@@ -513,7 +537,7 @@ export class WeaponSystem {
       );
 
       model.updateWorldMatrix(true, true);
-      this.updateGripPose();
+      this.updateGripPose(false);
       return;
     }
 
@@ -529,10 +553,10 @@ export class WeaponSystem {
     model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / cfg.mass, dt);
 
     model.updateWorldMatrix(true, true);
-    this.updateGripPose();
+    this.updateGripPose(false);
   }
 
-  updateGripPose() {
+  updateGripPose(rightHandIK = false) {
     const model = this.active.model;
     model.rightGrip.getWorldPosition(this.gripPose.rightGrip);
     model.leftGrip.getWorldPosition(this.gripPose.leftGrip);
@@ -548,6 +572,7 @@ export class WeaponSystem {
       this.holdPoseActive &&
       !this.visualHidden &&
       !this.blocked;
+    this.gripPose.rightHandIK = Boolean(rightHandIK);
   }
 
   getGripPose() {

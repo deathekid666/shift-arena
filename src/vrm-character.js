@@ -1344,9 +1344,6 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
   const { bones } = character;
   if (
     !gripPose?.aiming ||
-    !bones.rightUpperArm ||
-    !bones.rightLowerArm ||
-    !bones.rightHand ||
     !bones.leftUpperArm ||
     !bones.leftLowerArm ||
     !bones.leftHand
@@ -1366,28 +1363,46 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     .applyQuaternion(IK_TMP.rootQ)
     .normalize();
 
-  // Right elbow stays slightly out/down from the body; left elbow opens the
-  // opposite way so the support hand reaches the foregrip naturally.
-  bones.rightUpperArm.getWorldPosition(IK_TMP.shoulder);
-  IK_TMP.pole
-    .copy(IK_TMP.shoulder)
-    .addScaledVector(IK_TMP.right, 0.27)
-    .addScaledVector(IK_TMP.down, 0.18)
-    .addScaledVector(IK_TMP.forward, 0.04);
+  // In normal carry the right hand OWNS the weapon via weaponSocket.
+  // Solving that same hand back to a grip on the weapon creates a circular
+  // dependency and visible jitter. Right-arm IK is only enabled when the
+  // camera/shoulder owns the weapon transform (ADS / active combat pose).
+  if (
+    gripPose.rightHandIK &&
+    bones.rightUpperArm &&
+    bones.rightLowerArm &&
+    bones.rightHand
+  ) {
+    bones.rightUpperArm.getWorldPosition(IK_TMP.shoulder);
+    IK_TMP.pole
+      .copy(IK_TMP.shoulder)
+      .addScaledVector(IK_TMP.right, 0.27)
+      .addScaledVector(IK_TMP.down, 0.18)
+      .addScaledVector(IK_TMP.forward, 0.04);
 
-  solveTwoBoneIK(
-    character.root,
-    bones.rightUpperArm,
-    bones.rightLowerArm,
-    bones.rightHand,
-    gripPose.rightGrip,
-    IK_TMP.pole,
-    34,
-    dt
-  );
+    solveTwoBoneIK(
+      character.root,
+      bones.rightUpperArm,
+      bones.rightLowerArm,
+      bones.rightHand,
+      gripPose.rightGrip,
+      IK_TMP.pole,
+      32,
+      dt
+    );
 
-  character.root.updateWorldMatrix(true, true);
+    alignWeaponHandToSocket(
+      character,
+      bones.rightHand,
+      gripPose.weaponQuaternion,
+      30,
+      dt
+    );
 
+    character.root.updateWorldMatrix(true, true);
+  }
+
+  // The left hand is always the follower/support hand.
   bones.leftUpperArm.getWorldPosition(IK_TMP.shoulder);
   IK_TMP.pole
     .copy(IK_TMP.shoulder)
@@ -1402,9 +1417,46 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     bones.leftHand,
     gripPose.leftGrip,
     IK_TMP.pole,
-    34,
+    30,
     dt
   );
+}
+
+function alignWeaponHandToSocket(
+  character,
+  hand,
+  weaponWorldQuaternion,
+  lambda,
+  dt
+) {
+  const socket = character.weaponSocket;
+  if (!socket || !hand?.parent || !weaponWorldQuaternion) return;
+
+  // weaponWorldQ = handWorldQ * socketLocalQ
+  // => handWorldQ = weaponWorldQ * inverse(socketLocalQ)
+  IK_TMP.deltaWorldQ
+    .copy(socket.quaternion)
+    .invert();
+
+  IK_TMP.desiredWorldQ
+    .copy(weaponWorldQuaternion)
+    .multiply(IK_TMP.deltaWorldQ);
+
+  hand.parent.getWorldQuaternion(IK_TMP.parentWorldQ);
+  IK_TMP.parentWorldQInv
+    .copy(IK_TMP.parentWorldQ)
+    .invert();
+
+  IK_TMP.desiredLocalQ
+    .copy(IK_TMP.parentWorldQInv)
+    .multiply(IK_TMP.desiredWorldQ);
+
+  hand.quaternion.slerp(
+    IK_TMP.desiredLocalQ,
+    1 - Math.exp(-lambda * dt)
+  );
+
+  character.root.updateWorldMatrix(true, true);
 }
 
 function solveTwoBoneIK(
