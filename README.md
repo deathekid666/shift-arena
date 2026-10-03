@@ -367,3 +367,19 @@ Browser-first third-person shooter prototype.
 - Research: [Epic movement controls](https://dev.epicgames.com/documentation/fortnite/using-player-movement-devices?lang=en-US) and [public third-person motor](https://github.com/modcommunity/dot-player-controller/blob/main/addons/dot_player_controller/tp/core/dot_tps_motor.gd). Public documentation describes controls, not exact Battle Royale tuning values.
 - Run the dependency-free motion checks with `node --test tests/jump-motion.test.mjs`.
 - Local browser verification covered 15–144 FPS simulations, ceiling/ramp collisions, buffered/ledge jumps, airborne Fang use, and a direct grounded-controller comparison with 010.13 (zero position/velocity/blend difference in the exercised sprint/slide/crouch sequence).
+
+## Build 010.15 — running jump silhouette
+
+Replaced the paired knee tuck with a speed-scaled split stride: a raised lead knee,
+trailing thigh and bent rear knee. The takeoff gait chooses the lead leg once per
+jump. The stride stays open across the apex, reaches down during descent, and
+blends into the ground gait over 160 ms (80 ms into crouch/slide). Only the jump
+pose layer changes; physics, authored sprint/slide, weapons and Fang remain intact.
+
+References: [Epic jump state transitions](https://dev.epicgames.com/documentation/en-us/unreal-engine/adding-character-animation-in-unreal-engine)
+and [Quaternius animation viewer source](https://github.com/Quaternius/quaternius.github.io/blob/main/animviewer.html).
+This is an original Fortnite-inspired pose, not extracted Fortnite animation or
+an assertion of its proprietary implementation. The supplied running-jump image
+informed the lead/trail silhouette. Browser inspection used the actual VRM at
+rise, apex and descent for standing and sprint jumps; sprint apex knee separation
+was 0.566 world units versus 0.288 for standing.
