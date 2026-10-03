@@ -13,8 +13,11 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
     ? (cfg.pickupScale ?? 0.92)
     : (cfg.heldScale ?? 0.72);
 
-  // The sniper has its own authored procedural silhouette so it reads like
-  // the approved Scrap-Eye concept instead of a generic rifle with a scope.
+  // Dedicated simple silhouettes for hero scavenged weapons.
+  if (style === 'bugSprayer') {
+    return buildBugSprayerShotgun(cfg, mats, scale);
+  }
+
   if (style === 'antenna') {
     return buildScrapEyeSniper(cfg, mats, scale);
   }
@@ -184,6 +187,214 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
     leftGrip,
     muzzle,
     barrelLength,
+    primaryMesh: group.children.find((child) => child.isMesh) ?? null
+  };
+}
+
+function buildBugSprayerShotgun(cfg, mats, scale) {
+  const group = new THREE.Group();
+  group.name = 'JunkWeapon_BugSprayerShotgun';
+
+  const add = (mesh, pos, rot = null, parent = group) => {
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    parent.add(mesh);
+    mesh.castShadow = true;
+    return mesh;
+  };
+
+  // Small, readable cartoon palette: faded red sprayer paint,
+  // cream tank label, dark plumbing, dirty wrap and one yellow hose.
+  const red = mat(0xb84c38, 0.84, 0.30);
+  const redDark = mat(0x73362d, 0.90, 0.24);
+  const cream = mat(0xc9b58b, 0.96, 0.02);
+  const yellow = mat(0xc58a32, 0.82, 0.18);
+  const wood = mat(0x6b482f, 0.95, 0.04);
+  const gaugeFace = new THREE.MeshStandardMaterial({
+    color: 0xd9d1b7,
+    roughness: 0.32,
+    metalness: 0.08
+  });
+
+  // === 1. BUG-SPRAYER TANK ===
+  // One big canister is the whole receiver: deliberately simple.
+  add(
+    cylinder(0.145, 0.145, 0.42, 12, red),
+    [0, 0.035, 0.00],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // Cream center band makes the tank read like a repurposed household sprayer.
+  add(
+    cylinder(0.151, 0.151, 0.18, 12, cream),
+    [0, 0.035, -0.015],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // Two crude metal tank straps.
+  for (const z of [-0.165, 0.165]) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.151, 0.014, 5, 12),
+      mats.iron
+    );
+    add(ring, [0, 0.035, z]);
+  }
+
+  // === 2. SHORT PIPE BARREL ===
+  add(
+    cylinder(0.055, 0.060, 0.52, 10, mats.pipe),
+    [0, 0.035, -0.46],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // One clamp joining tank to pipe.
+  const frontClamp = new THREE.Mesh(
+    new THREE.TorusGeometry(0.067, 0.014, 5, 10),
+    mats.rust
+  );
+  add(frontClamp, [0, 0.035, -0.23]);
+
+  // === 3. WIDE CARTOON SCATTER NOZZLE ===
+  // Flared like a bug-sprayer horn, immediately readable as this weapon.
+  add(
+    new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        0.075,
+        0.155,
+        0.22,
+        10,
+        1,
+        true
+      ),
+      red
+    ),
+    [0, 0.035, -0.83],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // Dark lip around the nozzle.
+  const nozzleLip = new THREE.Mesh(
+    new THREE.TorusGeometry(0.155, 0.018, 5, 12),
+    redDark
+  );
+  add(nozzleLip, [0, 0.035, -0.945]);
+
+  // === 4. PUMP HANDLE ===
+  // A single wooden/plastic cylinder underneath, wrapped with dirty cloth.
+  add(
+    cylinder(0.074, 0.078, 0.25, 10, wood),
+    [0, -0.105, -0.505],
+    [Math.PI / 2, 0, 0]
+  );
+
+  for (let i = 0; i < 4; i++) {
+    const wrap = new THREE.Mesh(
+      new THREE.TorusGeometry(0.080, 0.008, 5, 10),
+      cream
+    );
+    add(wrap, [0, -0.105, -0.585 + i * 0.055]);
+  }
+
+  // === 5. SIMPLE PISTOL GRIP ===
+  add(
+    box(0.11, 0.30, 0.13, mats.rubber),
+    [0, -0.215, 0.205],
+    [-0.12, 0, 0]
+  );
+  for (let i = 0; i < 3; i++) {
+    add(
+      box(0.12, 0.035, 0.14, cream),
+      [0, -0.145 - i * 0.060, 0.205 + i * 0.006],
+      [-0.12, 0, i % 2 ? 0.035 : -0.025]
+    );
+  }
+
+  // Tiny trigger guard only.
+  const guard = new THREE.Mesh(
+    new THREE.TorusGeometry(0.070, 0.010, 5, 10, Math.PI * 1.45),
+    mats.bolt
+  );
+  add(guard, [0, -0.118, 0.120], [Math.PI / 2, 0, -0.40]);
+
+  // === 6. ONE PRESSURE GAUGE ===
+  const gaugeRoot = new THREE.Group();
+  gaugeRoot.position.set(0.115, 0.175, -0.02);
+  group.add(gaugeRoot);
+
+  add(
+    cylinder(0.058, 0.058, 0.025, 12, mats.iron),
+    [0, 0, 0],
+    [0, 0, Math.PI / 2],
+    gaugeRoot
+  );
+  add(
+    cylinder(0.047, 0.047, 0.028, 12, gaugeFace),
+    [0.014, 0, 0],
+    [0, 0, Math.PI / 2],
+    gaugeRoot
+  );
+
+  // Simple needle on visible gauge face.
+  add(
+    box(0.010, 0.060, 0.008, redDark),
+    [0.030, 0.012, 0],
+    [0, 0, -0.55],
+    gaugeRoot
+  );
+
+  // === 7. ONE YELLOW HOSE ===
+  const hoseCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-0.105, 0.105, 0.10),
+    new THREE.Vector3(-0.155, 0.155, -0.08),
+    new THREE.Vector3(-0.145, 0.080, -0.36),
+    new THREE.Vector3(-0.090, -0.005, -0.58)
+  ]);
+  const hose = new THREE.Mesh(
+    new THREE.TubeGeometry(hoseCurve, 12, 0.013, 5, false),
+    yellow
+  );
+  hose.castShadow = true;
+  group.add(hose);
+
+  // Small rear handle/brace from the original sprayer body.
+  add(
+    box(0.15, 0.055, 0.22, redDark),
+    [0, 0.160, 0.155],
+    [0.03, 0, 0]
+  );
+
+  // Gameplay sockets line up with visible grip geometry.
+  const rightGrip = new THREE.Object3D();
+  rightGrip.name = 'RightGripSocket';
+  rightGrip.position.set(
+    cfg.rightGripX ?? 0,
+    cfg.rightGripY ?? -0.205,
+    cfg.rightGripZ ?? 0.205
+  );
+  group.add(rightGrip);
+
+  const leftGrip = new THREE.Object3D();
+  leftGrip.name = 'LeftForegripSocket';
+  leftGrip.position.set(
+    cfg.leftGripX ?? 0,
+    cfg.leftGripY ?? -0.095,
+    cfg.foregripZ ?? -0.515
+  );
+  group.add(leftGrip);
+
+  const muzzle = new THREE.Object3D();
+  muzzle.name = 'MuzzleSocket';
+  muzzle.position.set(0, 0.035, -0.965);
+  group.add(muzzle);
+
+  group.scale.setScalar(scale);
+
+  return {
+    group,
+    rightGrip,
+    leftGrip,
+    muzzle,
+    barrelLength: 0.52,
     primaryMesh: group.children.find((child) => child.isMesh) ?? null
   };
 }
