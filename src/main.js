@@ -72,7 +72,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.19 · OPPONENT SETUP</div>
+    <div id="damage-test-hint">BUILD 010.19A · PICKED OPTIONS</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -121,7 +121,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.19 · OPPONENT SETUP</div>
+        <div class="build-tag">BUILD 010.19A · PICKED OPTIONS</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
@@ -370,14 +370,18 @@ function selectOpponentMode(enabled) {
       (choice.dataset.opponents === 'on') ===
       opponentsEnabled;
     choice.classList.toggle('selected', active);
+    choice.setAttribute(
+      'aria-pressed',
+      String(active)
+    );
   });
 
   opponentOptions.hidden = !opponentsEnabled;
 
   opponentChoiceStatus.textContent =
     opponentsEnabled
-      ? `${selectedBotCount} BOT${selectedBotCount === 1 ? '' : 'S'} · ${selectedBotDifficulty.toUpperCase()}`
-      : 'NO OPPONENTS';
+      ? `✓ ${selectedBotCount} BOT${selectedBotCount === 1 ? '' : 'S'} · ${selectedBotDifficulty.toUpperCase()}`
+      : '✓ NO OPPONENTS';
 
   // Critical safety rule: pre-match selection never activates a bot.
   setBotsEnabled(false);
@@ -392,9 +396,12 @@ function selectBotCount(count) {
   );
 
   botCountButtons.forEach((choice) => {
-    choice.classList.toggle(
-      'selected',
-      Number(choice.dataset.botCount) === selectedBotCount
+    const active =
+      Number(choice.dataset.botCount) === selectedBotCount;
+    choice.classList.toggle('selected', active);
+    choice.setAttribute(
+      'aria-pressed',
+      String(active)
     );
   });
 
@@ -411,10 +418,13 @@ function selectBotDifficulty(difficulty) {
       : 'normal';
 
   botDifficultyButtons.forEach((choice) => {
-    choice.classList.toggle(
-      'selected',
+    const active =
       choice.dataset.botDifficulty ===
-        selectedBotDifficulty
+        selectedBotDifficulty;
+    choice.classList.toggle('selected', active);
+    choice.setAttribute(
+      'aria-pressed',
+      String(active)
     );
   });
 
@@ -425,6 +435,7 @@ function selectBotDifficulty(difficulty) {
 }
 
 opponentModeButtons.forEach((choice) => {
+  choice.setAttribute('aria-pressed', 'false');
   choice.addEventListener('click', () => {
     selectOpponentMode(
       choice.dataset.opponents === 'on'
@@ -433,12 +444,25 @@ opponentModeButtons.forEach((choice) => {
 });
 
 botCountButtons.forEach((choice) => {
+  choice.setAttribute(
+    'aria-pressed',
+    String(
+      Number(choice.dataset.botCount) === selectedBotCount
+    )
+  );
   choice.addEventListener('click', () => {
     selectBotCount(choice.dataset.botCount);
   });
 });
 
 botDifficultyButtons.forEach((choice) => {
+  choice.setAttribute(
+    'aria-pressed',
+    String(
+      choice.dataset.botDifficulty ===
+        selectedBotDifficulty
+    )
+  );
   choice.addEventListener('click', () => {
     selectBotDifficulty(
       choice.dataset.botDifficulty
