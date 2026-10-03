@@ -10,7 +10,7 @@ export class CombatBot {
     this.targets = targets;
     this.cfg = GAME_CONFIG.bot;
 
-    this.spawnPoint = new THREE.Vector3(6.5, 0, -4.5);
+    this.spawnPoint = new THREE.Vector3(-6.5, 0, -4.5);
     this.group = new THREE.Group();
     this.health = this.cfg.maxHealth;
     this.alive = true;
