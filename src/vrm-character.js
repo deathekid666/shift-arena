@@ -843,31 +843,49 @@ function attachRoachAccessories(bones) {
     centerRidge.position.set(0, -0.045, -0.082);
     shellRoot.add(centerRidge);
 
-    // Twin elytra are the main back silhouette: long tapered roach wing-cases
-    // sitting over the smaller segmented foundation.
+    // Compact elytra: short, broad wing-cases that sit high on the back.
+    // They should read as shell covers, not long hanging wings.
     for (const side of [-1, 1]) {
       const elytron = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.105, 0.34, 7, 12),
+        new THREE.CapsuleGeometry(0.115, 0.18, 7, 12),
         side < 0 ? mats.shell : mats.shellLight
       );
       elytron.name =
         side < 0 ? 'LeftElytron' : 'RightElytron';
-      elytron.scale.set(0.78, 1.0, 0.40);
-      elytron.position.set(side * 0.080, -0.055, -0.082);
-      elytron.rotation.z = side * 0.035;
-      elytron.rotation.x = -0.035;
+
+      elytron.scale.set(0.88, 0.72, 0.48);
+      elytron.position.set(side * 0.072, 0.015, -0.078);
+
+      elytron.rotation.z = side * 0.085;
+      elytron.rotation.x = -0.10;
+      elytron.rotation.y = side * 0.03;
+
       elytron.castShadow = true;
       elytron.receiveShadow = true;
       shellRoot.add(elytron);
 
       const elytraStripe = new THREE.Mesh(
-        new THREE.BoxGeometry(0.012, 0.380, 0.014),
+        new THREE.BoxGeometry(0.010, 0.205, 0.014),
         mats.shellHighlight
       );
-      elytraStripe.position.set(side * 0.084, -0.040, -0.124);
-      elytraStripe.rotation.z = side * 0.025;
+      elytraStripe.position.set(side * 0.076, 0.010, -0.118);
+      elytraStripe.rotation.z = side * 0.045;
       shellRoot.add(elytraStripe);
     }
+
+    // Shared shoulder-back plate visually roots both wing-cases into the
+    // carapace and removes the "two separate objects glued on" look.
+    const wingBasePlate = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 14, 10),
+      mats.shellLight
+    );
+    wingBasePlate.name = 'WingBasePlate';
+    wingBasePlate.scale.set(0.18, 0.08, 0.10);
+    wingBasePlate.position.set(0, 0.055, -0.060);
+    wingBasePlate.rotation.x = -0.08;
+    wingBasePlate.castShadow = true;
+    wingBasePlate.receiveShadow = true;
+    shellRoot.add(wingBasePlate);
     // Bright perimeter accents stop the backpack from reading as a brown blob.
     for (const side of [-1, 1]) {
       const shellRail = new THREE.Mesh(
