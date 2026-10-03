@@ -378,21 +378,78 @@ function fitAvatar(scene, modelRoot, targetHeight) {
 
 function attachRoachAccessories(bones) {
   const mats = {
-    shell: new THREE.MeshToonMaterial({ color: 0x5c2e20 }),
-    shellLight: new THREE.MeshToonMaterial({ color: 0x7e4028 }),
-    orange: new THREE.MeshToonMaterial({ color: 0xc76f34 }),
-    orangeBright: new THREE.MeshToonMaterial({ color: 0xe58a43 }),
-    cream: new THREE.MeshToonMaterial({ color: 0xf0ddbd }),
-    creamDark: new THREE.MeshToonMaterial({ color: 0xc8aa7d }),
-    dark: new THREE.MeshToonMaterial({ color: 0x2f2522 }),
-    leather: new THREE.MeshToonMaterial({ color: 0x4a3026 }),
-    metal: new THREE.MeshStandardMaterial({ color: 0x8f673f, roughness: 0.42, metalness: 0.55 }),
+    // Shell is the hero material: richer highlights than the temporary toon
+    // primitives, but still low-poly/cartoon through flatShading.
+    shell: new THREE.MeshStandardMaterial({
+      color: 0x55291f,
+      roughness: 0.34,
+      metalness: 0.08,
+      flatShading: true
+    }),
+    shellLight: new THREE.MeshStandardMaterial({
+      color: 0x7b3d28,
+      roughness: 0.30,
+      metalness: 0.06,
+      flatShading: true
+    }),
+    shellHighlight: new THREE.MeshStandardMaterial({
+      color: 0xa85630,
+      roughness: 0.26,
+      metalness: 0.05,
+      emissive: 0x1b0803,
+      emissiveIntensity: 0.16,
+      flatShading: true
+    }),
+    orange: new THREE.MeshStandardMaterial({
+      color: 0xc96d32,
+      roughness: 0.44,
+      metalness: 0.04,
+      flatShading: true
+    }),
+    orangeBright: new THREE.MeshStandardMaterial({
+      color: 0xea9146,
+      roughness: 0.38,
+      metalness: 0.03,
+      emissive: 0x241006,
+      emissiveIntensity: 0.12,
+      flatShading: true
+    }),
+    cream: new THREE.MeshStandardMaterial({
+      color: 0xead7b7,
+      roughness: 0.88,
+      metalness: 0.0,
+      flatShading: true
+    }),
+    creamDark: new THREE.MeshStandardMaterial({
+      color: 0xc6a878,
+      roughness: 0.82,
+      metalness: 0.0,
+      flatShading: true
+    }),
+    dark: new THREE.MeshStandardMaterial({
+      color: 0x2a2321,
+      roughness: 0.76,
+      metalness: 0.08,
+      flatShading: true
+    }),
+    leather: new THREE.MeshStandardMaterial({
+      color: 0x493126,
+      roughness: 0.92,
+      metalness: 0.0,
+      flatShading: true
+    }),
+    metal: new THREE.MeshStandardMaterial({
+      color: 0x9b7448,
+      roughness: 0.34,
+      metalness: 0.62,
+      flatShading: true
+    }),
     lens: new THREE.MeshStandardMaterial({
-      color: 0x29221f,
-      roughness: 0.14,
-      metalness: 0.68,
-      emissive: 0x120d0a,
-      emissiveIntensity: 0.12
+      color: 0x1b2426,
+      roughness: 0.08,
+      metalness: 0.74,
+      emissive: 0x0c1516,
+      emissiveIntensity: 0.20
     })
   };
 
@@ -431,6 +488,55 @@ function attachRoachAccessories(bones) {
     goggles.add(bridge);
     refs.goggles = goggles;
 
+    // Cockroach-hero brow shell: frames the face without covering the eyes.
+    const browShell = new THREE.Group();
+    browShell.name = 'RoachScoutBrowShell';
+    browShell.position.set(0, 0.052, 0.045);
+    bones.head.add(browShell);
+
+    const browPlate = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 16, 10),
+      mats.shell
+    );
+    browPlate.scale.set(0.155, 0.050, 0.085);
+    browPlate.position.set(0, 0.058, -0.018);
+    browPlate.rotation.x = -0.16;
+    browPlate.castShadow = true;
+    browPlate.receiveShadow = true;
+    browShell.add(browPlate);
+
+    const browRidge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.205, 0.016, 0.020),
+      mats.shellHighlight
+    );
+    browRidge.position.set(0, 0.048, 0.058);
+    browRidge.rotation.x = -0.12;
+    browShell.add(browRidge);
+
+    for (const side of [-1, 1]) {
+      const temple = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5, 12, 8),
+        mats.shellLight
+      );
+      temple.scale.set(0.050, 0.075, 0.052);
+      temple.position.set(side * 0.102, -0.006, 0.018);
+      temple.rotation.z = side * -0.18;
+      temple.castShadow = true;
+      temple.receiveShadow = true;
+      browShell.add(temple);
+
+      const cheekGuard = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5, 12, 8),
+        mats.shell
+      );
+      cheekGuard.scale.set(0.035, 0.060, 0.028);
+      cheekGuard.position.set(side * 0.092, -0.072, 0.070);
+      cheekGuard.rotation.z = side * 0.24;
+      cheekGuard.castShadow = true;
+      browShell.add(cheekGuard);
+    }
+    refs.browShell = browShell;
+
     // Extra stylized hair crest to push the temporary base toward our sheet.
     const crest = new THREE.Group();
     crest.name = 'RoachScoutHairCrest';
@@ -438,10 +544,10 @@ function attachRoachAccessories(bones) {
     bones.head.add(crest);
 
     const tuftData = [
-      [-0.060, 0.020, 0.025, 0.040, 0.085, -0.32],
-      [-0.020, 0.040, 0.030, 0.050, 0.105, -0.10],
-      [0.025, 0.044, 0.028, 0.052, 0.112, 0.08],
-      [0.066, 0.020, 0.018, 0.043, 0.090, 0.30]
+      [-0.055, 0.016, 0.018, 0.030, 0.072, -0.28],
+      [-0.018, 0.032, 0.022, 0.038, 0.088, -0.08],
+      [0.022, 0.034, 0.020, 0.040, 0.094, 0.07],
+      [0.058, 0.015, 0.014, 0.032, 0.074, 0.27]
     ];
     for (const [x,y,z,r,h,rz] of tuftData) {
       const tuft = new THREE.Mesh(
@@ -532,15 +638,56 @@ function attachRoachAccessories(bones) {
     torsoGear.name = 'RoachScoutTorsoGear';
     chest.add(torsoGear);
 
-    // Cream chest bib.
-    const bib = new THREE.Mesh(
+    // Layered front carapace: large enough to define the hero torso, with a
+    // soft cream under-panel so the shell does not become one muddy mass.
+    const chestUnderlay = new THREE.Mesh(
       new THREE.SphereGeometry(0.5, 18, 12),
       mats.cream
     );
-    bib.scale.set(0.155, 0.205, 0.035);
-    bib.position.set(0, -0.055, 0.105);
-    bib.castShadow = true;
-    torsoGear.add(bib);
+    chestUnderlay.scale.set(0.168, 0.225, 0.040);
+    chestUnderlay.position.set(0, -0.060, 0.102);
+    chestUnderlay.castShadow = true;
+    chestUnderlay.receiveShadow = true;
+    torsoGear.add(chestUnderlay);
+
+    const chestPlate = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 16, 10),
+      mats.shellLight
+    );
+    chestPlate.scale.set(0.145, 0.125, 0.047);
+    chestPlate.position.set(0, 0.020, 0.135);
+    chestPlate.castShadow = true;
+    chestPlate.receiveShadow = true;
+    torsoGear.add(chestPlate);
+
+    const abdomenPlate = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 14, 9),
+      mats.shell
+    );
+    abdomenPlate.scale.set(0.120, 0.092, 0.044);
+    abdomenPlate.position.set(0, -0.118, 0.132);
+    abdomenPlate.castShadow = true;
+    abdomenPlate.receiveShadow = true;
+    torsoGear.add(abdomenPlate);
+
+    const sternum = new THREE.Mesh(
+      new THREE.BoxGeometry(0.026, 0.245, 0.020),
+      mats.shellHighlight
+    );
+    sternum.position.set(0, -0.045, 0.168);
+    torsoGear.add(sternum);
+
+    for (const side of [-1, 1]) {
+      const ribPlate = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5, 12, 8),
+        mats.orange
+      );
+      ribPlate.scale.set(0.052, 0.115, 0.030);
+      ribPlate.position.set(side * 0.122, -0.050, 0.120);
+      ribPlate.rotation.z = side * 0.15;
+      ribPlate.castShadow = true;
+      torsoGear.add(ribPlate);
+    }
 
     // Crossed dark harness straps.
     for (const side of [-1, 1]) {
@@ -573,7 +720,20 @@ function attachRoachAccessories(bones) {
       );
       cap.scale.set(0.080, 0.048, 0.088);
       cap.position.set(side * 0.016, 0.006, -0.010);
+      cap.castShadow = true;
+      cap.receiveShadow = true;
       boneNode.add(cap);
+
+      const flare = new THREE.Mesh(
+        new THREE.ConeGeometry(0.065, 0.115, 6),
+        mats.shellHighlight
+      );
+      flare.scale.z = 0.55;
+      flare.position.set(side * 0.045, 0.020, -0.015);
+      flare.rotation.z = side * -1.10;
+      flare.rotation.x = -0.18;
+      flare.castShadow = true;
+      boneNode.add(flare);
     }
 
     // Segmented shell backpack — broad top, tapered bottom, visible seams.
@@ -618,6 +778,27 @@ function attachRoachAccessories(bones) {
     );
     centerRidge.position.set(0, -0.045, -0.082);
     shellRoot.add(centerRidge);
+    // Bright perimeter accents stop the backpack from reading as a brown blob.
+    for (const side of [-1, 1]) {
+      const shellRail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.018, 0.430, 0.018),
+        mats.shellHighlight
+      );
+      shellRail.position.set(side * 0.142, -0.035, -0.060);
+      shellRail.rotation.z = side * 0.055;
+      shellRoot.add(shellRail);
+    }
+
+    const shellTip = new THREE.Mesh(
+      new THREE.ConeGeometry(0.080, 0.145, 7),
+      mats.shell
+    );
+    shellTip.position.set(0, -0.335, -0.025);
+    shellTip.rotation.x = Math.PI;
+    shellTip.scale.z = 0.58;
+    shellTip.castShadow = true;
+    shellRoot.add(shellTip);
+
     refs.shellRoot = shellRoot;
   }
 
@@ -659,6 +840,27 @@ function attachRoachAccessories(bones) {
       flap.rotation.y = side * 0.18;
       belt.add(flap);
     }
+    for (const side of [-1, 1]) {
+      const hipPlate = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5, 14, 9),
+        mats.shellLight
+      );
+      hipPlate.scale.set(0.070, 0.105, 0.045);
+      hipPlate.position.set(side * 0.160, -0.055, 0.015);
+      hipPlate.rotation.z = side * 0.16;
+      hipPlate.castShadow = true;
+      hipPlate.receiveShadow = true;
+      belt.add(hipPlate);
+
+      const hipEdge = new THREE.Mesh(
+        new THREE.BoxGeometry(0.018, 0.120, 0.020),
+        mats.orangeBright
+      );
+      hipEdge.position.set(side * 0.196, -0.055, 0.022);
+      hipEdge.rotation.z = side * 0.10;
+      belt.add(hipEdge);
+    }
+
     refs.belt = belt;
   }
 
@@ -672,7 +874,50 @@ function attachRoachAccessories(bones) {
     cuff.name = side < 0 ? 'LeftWristCuff' : 'RightWristCuff';
     cuff.rotation.y = Math.PI / 2;
     cuff.position.set(side * -0.015, 0, 0);
+    cuff.castShadow = true;
     handNode.add(cuff);
+
+    const gauntlet = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 12, 8),
+      mats.shellLight
+    );
+    gauntlet.name =
+      side < 0 ? 'LeftGauntletPlate' : 'RightGauntletPlate';
+    gauntlet.scale.set(0.048, 0.030, 0.070);
+    gauntlet.position.set(0, 0.018, 0.035);
+    gauntlet.rotation.x = -0.18;
+    gauntlet.castShadow = true;
+    handNode.add(gauntlet);
+  }
+
+  // Thigh armor gives the lower body a deliberate hero silhouette instead of
+  // leaving all visual weight on the torso.
+  for (const [legNode, side] of [
+    [bones.leftUpperLeg, -1],
+    [bones.rightUpperLeg, 1]
+  ]) {
+    if (!legNode) continue;
+
+    const thighPlate = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 14, 9),
+      mats.shell
+    );
+    thighPlate.name =
+      side < 0 ? 'LeftThighArmor' : 'RightThighArmor';
+    thighPlate.scale.set(0.075, 0.125, 0.040);
+    thighPlate.position.set(side * 0.010, -0.110, 0.055);
+    thighPlate.rotation.z = side * 0.055;
+    thighPlate.castShadow = true;
+    thighPlate.receiveShadow = true;
+    legNode.add(thighPlate);
+
+    const thighStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(0.018, 0.165, 0.016),
+      mats.orangeBright
+    );
+    thighStripe.position.set(side * 0.050, -0.110, 0.078);
+    thighStripe.rotation.z = side * 0.04;
+    legNode.add(thighStripe);
   }
 
   // Knee armor.
@@ -694,7 +939,16 @@ function attachRoachAccessories(bones) {
     );
     cap.scale.set(0.050, 0.038, 0.025);
     cap.position.set(0, -0.032, 0.083);
+    cap.castShadow = true;
     legNode.add(cap);
+
+    const kneeEdge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.090, 0.015, 0.018),
+      mats.shellHighlight
+    );
+    kneeEdge.position.set(0, -0.010, 0.102);
+    kneeEdge.rotation.z = side * 0.03;
+    legNode.add(kneeEdge);
   }
 
   // Cream/orange boot armor overlays.
@@ -726,34 +980,76 @@ function attachRoachAccessories(bones) {
       mats.dark
     );
     sole.position.set(0, -0.020, 0.045);
+    sole.castShadow = true;
     boot.add(sole);
+
+    const heel = new THREE.Mesh(
+      new THREE.BoxGeometry(0.085, 0.055, 0.055),
+      mats.shell
+    );
+    heel.position.set(0, 0.010, -0.040);
+    heel.castShadow = true;
+    boot.add(heel);
+
+    const bootCuff = new THREE.Mesh(
+      new THREE.TorusGeometry(0.050, 0.012, 6, 14),
+      mats.orangeBright
+    );
+    bootCuff.rotation.x = Math.PI / 2;
+    bootCuff.position.set(0, 0.070, -0.005);
+    boot.add(bootCuff);
   }
 
   return refs;
 }
 
 function retintAvatar(scene) {
-  const warmSkin = new THREE.Color(0xd99866);
-  const hairBrown = new THREE.Color(0x5f3324);
-  const cream = new THREE.Color(0xe6d0aa);
-  const dark = new THREE.Color(0x3b2a24);
+  const warmSkin = new THREE.Color(0xd79a72);
+  const hairBrown = new THREE.Color(0x4f2b22);
+  const cream = new THREE.Color(0xe8d5b6);
+  const dark = new THREE.Color(0x332824);
+  const shellBrown = new THREE.Color(0x6b3526);
 
   scene.traverse((object) => {
     if (!object.isMesh && !object.isSkinnedMesh) return;
-    const materials = Array.isArray(object.material) ? object.material : [object.material];
+
+    object.castShadow = true;
+    object.receiveShadow = true;
+
+    const materials = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
 
     for (const material of materials) {
       if (!material?.color) continue;
-      const name = `${object.name} ${material.name ?? ''}`.toLowerCase();
+
+      const name =
+        `${object.name} ${material.name ?? ''}`.toLowerCase();
 
       if (/hair|bang|fringe/.test(name)) {
-        material.color.lerp(hairBrown, 0.68);
-      } else if (/face|skin|body|head/.test(name) && !/eye|brow|lash|mouth/.test(name)) {
-        material.color.lerp(warmSkin, 0.18);
-      } else if (/cloth|shirt|top|bottom|pants|short|uniform|dress|outfit/.test(name)) {
-        material.color.lerp(cream, 0.34);
+        material.color.lerp(hairBrown, 0.76);
+        if ('roughness' in material) material.roughness = 0.48;
+      } else if (
+        /face|skin|body|head/.test(name) &&
+        !/eye|brow|lash|mouth/.test(name)
+      ) {
+        material.color.lerp(warmSkin, 0.16);
+        if ('roughness' in material) material.roughness = 0.62;
+      } else if (
+        /cloth|shirt|top|bottom|pants|short|uniform|dress|outfit/.test(name)
+      ) {
+        material.color.lerp(cream, 0.42);
+        if ('roughness' in material) material.roughness = 0.88;
       } else if (/shoe|boot|belt|strap/.test(name)) {
-        material.color.lerp(dark, 0.38);
+        material.color.lerp(dark, 0.52);
+        if ('roughness' in material) material.roughness = 0.76;
+      } else if (/armor|shell|plate|guard/.test(name)) {
+        material.color.lerp(shellBrown, 0.38);
+        if ('roughness' in material) material.roughness = 0.36;
+      }
+
+      if ('metalness' in material && !/eye|skin|face/.test(name)) {
+        material.metalness = Math.min(material.metalness ?? 0, 0.12);
       }
 
       material.needsUpdate = true;
