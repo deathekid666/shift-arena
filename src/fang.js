@@ -285,29 +285,25 @@ export class TinFangSystem {
           };
 
     if (this.useRealHand) {
-      this.player.setFangAnimation?.({
-        mode: 'aim',
-        t: charge,
-        compact: this.compactAim,
-        aimPitch: this.cameraRig.pitch,
-        aimYaw: angleDelta(this.player.group.rotation.y, this.cameraRig.yaw)
-      });
+      this.applyRealThrowPose('aim', charge, this.compactAim, dt);
     } else {
       this.dampArmPose(target, aiming ? 16 : 20, dt);
     }
 
-    this.player.body.rotation.z = THREE.MathUtils.damp(
-      this.player.body.rotation.z,
-      aiming ? (this.compactAim ? -0.025 : -0.065) : -0.025,
-      14,
-      dt
-    );
-    this.player.body.rotation.y = THREE.MathUtils.damp(
-      this.player.body.rotation.y,
-      aiming ? (this.compactAim ? 0.045 : 0.10) : 0.03,
-      14,
-      dt
-    );
+    if (!this.useRealHand) {
+      this.player.body.rotation.z = THREE.MathUtils.damp(
+        this.player.body.rotation.z,
+        aiming ? (this.compactAim ? -0.025 : -0.065) : -0.025,
+        14,
+        dt
+      );
+      this.player.body.rotation.y = THREE.MathUtils.damp(
+        this.player.body.rotation.y,
+        aiming ? (this.compactAim ? 0.045 : 0.10) : 0.03,
+        14,
+        dt
+      );
+    }
 
     setFangGlow(this.handFang, aiming ? 0.10 + charge * 0.42 : 0.03);
 
@@ -343,111 +339,113 @@ export class TinFangSystem {
   }
 
   updateRelease(dt) {
+    const previousTime = this.actionTime;
     this.actionTime += dt;
+    // Sample the release key exactly even when a slow frame crosses it.
+    const releaseTime = this.actionDuration * this.cfg.releaseMoment;
+    if (!this.releaseLaunched && previousTime < releaseTime && this.actionTime >= releaseTime) {
+      this.actionTime = releaseTime;
+    }
     const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
 
     if (this.useRealHand) {
-      this.player.setFangAnimation?.({
-        mode: 'release',
-        t,
-        compact: this.releaseCompact,
-        aimPitch: this.cameraRig.pitch,
-        aimYaw: angleDelta(this.player.group.rotation.y, this.cameraRig.yaw)
-      });
+      this.applyRealThrowPose('release', t, this.releaseCompact, dt);
     }
 
-    if (this.releaseCompact) {
-      if (t < 0.24) {
-        const k = easeInOut(t / 0.24);
-        this.setArmPose({
-          shoulder: [
-            THREE.MathUtils.lerp(-0.62, -0.78, k),
-            THREE.MathUtils.lerp(-0.30, -0.36, k),
-            THREE.MathUtils.lerp(-0.66, -0.78, k)
-          ],
-          elbow: [
-            THREE.MathUtils.lerp(1.02, 1.16, k),
-            0.02,
-            THREE.MathUtils.lerp(-0.48, -0.58, k)
-          ],
-          hand: [-0.34, -0.06, 0.22]
-        }, 1);
-      } else if (t < 0.68) {
-        const k = easeInOut((t - 0.24) / 0.44);
-        this.setArmPose({
-          shoulder: [
-            THREE.MathUtils.lerp(-0.78, 0.46, k),
-            THREE.MathUtils.lerp(-0.36, 0.06, k),
-            THREE.MathUtils.lerp(-0.78, -0.08, k)
-          ],
-          elbow: [
-            THREE.MathUtils.lerp(1.16, -0.58, k),
-            THREE.MathUtils.lerp(0.02, -0.05, k),
-            THREE.MathUtils.lerp(-0.58, -0.14, k)
-          ],
-          hand: [
-            THREE.MathUtils.lerp(-0.34, 0.24, k),
-            -0.04,
-            THREE.MathUtils.lerp(0.22, -0.18, k)
-          ]
-        }, 1);
-        this.player.body.rotation.y = THREE.MathUtils.lerp(0.045, -0.045, k);
+    if (!this.useRealHand) {
+      if (this.releaseCompact) {
+        if (t < 0.24) {
+          const k = easeInOut(t / 0.24);
+          this.setArmPose({
+            shoulder: [
+              THREE.MathUtils.lerp(-0.62, -0.78, k),
+              THREE.MathUtils.lerp(-0.30, -0.36, k),
+              THREE.MathUtils.lerp(-0.66, -0.78, k)
+            ],
+            elbow: [
+              THREE.MathUtils.lerp(1.02, 1.16, k),
+              0.02,
+              THREE.MathUtils.lerp(-0.48, -0.58, k)
+            ],
+            hand: [-0.34, -0.06, 0.22]
+          }, 1);
+        } else if (t < 0.68) {
+          const k = easeInOut((t - 0.24) / 0.44);
+          this.setArmPose({
+            shoulder: [
+              THREE.MathUtils.lerp(-0.78, 0.46, k),
+              THREE.MathUtils.lerp(-0.36, 0.06, k),
+              THREE.MathUtils.lerp(-0.78, -0.08, k)
+            ],
+            elbow: [
+              THREE.MathUtils.lerp(1.16, -0.58, k),
+              THREE.MathUtils.lerp(0.02, -0.05, k),
+              THREE.MathUtils.lerp(-0.58, -0.14, k)
+            ],
+            hand: [
+              THREE.MathUtils.lerp(-0.34, 0.24, k),
+              -0.04,
+              THREE.MathUtils.lerp(0.22, -0.18, k)
+            ]
+          }, 1);
+          this.player.body.rotation.y = THREE.MathUtils.lerp(0.045, -0.045, k);
+        } else {
+          const k = easeOut((t - 0.68) / 0.32);
+          this.setArmPose({
+            shoulder: [THREE.MathUtils.lerp(0.46, 0.58, k), 0.08, -0.04],
+            elbow: [THREE.MathUtils.lerp(-0.58, -0.72, k), -0.04, -0.16],
+            hand: [0.22, -0.03, -0.20]
+          }, 1);
+          this.player.body.rotation.y = THREE.MathUtils.lerp(-0.045, 0, k);
+        }
       } else {
-        const k = easeOut((t - 0.68) / 0.32);
-        this.setArmPose({
-          shoulder: [THREE.MathUtils.lerp(0.46, 0.58, k), 0.08, -0.04],
-          elbow: [THREE.MathUtils.lerp(-0.58, -0.72, k), -0.04, -0.16],
-          hand: [0.22, -0.03, -0.20]
-        }, 1);
-        this.player.body.rotation.y = THREE.MathUtils.lerp(-0.045, 0, k);
-      }
-    } else {
-      if (t < 0.24) {
-        const k = easeInOut(t / 0.24);
-        this.setArmPose({
-          shoulder: [
-            THREE.MathUtils.lerp(-1.58, -1.92, k),
-            THREE.MathUtils.lerp(-0.18, -0.24, k),
-            THREE.MathUtils.lerp(-0.48, -0.58, k)
-          ],
-          elbow: [
-            THREE.MathUtils.lerp(1.48, 1.62, k),
-            0.08,
-            THREE.MathUtils.lerp(0.30, 0.38, k)
-          ],
-          hand: [-0.48, 0.10, 0.50]
-        }, 1);
-        this.player.body.rotation.z = THREE.MathUtils.lerp(-0.065, -0.10, k);
-      } else if (t < 0.68) {
-        const k = easeInOut((t - 0.24) / 0.44);
-        this.setArmPose({
-          shoulder: [
-            THREE.MathUtils.lerp(-1.92, 0.34, k),
-            THREE.MathUtils.lerp(-0.24, 0.10, k),
-            THREE.MathUtils.lerp(-0.58, 0.24, k)
-          ],
-          elbow: [
-            THREE.MathUtils.lerp(1.62, -0.55, k),
-            THREE.MathUtils.lerp(0.08, -0.06, k),
-            THREE.MathUtils.lerp(0.38, -0.18, k)
-          ],
-          hand: [
-            THREE.MathUtils.lerp(-0.48, 0.22, k),
-            0,
-            THREE.MathUtils.lerp(0.50, -0.18, k)
-          ]
-        }, 1);
-        this.player.body.rotation.z = THREE.MathUtils.lerp(-0.10, 0.055, k);
-        this.player.body.rotation.y = THREE.MathUtils.lerp(0.10, -0.08, k);
-      } else {
-        const k = easeOut((t - 0.68) / 0.32);
-        this.setArmPose({
-          shoulder: [THREE.MathUtils.lerp(0.34, 0.72, k), 0.12, 0.18],
-          elbow: [THREE.MathUtils.lerp(-0.55, -0.78, k), -0.08, -0.20],
-          hand: [0.26, 0, -0.22]
-        }, 1);
-        this.player.body.rotation.z = THREE.MathUtils.lerp(0.055, 0, k);
-        this.player.body.rotation.y = THREE.MathUtils.lerp(-0.08, 0, k);
+        if (t < 0.24) {
+          const k = easeInOut(t / 0.24);
+          this.setArmPose({
+            shoulder: [
+              THREE.MathUtils.lerp(-1.58, -1.92, k),
+              THREE.MathUtils.lerp(-0.18, -0.24, k),
+              THREE.MathUtils.lerp(-0.48, -0.58, k)
+            ],
+            elbow: [
+              THREE.MathUtils.lerp(1.48, 1.62, k),
+              0.08,
+              THREE.MathUtils.lerp(0.30, 0.38, k)
+            ],
+            hand: [-0.48, 0.10, 0.50]
+          }, 1);
+          this.player.body.rotation.z = THREE.MathUtils.lerp(-0.065, -0.10, k);
+        } else if (t < 0.68) {
+          const k = easeInOut((t - 0.24) / 0.44);
+          this.setArmPose({
+            shoulder: [
+              THREE.MathUtils.lerp(-1.92, 0.34, k),
+              THREE.MathUtils.lerp(-0.24, 0.10, k),
+              THREE.MathUtils.lerp(-0.58, 0.24, k)
+            ],
+            elbow: [
+              THREE.MathUtils.lerp(1.62, -0.55, k),
+              THREE.MathUtils.lerp(0.08, -0.06, k),
+              THREE.MathUtils.lerp(0.38, -0.18, k)
+            ],
+            hand: [
+              THREE.MathUtils.lerp(-0.48, 0.22, k),
+              0,
+              THREE.MathUtils.lerp(0.50, -0.18, k)
+            ]
+          }, 1);
+          this.player.body.rotation.z = THREE.MathUtils.lerp(-0.10, 0.055, k);
+          this.player.body.rotation.y = THREE.MathUtils.lerp(0.10, -0.08, k);
+        } else {
+          const k = easeOut((t - 0.68) / 0.32);
+          this.setArmPose({
+            shoulder: [THREE.MathUtils.lerp(0.34, 0.72, k), 0.12, 0.18],
+            elbow: [THREE.MathUtils.lerp(-0.55, -0.78, k), -0.08, -0.20],
+            hand: [0.26, 0, -0.22]
+          }, 1);
+          this.player.body.rotation.z = THREE.MathUtils.lerp(0.055, 0, k);
+          this.player.body.rotation.y = THREE.MathUtils.lerp(-0.08, 0, k);
+        }
       }
     }
 
@@ -465,9 +463,26 @@ export class TinFangSystem {
       this.player.setFangArmOverride?.(false);
       this.handFang.visible = true;
       this.resetBodyPose();
+      this.player.setFangAnimation?.(null);
       this.state = this.stateFromProjectile();
     }
   }
+
+  applyRealThrowPose(mode, t, compact, dt) {
+    const head = this.player.getBoneWorldPosition?.('head') ?? this.player.group.position;
+    const direction = mode === 'release' && this.releaseAimPoint
+      ? this.releaseAimPoint.clone().sub(head).normalize()
+      : this.camera.getWorldDirection(new THREE.Vector3());
+    const animation = {
+      mode, t, compact, direction,
+      draw: this.holdTime / this.cfg.primeThreshold,
+      releaseMoment: this.cfg.releaseMoment,
+      aimYaw: angleDelta(this.player.group.rotation.y, Math.atan2(-direction.x, -direction.z))
+    };
+    this.player.setFangAnimation?.(animation);
+    this.player.applyFangPose?.(animation, dt);
+  }
+
   beginSlash() {
     this.state = 'SLASH';
     this.actionTime = 0;
@@ -642,7 +657,7 @@ export class TinFangSystem {
   }
 
   updateTrajectoryPreview(forcedAimPoint = null, forcedCharge = null) {
-    if (!this.armRig.visible || !this.handFang.visible) {
+    if ((!this.useRealHand && !this.armRig.visible) || !this.handFang.visible) {
       this.trajectoryLine.visible = false;
       return;
     }

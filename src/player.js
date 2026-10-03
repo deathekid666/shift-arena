@@ -441,6 +441,10 @@ export class PlayerController {
     this.fangAnimation = animation ? { ...animation } : null;
   }
 
+  applyFangPose(animation, dt) {
+    this.vrmCharacter?.applyFangPose(animation, dt);
+  }
+
   getWeaponSocket() {
     return this.vrmCharacter?.weaponSocket ?? null;
   }

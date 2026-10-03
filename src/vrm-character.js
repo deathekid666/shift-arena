@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { createVrmLocomotionController } from './vrm-locomotion.js';
+import { createFangPoseLayer } from './fang-pose.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -286,6 +287,7 @@ function buildCharacterInterface({
     authoredLocomotion: null,
     authoredLocomotionReady: null,
     update(dt, state = {}) {
+      this.fangPoseLayer?.restore();
       this.authoredLocomotion?.update(dt, state);
       updatePose(this, dt, state);
       vrm?.update?.(dt);
@@ -299,6 +301,11 @@ function buildCharacterInterface({
       if (!hand) return null;
       hand.getWorldPosition(target);
       return target;
+    },
+    applyFangPose(fang, dt) {
+      this.fangPoseLayer ??= createFangPoseLayer(this);
+      this.fangPoseLayer.apply(fang, dt);
+      vrm?.update?.(0);
     },
     applyWeaponIK(gripPose, dt) {
       applyTwoHandWeaponIK(this, gripPose, dt);
@@ -743,7 +750,8 @@ function applyIdlePose(bones, baseRotations, blend = 1) {
 function updatePose(character, dt, state) {
   const { bones, baseRotations } = character;
   const combat = Boolean(state.combat);
-  const fang = state.fangAnimation ?? null;
+  // Throw IK is applied by Fang after camera update, before projectile release.
+  const fang = state.fangAnimation?.mode === 'slash' ? state.fangAnimation : null;
 
   const locomotion = updateLocomotionLayer(character, dt, state);
   const { cycle, moveBlend, stateName, authored } = locomotion;
@@ -1478,9 +1486,6 @@ function rotateBoneChildToward(
 function applyRealFangPose(bones, baseRotations, fang, dt) {
   const mode = fang.mode ?? 'aim';
   const t = THREE.MathUtils.clamp(fang.t ?? 0, 0, 1);
-  const compact = Boolean(fang.compact);
-  const pitch = THREE.MathUtils.clamp(fang.aimPitch ?? 0, -0.68, 0.86);
-  const yaw = THREE.MathUtils.clamp(fang.aimYaw ?? 0, -1.05, 1.05);
 
   let upper;
   let lower;
@@ -1488,56 +1493,7 @@ function applyRealFangPose(bones, baseRotations, fang, dt) {
   let shoulder;
   let chest;
 
-  if (mode === 'release') {
-    const snap = easeInOut(Math.min(1, t / 0.70));
-    const follow = t > 0.70 ? easeOut((t - 0.70) / 0.30) : 0;
-
-    const startUpper = compact
-      ? [-1.02, -0.34, 0.94]
-      : [-1.72, -0.24, 1.14];
-    const startLower = compact
-      ? [-1.10, 0.02, -0.18]
-      : [-1.38, 0.08, 0.30];
-    const startHand = compact
-      ? [-0.32, 0.02, 0.14]
-      : [-0.56, 0.12, 0.34];
-
-    const endUpper = compact
-      ? [0.24, 0.16, 0.26]
-      : [0.48, 0.22, 0.24];
-    const endLower = compact
-      ? [-0.18, -0.06, -0.08]
-      : [-0.16, -0.10, -0.12];
-    const endHand = compact
-      ? [0.22, -0.04, -0.18]
-      : [0.34, -0.05, -0.24];
-
-    upper = [
-      THREE.MathUtils.lerp(startUpper[0], endUpper[0], snap),
-      THREE.MathUtils.lerp(startUpper[1], endUpper[1], snap),
-      THREE.MathUtils.lerp(startUpper[2], endUpper[2], snap)
-    ];
-    lower = [
-      THREE.MathUtils.lerp(startLower[0], endLower[0], snap),
-      THREE.MathUtils.lerp(startLower[1], endLower[1], snap),
-      THREE.MathUtils.lerp(startLower[2], endLower[2], snap)
-    ];
-    hand = [
-      THREE.MathUtils.lerp(startHand[0], endHand[0], snap),
-      THREE.MathUtils.lerp(startHand[1], endHand[1], snap),
-      THREE.MathUtils.lerp(startHand[2], endHand[2], snap)
-    ];
-    shoulder = [
-      THREE.MathUtils.lerp(compact ? -0.12 : -0.22, 0.02, snap),
-      THREE.MathUtils.lerp(compact ? -0.04 : -0.10, 0.04, snap),
-      THREE.MathUtils.lerp(compact ? 0.18 : 0.28, 0.04, snap)
-    ];
-    chest = [
-      -pitch * THREE.MathUtils.lerp(0.20, 0.05, snap),
-      yaw * THREE.MathUtils.lerp(0.34, -0.12, snap) * (1 - follow * 0.65),
-      THREE.MathUtils.lerp(compact ? 0.02 : 0.08, -0.05, snap)
-    ];
-  } else if (mode === 'slash') {
+  if (mode === 'slash') {
     const swing = easeInOut(t);
     upper = [
       THREE.MathUtils.lerp(-0.85, 0.52, swing),
@@ -1557,25 +1513,7 @@ function applyRealFangPose(bones, baseRotations, fang, dt) {
     shoulder = [-0.06, 0, 0.10];
     chest = [0, THREE.MathUtils.lerp(0.10, -0.10, swing), 0];
   } else {
-    // Real throwing wind-up: hand rises above/behind the head, elbow bends,
-    // chest turns toward the crosshair and pitch follows camera elevation.
-    upper = compact
-      ? [-1.02 - pitch * 0.10, -0.34 + yaw * 0.08, 0.94]
-      : [-1.72 - pitch * 0.16, -0.24 + yaw * 0.10, 1.14];
-    lower = compact
-      ? [-1.10, 0.02, -0.18]
-      : [-1.38, 0.08, 0.30];
-    hand = compact
-      ? [-0.32, 0.02, 0.14]
-      : [-0.56, 0.12, 0.34];
-    shoulder = compact
-      ? [-0.12, -0.04, 0.18]
-      : [-0.22, -0.10, 0.28];
-    chest = [
-      -pitch * 0.20,
-      yaw * 0.34,
-      compact ? 0.02 : 0.08
-    ];
+    return;
   }
 
   dampBoneEuler(
