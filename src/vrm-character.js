@@ -130,8 +130,11 @@ function vrmBones(vrm) {
   return {
     head: bone(vrm, 'head'),
     neck: bone(vrm, 'neck'),
+    spine: bone(vrm, 'spine'),
     chest: bone(vrm, 'chest') ?? bone(vrm, 'upperChest'),
     upperChest: bone(vrm, 'upperChest') ?? bone(vrm, 'chest'),
+    leftShoulder: bone(vrm, 'leftShoulder'),
+    rightShoulder: bone(vrm, 'rightShoulder'),
     leftUpperArm: bone(vrm, 'leftUpperArm'),
     rightUpperArm: bone(vrm, 'rightUpperArm'),
     leftLowerArm: bone(vrm, 'leftLowerArm'),
@@ -144,7 +147,9 @@ function vrmBones(vrm) {
     leftLowerLeg: bone(vrm, 'leftLowerLeg'),
     rightLowerLeg: bone(vrm, 'rightLowerLeg'),
     leftFoot: bone(vrm, 'leftFoot'),
-    rightFoot: bone(vrm, 'rightFoot')
+    rightFoot: bone(vrm, 'rightFoot'),
+    leftToes: bone(vrm, 'leftToes'),
+    rightToes: bone(vrm, 'rightToes')
   };
 }
 
@@ -152,8 +157,11 @@ function glbBones(scene) {
   const aliases = {
     head: ['head', 'head_end'],
     neck: ['neck'],
-    chest: ['upperchest', 'chest', 'spine2', 'spine_02'],
-    upperChest: ['upperchest', 'spine2', 'spine_02', 'chest'],
+    spine: ['spine', 'spine1', 'spine_01', 'mixamorigspine'],
+    chest: ['upperchest', 'chest', 'spine2', 'spine_02', 'mixamorigspine1'],
+    upperChest: ['upperchest', 'spine2', 'spine_02', 'chest', 'mixamorigspine2'],
+    leftShoulder: ['leftshoulder', 'shoulder_l', 'mixamorigleftshoulder'],
+    rightShoulder: ['rightshoulder', 'shoulder_r', 'mixamorigrightshoulder'],
     leftUpperArm: ['leftupperarm', 'leftarm', 'upperarm_l', 'mixamorigleftarm'],
     rightUpperArm: ['rightupperarm', 'rightarm', 'upperarm_r', 'mixamorigrightarm'],
     leftLowerArm: ['leftlowerarm', 'leftforearm', 'lowerarm_l', 'mixamorigleftforearm'],
@@ -166,7 +174,9 @@ function glbBones(scene) {
     leftLowerLeg: ['leftlowerleg', 'leftleg', 'calf_l', 'mixamorigleftleg'],
     rightLowerLeg: ['rightlowerleg', 'rightleg', 'calf_r', 'mixamorigrightleg'],
     leftFoot: ['leftfoot', 'foot_l', 'mixamorigleftfoot'],
-    rightFoot: ['rightfoot', 'foot_r', 'mixamorigrightfoot']
+    rightFoot: ['rightfoot', 'foot_r', 'mixamorigrightfoot'],
+    leftToes: ['lefttoes', 'lefttoe', 'toe_l', 'mixamoriglefttoebase'],
+    rightToes: ['righttoes', 'righttoe', 'toe_r', 'mixamorigrighttoebase']
   };
 
   const nodes = [];
@@ -201,8 +211,11 @@ function buildCharacterInterface({
   applyScoutAccessories
 }) {
   const baseRotations = new Map();
+  const basePositions = new Map();
   for (const node of Object.values(bones)) {
-    if (node) baseRotations.set(node, node.quaternion.clone());
+    if (!node) continue;
+    baseRotations.set(node, node.quaternion.clone());
+    basePositions.set(node, node.position.clone());
   }
 
   const accessories = applyScoutAccessories
@@ -247,6 +260,14 @@ function buildCharacterInterface({
     headSocket,
     accessories,
     baseRotations,
+    basePositions,
+    locomotion: {
+      phase: 0,
+      state: 'IDLE',
+      previousGrounded: true,
+      landing: 0,
+      moveBlend: 0
+    },
     update(dt, state = {}) {
       vrm?.update?.(dt);
       updatePose(this, dt, state);
@@ -699,32 +720,52 @@ function applyIdlePose(bones, baseRotations, blend = 1) {
 
 function updatePose(character, dt, state) {
   const { bones, baseRotations } = character;
-  const speed = Math.min(1, (state.speed ?? 0) / 6.5);
   const combat = Boolean(state.combat);
-  const crouching = Boolean(state.crouching);
-  const grounded = state.grounded !== false;
   const fang = state.fangAnimation ?? null;
+
+  const locomotion = updateLocomotionLayer(character, dt, state);
+  const { cycle, moveBlend, stateName } = locomotion;
 
   const time = performance.now() * 0.001;
   const breathe = Math.sin(time * 2.4) * 0.025;
-  const armSwing = Math.sin(time * (5.5 + speed * 5.5)) * 0.24 * speed;
 
-  // Left arm follows firearm stance when fighting. Right arm is overridden by
-  // the Fang animation whenever V is active.
+  // Upper body is layered over locomotion. Gun/Fang poses keep control of the
+  // shoulders while the legs continue walking/running underneath.
   if (combat && !fang) {
     dampBoneEuler(bones.leftUpperArm, baseRotations, -0.62, 0.16, -0.68, 16, dt);
     dampBoneEuler(bones.leftLowerArm, baseRotations, -0.82, -0.08, -0.16, 16, dt);
     dampBoneEuler(bones.rightUpperArm, baseRotations, -0.48, -0.10, 0.70, 16, dt);
     dampBoneEuler(bones.rightLowerArm, baseRotations, -0.76, 0.02, 0.18, 16, dt);
-  } else {
-    dampBoneEuler(bones.leftUpperArm, baseRotations, 0.06 + armSwing, 0.04, -1.08, 10, dt);
-    dampBoneEuler(bones.leftLowerArm, baseRotations, 0.10, 0, -0.12, 10, dt);
+  } else if (!fang) {
+    const armAmplitude =
+      stateName === 'RUN' ? 0.58 :
+      stateName === 'WALK' ? 0.36 :
+      stateName === 'CROUCH_WALK' ? 0.22 :
+      0.04;
 
-    if (!fang) {
-      dampBoneEuler(bones.rightUpperArm, baseRotations, 0.06 - armSwing, -0.04, 1.08, 10, dt);
-      dampBoneEuler(bones.rightLowerArm, baseRotations, 0.10, 0, 0.12, 10, dt);
-      dampBoneEuler(bones.rightHand, baseRotations, 0, 0, 0, 10, dt);
-    }
+    const swing = cycle * armAmplitude * moveBlend;
+
+    dampBoneEuler(
+      bones.leftUpperArm,
+      baseRotations,
+      0.06 - swing,
+      0.04,
+      -1.08,
+      12,
+      dt
+    );
+    dampBoneEuler(
+      bones.rightUpperArm,
+      baseRotations,
+      0.06 + swing,
+      -0.04,
+      1.08,
+      12,
+      dt
+    );
+    dampBoneEuler(bones.leftLowerArm, baseRotations, 0.10, 0, -0.12, 11, dt);
+    dampBoneEuler(bones.rightLowerArm, baseRotations, 0.10, 0, 0.12, 11, dt);
+    dampBoneEuler(bones.rightHand, baseRotations, 0, 0, 0, 10, dt);
   }
 
   if (fang) applyRealFangPose(bones, baseRotations, fang, dt);
@@ -739,19 +780,306 @@ function updatePose(character, dt, state) {
     dt
   );
 
-  const crouch = crouching ? 0.24 : 0;
-  dampBoneEuler(bones.leftUpperLeg, baseRotations, -crouch, 0, 0, 12, dt);
-  dampBoneEuler(bones.rightUpperLeg, baseRotations, -crouch, 0, 0, 12, dt);
+  animateScoutAccessories(character, locomotion, dt);
+}
 
-  dampBoneEuler(
-    bones.hips,
-    baseRotations,
-    grounded ? 0 : -0.10,
-    0,
-    0,
-    10,
+function updateLocomotionLayer(character, dt, state) {
+  const { bones, baseRotations, basePositions, locomotion } = character;
+  const speed = Math.max(0, state.speed ?? 0);
+  const grounded = state.grounded !== false;
+  const crouching = Boolean(state.crouching);
+  const sliding = Boolean(state.sliding);
+  const sprinting = Boolean(state.sprinting);
+  const verticalSpeed = state.verticalSpeed ?? 0;
+
+  const stateName = resolveLocomotionState({
+    speed,
+    grounded,
+    crouching,
+    sliding,
+    sprinting,
+    verticalSpeed
+  });
+
+  if (!locomotion.previousGrounded && grounded) {
+    locomotion.landing = 1;
+  }
+  locomotion.previousGrounded = grounded;
+  locomotion.landing = Math.max(0, locomotion.landing - dt * 6.5);
+  locomotion.state = stateName;
+
+  const targetMoveBlend =
+    stateName === 'WALK' ||
+    stateName === 'RUN' ||
+    stateName === 'CROUCH_WALK'
+      ? 1
+      : 0;
+  locomotion.moveBlend = THREE.MathUtils.damp(
+    locomotion.moveBlend,
+    targetMoveBlend,
+    12,
     dt
   );
+
+  let cadence = 0;
+  if (stateName === 'WALK') cadence = 7.6;
+  if (stateName === 'RUN') cadence = 12.4;
+  if (stateName === 'CROUCH_WALK') cadence = 6.2;
+
+  const localForward = speed > 0.05
+    ? THREE.MathUtils.clamp(-(state.localZ ?? 0) / speed, -1, 1)
+    : 1;
+  const localStrafe = speed > 0.05
+    ? THREE.MathUtils.clamp((state.localX ?? 0) / speed, -1, 1)
+    : 0;
+  const reverse = localForward < -0.25 ? -1 : 1;
+
+  if (cadence > 0) locomotion.phase += dt * cadence * reverse;
+
+  const cycle = Math.sin(locomotion.phase);
+  const cycleOpposite = -cycle;
+  const liftL = Math.max(0, cycle);
+  const liftR = Math.max(0, cycleOpposite);
+  const landing = locomotion.landing;
+
+  let stride = 0;
+  let knee = 0;
+  let lean = 0;
+  let hipDrop = 0;
+  let hipRoll = 0;
+  let footCounter = 0;
+  let baseThigh = 0;
+  let baseKnee = 0;
+
+  if (stateName === 'WALK') {
+    stride = 0.54;
+    knee = 0.58;
+    lean = 0.035;
+    hipRoll = 0.035;
+    footCounter = 0.22;
+  } else if (stateName === 'RUN') {
+    stride = 0.88;
+    knee = 0.94;
+    lean = 0.13;
+    hipRoll = 0.055;
+    footCounter = 0.34;
+  } else if (stateName === 'CROUCH_WALK') {
+    stride = 0.31;
+    knee = 0.42;
+    lean = 0.10;
+    hipDrop = 0.14;
+    baseThigh = -0.34;
+    baseKnee = 0.58;
+    footCounter = 0.16;
+  } else if (stateName === 'CROUCH') {
+    lean = 0.08;
+    hipDrop = 0.15;
+    baseThigh = -0.42;
+    baseKnee = 0.72;
+  }
+
+  if (stateName === 'SLIDE') {
+    hipDrop = 0.19;
+    dampBoneEuler(bones.leftUpperLeg, baseRotations, -0.82, -0.08, -0.05, 18, dt);
+    dampBoneEuler(bones.leftLowerLeg, baseRotations, 1.10, 0, 0.04, 18, dt);
+    dampBoneEuler(bones.leftFoot, baseRotations, -0.24, 0, 0, 18, dt);
+    dampBoneEuler(bones.rightUpperLeg, baseRotations, 0.24, 0.08, 0.08, 18, dt);
+    dampBoneEuler(bones.rightLowerLeg, baseRotations, 0.30, 0, -0.04, 18, dt);
+    dampBoneEuler(bones.rightFoot, baseRotations, 0.12, 0, 0, 18, dt);
+    dampBoneEuler(bones.hips, baseRotations, 0.18, 0, localStrafe * -0.06, 16, dt);
+    dampBoneEuler(bones.spine, baseRotations, -0.12, 0, 0, 14, dt);
+  } else if (stateName === 'JUMP' || stateName === 'FALL') {
+    const rising = stateName === 'JUMP';
+    dampBoneEuler(
+      bones.leftUpperLeg,
+      baseRotations,
+      rising ? -0.36 : -0.14,
+      0,
+      -0.045,
+      13,
+      dt
+    );
+    dampBoneEuler(
+      bones.rightUpperLeg,
+      baseRotations,
+      rising ? -0.20 : -0.08,
+      0,
+      0.045,
+      13,
+      dt
+    );
+    dampBoneEuler(
+      bones.leftLowerLeg,
+      baseRotations,
+      rising ? 0.62 : 0.42,
+      0,
+      0,
+      13,
+      dt
+    );
+    dampBoneEuler(
+      bones.rightLowerLeg,
+      baseRotations,
+      rising ? 0.48 : 0.36,
+      0,
+      0,
+      13,
+      dt
+    );
+    dampBoneEuler(bones.leftFoot, baseRotations, -0.18, 0, 0, 12, dt);
+    dampBoneEuler(bones.rightFoot, baseRotations, -0.12, 0, 0, 12, dt);
+    dampBoneEuler(bones.hips, baseRotations, rising ? -0.10 : 0.04, 0, 0, 10, dt);
+    dampBoneEuler(bones.spine, baseRotations, rising ? 0.07 : -0.03, 0, 0, 9, dt);
+  } else {
+    const moveBlend = locomotion.moveBlend;
+    const swingL = cycle * stride * moveBlend;
+    const swingR = cycleOpposite * stride * moveBlend;
+    const strafeLeg = localStrafe * 0.08 * moveBlend;
+
+    const kneeL = baseKnee + liftR * knee * moveBlend + landing * 0.24;
+    const kneeR = baseKnee + liftL * knee * moveBlend + landing * 0.24;
+
+    dampBoneEuler(
+      bones.leftUpperLeg,
+      baseRotations,
+      baseThigh + swingL - landing * 0.12,
+      localStrafe * -0.035,
+      strafeLeg,
+      14,
+      dt
+    );
+    dampBoneEuler(
+      bones.rightUpperLeg,
+      baseRotations,
+      baseThigh + swingR - landing * 0.12,
+      localStrafe * 0.035,
+      -strafeLeg,
+      14,
+      dt
+    );
+    dampBoneEuler(bones.leftLowerLeg, baseRotations, kneeL, 0, 0, 15, dt);
+    dampBoneEuler(bones.rightLowerLeg, baseRotations, kneeR, 0, 0, 15, dt);
+
+    dampBoneEuler(
+      bones.leftFoot,
+      baseRotations,
+      -swingL * footCounter - liftL * 0.10,
+      0,
+      0,
+      15,
+      dt
+    );
+    dampBoneEuler(
+      bones.rightFoot,
+      baseRotations,
+      -swingR * footCounter - liftR * 0.10,
+      0,
+      0,
+      15,
+      dt
+    );
+
+    const roll = Math.cos(locomotion.phase * 2) * hipRoll * moveBlend;
+    dampBoneEuler(
+      bones.hips,
+      baseRotations,
+      -lean - landing * 0.08,
+      localStrafe * 0.035,
+      roll + localStrafe * -0.035,
+      12,
+      dt
+    );
+    dampBoneEuler(
+      bones.spine,
+      baseRotations,
+      lean * 0.52 + landing * 0.05,
+      localStrafe * -0.028,
+      -roll * 0.40,
+      10,
+      dt
+    );
+  }
+
+  const stepBob =
+    cadence > 0
+      ? Math.abs(Math.sin(locomotion.phase * 2)) *
+        (stateName === 'RUN' ? 0.018 : 0.010) *
+        locomotion.moveBlend
+      : 0;
+
+  dampBonePosition(
+    bones.hips,
+    basePositions,
+    0,
+    -hipDrop - landing * 0.055 + stepBob,
+    0,
+    15,
+    dt
+  );
+
+  return {
+    cycle,
+    moveBlend: locomotion.moveBlend,
+    stateName,
+    localForward,
+    localStrafe
+  };
+}
+
+function resolveLocomotionState({
+  speed,
+  grounded,
+  crouching,
+  sliding,
+  sprinting,
+  verticalSpeed
+}) {
+  if (!grounded) return verticalSpeed > 0.15 ? 'JUMP' : 'FALL';
+  if (sliding) return 'SLIDE';
+  if (crouching) return speed > 0.35 ? 'CROUCH_WALK' : 'CROUCH';
+  if (speed < 0.28) return 'IDLE';
+  if (sprinting || speed > 6.15) return 'RUN';
+  return 'WALK';
+}
+
+function animateScoutAccessories(character, locomotion, dt) {
+  const antennae = character.accessories?.antennaRoot;
+  if (antennae) {
+    const targetX =
+      locomotion.stateName === 'RUN'
+        ? -0.10 + Math.cos(character.locomotion.phase) * 0.035
+        : locomotion.stateName === 'WALK'
+          ? -0.045 + Math.cos(character.locomotion.phase) * 0.018
+          : 0;
+
+    antennae.rotation.x = THREE.MathUtils.damp(
+      antennae.rotation.x,
+      targetX,
+      7,
+      dt
+    );
+    antennae.rotation.z = THREE.MathUtils.damp(
+      antennae.rotation.z,
+      -locomotion.localStrafe * 0.055,
+      8,
+      dt
+    );
+  }
+
+  const shell = character.accessories?.shellRoot;
+  if (shell) {
+    const target = -0.055 +
+      (locomotion.stateName === 'RUN'
+        ? Math.cos(character.locomotion.phase * 2) * 0.018
+        : 0);
+
+    shell.rotation.x = THREE.MathUtils.damp(
+      shell.rotation.x,
+      target,
+      7,
+      dt
+    );
+  }
 }
 
 function applyRealFangPose(bones, baseRotations, fang, dt) {
@@ -838,6 +1166,14 @@ function setBoneEuler(node, baseRotations, x, y, z, blend = 1) {
   const offset = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, 'XYZ'));
   const target = base.clone().multiply(offset);
   node.quaternion.slerp(target, blend);
+}
+
+function dampBonePosition(node, basePositions, x, y, z, lambda, dt) {
+  if (!node) return;
+  const base = basePositions.get(node) ?? new THREE.Vector3();
+  node.position.x = THREE.MathUtils.damp(node.position.x, base.x + x, lambda, dt);
+  node.position.y = THREE.MathUtils.damp(node.position.y, base.y + y, lambda, dt);
+  node.position.z = THREE.MathUtils.damp(node.position.z, base.z + z, lambda, dt);
 }
 
 function dampBoneEuler(node, baseRotations, x, y, z, lambda, dt) {

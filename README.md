@@ -193,3 +193,22 @@ Browser-first third-person shooter prototype.
 - Final custom assets do not receive the temporary VRM's procedural costume overlays or material retinting.
 - Added an explicit asset contract at assets/characters/README.md.
 - Hugging Face TRELLIS generation was investigated, but the connected account returned HTTP 402 before a Job started because Jobs require a positive credit balance; no compute was charged.
+
+
+## Build 010.1 — humanoid locomotion
+- Implemented a locomotion state layer based on the architecture used by norio/vrm-game-starter / BVHEcctrl: IDLE, WALK, RUN, JUMP/FALL and landing recovery, extended for SHIFT with CROUCH, CROUCH_WALK and SLIDE.
+- The reference starter maps movement state to animation clips and crossfades them; SHIFT now follows the same state separation while driving the current humanoid bones directly so it works immediately with both VRM and common rigged GLB characters.
+- Legs now visibly alternate at walk/run cadence instead of remaining rigid.
+- Upper legs swing with stride length based on walk/run state.
+- Knees bend on the recovery leg and feet counter-rotate for a planted-step look.
+- Run has a larger stride, faster cadence, hip roll and forward body lean.
+- Backpedaling reverses gait phase instead of moonwalking with forward leg timing.
+- Strafing adds small hip/leg lateral offsets while preserving the step cycle.
+- Crouch no longer vertically squashes the whole avatar; gameplay collider still crouches while the visual character bends hips/knees and lowers the hip bone.
+- Crouch-walk has its own shorter stride and cadence.
+- Slide has a dedicated asymmetric leg pose instead of a compressed standing model.
+- Jump/fall tuck and extend the legs separately and landing adds a short compression recovery.
+- Upper-body gun/Fang poses are layered over locomotion, so the legs continue moving while aiming or holding the Tin Fang.
+- Antennae lean/sway during movement and the segmented shell gets subtle run secondary motion.
+- Added live debug Anim state to the performance HUD.
+- Quaternius Universal Animation Library was reviewed as the clip source used by the GitHub starter; Quaternius publishes it under CC0. A later clip-retarget pass can replace the procedural gait without changing the movement-state architecture.

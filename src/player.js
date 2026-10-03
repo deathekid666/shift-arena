@@ -12,6 +12,7 @@ export class PlayerController {
     this.crouching = false;
     this.sliding = false;
     this.slideTimer = 0;
+    this.localMotion = new THREE.Vector3();
 
     // The gameplay capsule remains implicit in movement/collision values.
     // This pivot contains only the visible character and animation attachments.
@@ -130,13 +131,23 @@ export class PlayerController {
       }
     }
 
-    const height = this.crouching ? cfg.crouchHeight : cfg.standingHeight;
-    this.body.scale.y = THREE.MathUtils.damp(this.body.scale.y, height / cfg.standingHeight, 18, dt);
-    this.body.position.y = height / 2;
+    // Collider height still changes when crouching, but a real humanoid must
+    // crouch with bones instead of being vertically squashed like the old capsule.
+    this.body.scale.y = THREE.MathUtils.damp(this.body.scale.y, 1, 18, dt);
+    this.body.position.y = cfg.standingHeight / 2;
+
+    this.localMotion
+      .set(this.velocity.x, 0, this.velocity.z)
+      .applyAxisAngle(Y_AXIS, -this.group.rotation.y);
 
     const characterState = {
       dt,
       speed: this.horizontalSpeed(),
+      localX: this.localMotion.x,
+      localZ: this.localMotion.z,
+      verticalSpeed: this.velocity.y,
+      sprinting: this.input.down('sprint') && !this.crouching && !this.sliding,
+      sliding: this.sliding,
       combat: this.weaponVisualActive && combatFacing,
       crouching: this.crouching,
       grounded: this.grounded,
@@ -410,6 +421,10 @@ export class PlayerController {
     return this.visualRoot ?? null;
   }
 
+  getAnimationState() {
+    return this.vrmCharacter?.locomotion?.state ?? 'FALLBACK';
+  }
+
   setWeaponVisualActive(active) {
     this.weaponVisualActive = Boolean(active);
   }
@@ -418,6 +433,8 @@ export class PlayerController {
     return Math.hypot(this.velocity.x, this.velocity.z);
   }
 }
+
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 function withTimeout(promise, timeoutMs, message) {
   return new Promise((resolve, reject) => {
