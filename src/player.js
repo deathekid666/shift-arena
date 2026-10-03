@@ -83,23 +83,32 @@ export class PlayerController {
 
     const crouchDown = this.input.down('crouch');
     const crouchPressed = this.input.consume('crouch');
-    const sprintPressed = this.input.consume('sprint');
     const jumpPressed = this.input.consume('jump');
+    const sprintDown = this.input.down('sprint');
 
-    // Use both the input controller's pressed edge and the player's own state
-    // edge. This makes slide entry robust even if Ctrl and Shift arrive in the
-    // same browser frame.
+    // Deterministic slide intent:
+    // - Shift + movement + Ctrl always means SLIDE.
+    // - Existing high momentum can also enter slide without Shift.
+    // - Ctrl without sprint/momentum remains a normal crouch.
+    //
+    // The old logic sampled velocity against one hard threshold on the exact
+    // Ctrl frame. Small acceleration/turning dips therefore randomly turned a
+    // requested slide into crouch, which immediately killed speed.
     const crouchJustPressed = crouchDown && !this.crouching;
-    let startedSlide = false;
+    const crouchEdge = crouchPressed || crouchJustPressed;
+    const movingIntent = move.lengthSq() > 0.01;
+    const sprintSlideIntent = sprintDown && movingIntent;
+    const momentumSlideIntent =
+      movingIntent &&
+      this.horizontalSpeed() >= cfg.slideMinStartSpeed;
 
     if (
-      (crouchPressed || crouchJustPressed) &&
+      crouchEdge &&
       !this.sliding &&
       this.grounded &&
-      this.horizontalSpeed() >= cfg.slideMinStartSpeed
+      (sprintSlideIntent || momentumSlideIntent)
     ) {
       this.beginSlide(move);
-      startedSlide = true;
     }
 
     this.crouching = crouchDown;
@@ -119,14 +128,13 @@ export class PlayerController {
     if (this.sliding) {
       this.updateSlide(dt, move);
 
-      // Fortnite-style early cancels. Jump keeps the existing jump impulse;
-      // sprint simply exits the skid and returns control to normal movement.
+      // Slide exits only for an intentional jump, Ctrl release, timer expiry,
+      // or loss of usable momentum. Sprint is NOT a cancel input; it is part
+      // of the slide-entry gesture.
       if (jumpPressed && this.grounded) {
         this.sliding = false;
         this.velocity.y = cfg.jumpVelocity;
         this.grounded = false;
-      } else if (sprintPressed && !startedSlide) {
-        this.sliding = false;
       } else if (
         this.slideTimer <= 0 ||
         !crouchDown ||
