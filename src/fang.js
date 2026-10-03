@@ -127,8 +127,12 @@ export class TinFangSystem {
 
     this.sheath = buildSheath();
     this.holsteredFang = this.sheath.userData.holsteredFang ?? null;
-    this.sheath.position.set(0.46, -0.22, 0.18);
-    this.sheath.rotation.set(-0.15, 0.05, 0.42);
+
+    // Temporary fallback placement before the humanoid skeleton is available.
+    // Keep it close and small instead of the old oversized floating prop.
+    this.sheath.position.set(0.23, -0.18, 0.035);
+    this.sheath.rotation.set(-0.08, 0.06, 0.16);
+    this.sheath.scale.setScalar(0.56);
     this.player.body.add(this.sheath);
 
     // READY means holstered. The real knife must not remain rendered in-hand.
@@ -150,6 +154,15 @@ export class TinFangSystem {
     this.handFang.position.set(0.0, 0.015, -0.10);
     this.handFang.rotation.set(-0.10, 0.0, Math.PI * 0.52);
     this.handFang.scale.setScalar(0.64);
+
+    const holsterSocket = this.player.getHolsterSocket?.();
+    if (holsterSocket && this.sheath) {
+      holsterSocket.add(this.sheath);
+      this.sheath.position.set(0, 0, 0);
+      this.sheath.rotation.set(0, 0, 0);
+      this.sheath.scale.setScalar(0.54);
+    }
+
     this.player.setFangArmOverride?.(false);
     this.syncFangVisuals();
   }
@@ -1470,6 +1483,22 @@ function buildSheath() {
   lowerBand.position.y = -0.12;
   lowerBand.rotation.z = -0.07;
   group.add(lowerBand);
+
+  // Short leather hanger that visually joins the scabbard to the belt/hip.
+  const beltLoop = new THREE.Mesh(
+    new THREE.BoxGeometry(0.060, 0.18, 0.032),
+    leatherMat
+  );
+  beltLoop.position.set(-0.055, 0.235, -0.045);
+  beltLoop.rotation.z = -0.08;
+  group.add(beltLoop);
+
+  const beltLoopCap = new THREE.Mesh(
+    new THREE.BoxGeometry(0.105, 0.035, 0.040),
+    metalMat
+  );
+  beltLoopCap.position.set(-0.055, 0.315, -0.045);
+  group.add(beltLoopCap);
 
   // Only the part of the knife that should protrude from the sheath is modeled
   // here. It is toggled independently from the real hand/projectile knife.

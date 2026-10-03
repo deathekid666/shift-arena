@@ -788,6 +788,10 @@ export class PlayerController {
     return this.vrmCharacter?.fangSocket ?? null;
   }
 
+  getHolsterSocket() {
+    return this.vrmCharacter?.holsterSocket ?? null;
+  }
+
   getHandWorldPosition(side = 'right', target = new THREE.Vector3()) {
     const key = side === 'left' ? 'leftHand' : 'rightHand';
     const hand = this.vrmCharacter?.bones?.[key];

@@ -260,6 +260,19 @@ function buildCharacterInterface({
     root.add(fangSocket);
   }
 
+  // Dedicated wearable-equipment anchor. Because this lives on the real hips
+  // bone, the sheath follows walk/crouch/turn animation without floating.
+  const holsterSocket = new THREE.Object3D();
+  holsterSocket.name = 'holsterSocket';
+  if (bones.hips) {
+    holsterSocket.position.set(0.185, -0.070, -0.030);
+    holsterSocket.rotation.set(-0.08, 0.08, 0.12);
+    bones.hips.add(holsterSocket);
+  } else {
+    holsterSocket.position.set(0.22, -0.18, 0.06);
+    root.add(holsterSocket);
+  }
+
   const headSocket = new THREE.Object3D();
   headSocket.name = 'headSocket';
   if (bones.head) bones.head.add(headSocket);
@@ -275,6 +288,7 @@ function buildCharacterInterface({
     bones,
     weaponSocket,
     fangSocket,
+    holsterSocket,
     headSocket,
     accessories,
     baseRotations,
