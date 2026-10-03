@@ -69,7 +69,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.17 · TAPE-RATTLER SMG</div>
+    <div id="damage-test-hint">BUILD 010.18B · CLEAN CHARACTER START</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -79,7 +79,7 @@ root.innerHTML = `
         <strong id="pickup-title">STAPLE-SLINGER AR</strong>
         <small id="pickup-subtitle">MEDIUM AMMO</small>
       </div>
-      <b id="pickup-action">SWAP ACTIVE SLOT</b>
+      <b id="pickup-action">EQUIP FOR TEST</b>
     </div>
 
     <div id="pickup-toast"></div>
@@ -118,7 +118,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.17 · TAPE-RATTLER SMG</div>
+        <div class="build-tag">BUILD 010.18B · CLEAN CHARACTER START</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
@@ -131,7 +131,7 @@ root.innerHTML = `
           <span class="bot-toggle-track"><i></i></span>
           <b id="bot-toggle-label">ON</b>
         </label>
-        <button type="button">ENTER LOADOUT TEST</button>
+        <button type="button" disabled>PREPARING CHARACTER…</button>
       </div>
     </div>
   </div>`;
@@ -276,36 +276,81 @@ const pickups = new PickupSystem({
   onToast: showToast
 });
 
-player.characterReady.then((avatar) => {
-  const status = player.getCharacterStatus();
-  if (characterLoadStatus) {
-    characterLoadStatus.textContent = status.usingVrm
-      ? (avatar.finalAsset
-          ? `CHARACTER · FINAL ${avatar.assetType.toUpperCase()} LOADED`
-          : 'CHARACTER · DEVELOPMENT VRM LOADED')
-      : 'CHARACTER · LOAD FAILED · FALLBACK ACTIVE';
-  }
-
-  if (avatar) {
-    showToast('ANIME VRM RIG LOADED');
-
-    avatar.authoredLocomotionReady?.then((controller) => {
-      if (!characterLoadStatus || !controller) return;
-
-      const base = avatar.finalAsset
-        ? `CHARACTER · FINAL ${avatar.assetType.toUpperCase()} LOADED`
-        : 'CHARACTER · DEVELOPMENT VRM LOADED';
-
-      characterLoadStatus.textContent = controller.hasAuthoredSlide
-        ? `${base} · UAL2 SLIDE READY`
-        : `${base} · SLIDE FALLBACK`;
-    });
-  }
-});
-
 const start = document.querySelector('#start');
 const button = start.querySelector('button');
+let startupReady = false;
+
+async function prewarmGameBeforeEntry() {
+  button.disabled = true;
+  button.textContent = 'PREPARING CHARACTER…';
+
+  const avatar = await player.characterReady;
+  const status = player.getCharacterStatus();
+
+  if (avatar) {
+    characterLoadStatus.textContent = avatar.finalAsset
+      ? `CHARACTER · FINAL ${avatar.assetType.toUpperCase()} LOADED · PREWARMING…`
+      : 'CHARACTER · DEVELOPMENT VRM LOADED · PREWARMING…';
+
+    // Let authored locomotion finish creating its clips/controllers before
+    // gameplay starts. Failure is already handled by the avatar controller.
+    if (avatar.authoredLocomotionReady) {
+      await avatar.authoredLocomotionReady;
+    }
+  } else {
+    characterLoadStatus.textContent =
+      'CHARACTER · FINAL LOAD FAILED · FALLBACK MODE · PREWARMING…';
+  }
+
+  // Compile the character, all hero weapons, pickup models and world materials
+  // while the opaque start overlay is still covering the game.
+  try {
+    if (typeof renderer.compileAsync === 'function') {
+      await renderer.compileAsync(scene, camera);
+    } else {
+      renderer.compile(scene, camera);
+    }
+  } catch (error) {
+    console.warn('Scene prewarm compile failed; continuing with normal render.', error);
+  }
+
+  // Force completed matrices/material upload behind the start screen.
+  scene.updateMatrixWorld(true);
+  renderer.render(scene, camera);
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  renderer.render(scene, camera);
+
+  const controller = avatar?.authoredLocomotion ?? null;
+  if (avatar) {
+    const base = avatar.finalAsset
+      ? `CHARACTER · FINAL ${avatar.assetType.toUpperCase()} READY`
+      : 'CHARACTER · DEVELOPMENT VRM READY';
+
+    characterLoadStatus.textContent = controller?.hasAuthoredSlide
+      ? `${base} · UAL2 SLIDE READY`
+      : `${base} · GAME READY`;
+
+    showToast('CHARACTER + WEAPONS READY');
+  } else {
+    characterLoadStatus.textContent =
+      'CHARACTER · FALLBACK MODE READY';
+  }
+
+  startupReady = true;
+  button.disabled = false;
+  button.textContent = 'ENTER LOADOUT TEST';
+}
+
+prewarmGameBeforeEntry().catch((error) => {
+  console.error('Startup prewarm failed:', error);
+  characterLoadStatus.textContent =
+    'STARTUP PREWARM FAILED · RETRY PAGE';
+  button.disabled = true;
+  button.textContent = 'RELOAD REQUIRED';
+});
+
 button.addEventListener('click', () => {
+  if (!startupReady) return;
   weapon.unlockAudio();
   start.style.display = 'none';
   input.lockPointer();
