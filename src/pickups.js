@@ -1,5 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG, WEAPON_ORDER } from './config.js';
+import { buildJunkWeaponVisual, disposeJunkWeaponVisual } from './junk-weapon-model.js';
 
 const AMMO_LABELS = {
   light: 'LIGHT AMMO',
@@ -53,25 +54,19 @@ export class PickupSystem {
 
     const glow = new THREE.Mesh(
       new THREE.CylinderGeometry(0.72, 0.72, 0.05, 24),
-      new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.28 })
+      new THREE.MeshBasicMaterial({
+        color: cfg.color,
+        transparent: true,
+        opacity: 0.24
+      })
     );
     group.add(glow);
 
     const weaponGroup = new THREE.Group();
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.22, 0.16, cfg.modelLength),
-      new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.38, metalness: 0.25 })
-    );
-    body.position.y = 0.34;
-    weaponGroup.add(body);
-
-    const barrel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.05, cfg.scope ? 0.62 : cfg.pellets > 1 ? 0.46 : 0.36, 8),
-      new THREE.MeshStandardMaterial({ color: 0x1b2833, roughness: 0.44, metalness: 0.35 })
-    );
-    barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0, 0.34, -(cfg.modelLength / 2 + 0.2));
-    weaponGroup.add(barrel);
+    const visual = buildJunkWeaponVisual(cfg, { pickup: true });
+    visual.group.position.y = 0.34;
+    visual.group.rotation.z = 0.04;
+    weaponGroup.add(visual.group);
     group.add(weaponGroup);
 
     group.position.copy(position);
@@ -80,9 +75,9 @@ export class PickupSystem {
     this.weaponPickups.push({
       kind: 'weapon',
       group,
-      body,
       glow,
       weaponGroup,
+      visual,
       weaponKey: key,
       magazineAmmo: cfg.magazineSize,
       baseY: position.y
@@ -208,12 +203,19 @@ export class PickupSystem {
     const cfg = GAME_CONFIG.weapons[key];
     pickup.weaponKey = key;
     pickup.magazineAmmo = magazineAmmo;
-    pickup.body.material.color.setHex(cfg.color);
     pickup.glow.material.color.setHex(cfg.color);
-    pickup.body.geometry.dispose();
-    pickup.body.geometry = new THREE.BoxGeometry(0.22, 0.16, cfg.modelLength);
-  }
-}
+
+    if (pickup.visual?.group) {
+      pickup.weaponGroup.remove(pickup.visual.group);
+      disposeJunkWeaponVisual(pickup.visual.group);
+    }
+
+    const visual = buildJunkWeaponVisual(cfg, { pickup: true });
+    visual.group.position.y = 0.34;
+    visual.group.rotation.z = 0.04;
+    pickup.weaponGroup.add(visual.group);
+    pickup.visual = visual;
+  }}
 
 function flatDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);

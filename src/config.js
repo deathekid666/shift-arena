@@ -57,6 +57,8 @@ export const GAME_CONFIG = {
   },
   weapons: {
     tacticalAR: {
+      junkStyle: 'roachCarbine',
+      junkPaint: 0x466f7d,
       slot: 1, name: 'TACTICAL AR', role: 'FAST CLOSE–MID', automatic: true, ammoType: 'medium',
       damage: 22, headshotMultiplier: 1.5, fireRate: 7, magazineSize: 30, reloadTime: 2.2,
       range: 90, falloffStart: 30, falloffEnd: 70, minDamageMultiplier: 0.65,
@@ -70,6 +72,8 @@ export const GAME_CONFIG = {
       sound: { pitch: 145, duration: 0.075, noise: 0.55, gain: 0.20 }
     },
     mechanicalAR: {
+      junkStyle: 'clockwork',
+      junkPaint: 0x66714d,
       slot: 2, name: 'MECHANICAL AR', role: 'STABLE MID–FAR', automatic: true, ammoType: 'medium',
       damage: 30, headshotMultiplier: 1.5, fireRate: 5.8, magazineSize: 20, reloadTime: 2.2,
       range: 105, falloffStart: 40, falloffEnd: 88, minDamageMultiplier: 0.72,
@@ -83,6 +87,8 @@ export const GAME_CONFIG = {
       sound: { pitch: 118, duration: 0.095, noise: 0.48, gain: 0.23 }
     },
     tacticalShotgun: {
+      junkStyle: 'doublePipe',
+      junkPaint: 0x8a6237,
       slot: 3, name: 'TACTICAL SHOTGUN', role: 'FAST CLOSE BURST', automatic: false, ammoType: 'shells',
       damage: 80, headshotMultiplier: 1.5, fireRate: 1.5, magazineSize: 8, reloadTime: 5.7,
       range: 24, falloffStart: 7, falloffEnd: 18, minDamageMultiplier: 0.22,
@@ -96,6 +102,8 @@ export const GAME_CONFIG = {
       sound: { pitch: 82, duration: 0.16, noise: 0.88, gain: 0.31 }
     },
     pumpShotgun: {
+      junkStyle: 'drainPump',
+      junkPaint: 0x7b4936,
       slot: 4, name: 'PUMP SHOTGUN', role: 'HEAVY CLOSE BURST', automatic: false, ammoType: 'shells',
       damage: 100, headshotMultiplier: 1.5, fireRate: 0.7, magazineSize: 5, reloadTime: 4.4,
       range: 22, falloffStart: 6, falloffEnd: 16, minDamageMultiplier: 0.18,
@@ -109,6 +117,8 @@ export const GAME_CONFIG = {
       sound: { pitch: 64, duration: 0.22, noise: 1.0, gain: 0.36 }
     },
     marksmanSniper: {
+      junkStyle: 'antenna',
+      junkPaint: 0x554a72,
       slot: 5, name: 'MARKSMAN SNIPER', role: '2-SHOT LONG RANGE', automatic: false, ammoType: 'heavy',
       damage: 110, headshotMultiplier: 2, fireRate: 0.75, magazineSize: 2, reloadTime: 3.0,
       range: 160, falloffStart: 105, falloffEnd: 155, minDamageMultiplier: 0.90,
@@ -122,6 +132,8 @@ export const GAME_CONFIG = {
       sound: { pitch: 52, duration: 0.24, noise: 0.78, gain: 0.37 }
     },
     compactSMG: {
+      junkStyle: 'canSMG',
+      junkPaint: 0x82752c,
       slot: 6, name: 'COMPACT SMG', role: 'VERY FAST CLOSE', automatic: true, ammoType: 'light',
       damage: 17, headshotMultiplier: 1.5, fireRate: 12, magazineSize: 30, reloadTime: 2.5,
       range: 60, falloffStart: 16, falloffEnd: 40, minDamageMultiplier: 0.42,
@@ -135,6 +147,8 @@ export const GAME_CONFIG = {
       sound: { pitch: 205, duration: 0.045, noise: 0.42, gain: 0.15 }
     },
     longSMG: {
+      junkStyle: 'railSMG',
+      junkPaint: 0x357568,
       slot: 7, name: 'LONG SMG', role: 'PRECISE CLOSE–MID', automatic: true, ammoType: 'light',
       damage: 17, headshotMultiplier: 1.5, fireRate: 10.3, magazineSize: 21, reloadTime: 2.05,
       range: 78, falloffStart: 26, falloffEnd: 58, minDamageMultiplier: 0.62,

@@ -1,5 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG, WEAPON_ORDER } from './config.js';
+import { buildJunkWeaponVisual } from './junk-weapon-model.js';
 import { WeaponAudio } from './audio.js';
 
 export class WeaponSystem {
@@ -904,100 +905,26 @@ export class WeaponSystem {
   }
 
   buildModel(cfg) {
-    const group = new THREE.Group();
-    const shell = new THREE.MeshStandardMaterial({
-      color: cfg.color,
-      roughness: 0.42,
-      metalness: 0.22
-    });
-    const dark = new THREE.MeshStandardMaterial({
-      color: 0x152434,
-      roughness: 0.5,
-      metalness: 0.28
-    });
-    const accent = new THREE.MeshStandardMaterial({
-      color: 0xeef7ff,
-      roughness: 0.34,
-      metalness: 0.08
-    });
-
-    const bodyHeight = cfg.pellets > 1 ? 0.25 : 0.20;
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, bodyHeight, cfg.modelLength),
-      shell
-    );
-    body.position.z = -0.12;
-    group.add(body);
-
-    const stock = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.17, cfg.name.includes('SMG') ? 0.20 : 0.30),
-      accent
-    );
-    stock.position.z = cfg.modelLength * 0.45;
-    group.add(stock);
-
-    const barrelLength = cfg.scope ? 0.78 : cfg.pellets > 1 ? 0.54 : 0.44;
-    const barrel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.05, barrelLength, 10),
-      dark
-    );
-    barrel.rotation.x = Math.PI / 2;
-    barrel.position.z = -(cfg.modelLength / 2 + barrelLength / 2);
-    group.add(barrel);
-
-    const mag = new THREE.Mesh(
-      new THREE.BoxGeometry(0.11, cfg.pellets > 1 ? 0.22 : 0.30, 0.16),
-      dark
-    );
-    mag.position.set(0, -0.22, 0.02);
-    mag.rotation.x = -0.14;
-    group.add(mag);
-
-    if (!cfg.name.includes('SHOTGUN')) {
-      const sight = new THREE.Mesh(
-        new THREE.BoxGeometry(cfg.scope ? 0.16 : 0.10, cfg.scope ? 0.11 : 0.08, cfg.scope ? 0.34 : 0.16),
-        accent
-      );
-      sight.position.set(0, 0.15, -0.16);
-      group.add(sight);
-    }
-
-    const rightGrip = new THREE.Object3D();
-    rightGrip.name = 'RightGripSocket';
-    rightGrip.position.set(0, -0.090, 0.105);
-    group.add(rightGrip);
-
-    const leftGrip = new THREE.Object3D();
-    leftGrip.name = 'LeftForegripSocket';
-    leftGrip.position.set(
-      0,
-      -0.025,
-      -Math.min(0.34, Math.max(0.20, cfg.modelLength * 0.34))
-    );
-    group.add(leftGrip);
-
-    const muzzle = new THREE.Object3D();
-    muzzle.position.set(0, 0, -(cfg.modelLength / 2 + barrelLength + 0.04));
-    group.add(muzzle);
+    const model = buildJunkWeaponVisual(cfg, { pickup: false });
+    const { group, muzzle, rightGrip, leftGrip } = model;
 
     const muzzleFx = buildMuzzleFx(cfg);
     muzzleFx.group.position.copy(muzzle.position);
     muzzleFx.group.visible = false;
     group.add(muzzleFx.group);
 
+    // Preserve the existing hand/aim placement contract.
     group.position.set(0.34, 1.05, -0.48);
     group.rotation.x = -0.04;
 
     return {
-      group,
-      muzzle,
+      ...model,
       muzzleFlash: muzzleFx.group,
       muzzleFx,
       rightGrip,
       leftGrip
     };
-  }
-}
+  }}
 
 function buildMuzzleFx(cfg) {
   const group = new THREE.Group();
