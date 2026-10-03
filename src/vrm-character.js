@@ -299,6 +299,10 @@ function buildCharacterInterface({
       if (!hand) return null;
       hand.getWorldPosition(target);
       return target;
+    },
+    applyWeaponIK(gripPose, dt) {
+      applyTwoHandWeaponIK(this, gripPose, dt);
+      vrm?.update?.(0);
     }
   };
 }
@@ -1128,22 +1132,74 @@ function applyWeaponAimPose(bones, baseRotations, state, dt) {
   const pitch = THREE.MathUtils.clamp(state.aimPitch ?? 0, -0.68, 0.86);
   const yaw = THREE.MathUtils.clamp(state.aimYawOffset ?? 0, -1.18, 1.18);
 
-  dampBoneEuler(bones.spine, baseRotations, -pitch * 0.22, yaw * 0.28, -yaw * 0.025, 20, dt);
-  dampBoneEuler(bones.chest, baseRotations, -pitch * 0.28, yaw * 0.34, -yaw * 0.035, 22, dt);
-  dampBoneEuler(bones.upperChest, baseRotations, -pitch * 0.22, yaw * 0.26, 0, 22, dt);
-  dampBoneEuler(bones.neck, baseRotations, -pitch * 0.10, yaw * 0.08, 0, 18, dt);
-  dampBoneEuler(bones.head, baseRotations, -pitch * 0.08, yaw * 0.06, 0, 18, dt);
+  // Mesh-space-like aim offset. Locomotion owns the lower body; torso bones
+  // progressively turn toward the camera aim before the hands are solved by IK.
+  dampBoneEuler(
+    bones.spine,
+    baseRotations,
+    -pitch * 0.20,
+    yaw * 0.24,
+    -yaw * 0.020,
+    20,
+    dt
+  );
+  dampBoneEuler(
+    bones.chest,
+    baseRotations,
+    -pitch * 0.27,
+    yaw * 0.34,
+    -yaw * 0.030,
+    22,
+    dt
+  );
+  dampBoneEuler(
+    bones.upperChest,
+    baseRotations,
+    -pitch * 0.23,
+    yaw * 0.28,
+    0,
+    22,
+    dt
+  );
+  dampBoneEuler(
+    bones.neck,
+    baseRotations,
+    -pitch * 0.09,
+    yaw * 0.07,
+    0,
+    18,
+    dt
+  );
+  dampBoneEuler(
+    bones.head,
+    baseRotations,
+    -pitch * 0.07,
+    yaw * 0.05,
+    0,
+    18,
+    dt
+  );
 
-  dampBoneEuler(bones.leftShoulder, baseRotations, -0.10, 0.08, -0.18, 24, dt);
-  dampBoneEuler(bones.rightShoulder, baseRotations, -0.08, -0.06, 0.16, 24, dt);
-
-  dampBoneEuler(bones.leftUpperArm, baseRotations, -1.12, 0.18, -0.78, 26, dt);
-  dampBoneEuler(bones.leftLowerArm, baseRotations, -1.06, -0.04, -0.24, 28, dt);
-  dampBoneEuler(bones.leftHand, baseRotations, -0.14, 0.06, -0.08, 28, dt);
-
-  dampBoneEuler(bones.rightUpperArm, baseRotations, -0.98, -0.14, 0.74, 26, dt);
-  dampBoneEuler(bones.rightLowerArm, baseRotations, -1.02, 0.04, 0.18, 28, dt);
-  dampBoneEuler(bones.rightHand, baseRotations, -0.16, -0.04, 0.08, 28, dt);
+  // Shoulders rise a little under ADS, but the two-bone solver owns upper arm,
+  // forearm and hand placement from here.
+  dampBoneEuler(
+    bones.leftShoulder,
+    baseRotations,
+    -0.08,
+    0.06,
+    -0.14,
+    24,
+    dt
+  );
+  dampBoneEuler(
+    bones.rightShoulder,
+    baseRotations,
+    -0.07,
+    -0.05,
+    0.13,
+    24,
+    dt
+  );
 }
 
 function applyHipFirePose(bones, baseRotations, state, dt) {
@@ -1157,6 +1213,266 @@ function applyHipFirePose(bones, baseRotations, state, dt) {
   dampBoneEuler(bones.leftLowerArm, baseRotations, -0.82, -0.04, -0.18, 18, dt);
   dampBoneEuler(bones.rightUpperArm, baseRotations, -0.62, -0.08, 0.68, 18, dt);
   dampBoneEuler(bones.rightLowerArm, baseRotations, -0.80, 0.03, 0.16, 18, dt);
+}
+
+const IK_TMP = {
+  shoulder: new THREE.Vector3(),
+  elbow: new THREE.Vector3(),
+  hand: new THREE.Vector3(),
+  target: new THREE.Vector3(),
+  toTarget: new THREE.Vector3(),
+  dir: new THREE.Vector3(),
+  poleDir: new THREE.Vector3(),
+  elbowTarget: new THREE.Vector3(),
+  currentDir: new THREE.Vector3(),
+  desiredDir: new THREE.Vector3(),
+  rootQ: new THREE.Quaternion(),
+  right: new THREE.Vector3(),
+  forward: new THREE.Vector3(),
+  down: new THREE.Vector3(0, -1, 0),
+  pole: new THREE.Vector3(),
+  boneWorldQ: new THREE.Quaternion(),
+  parentWorldQ: new THREE.Quaternion(),
+  parentWorldQInv: new THREE.Quaternion(),
+  deltaWorldQ: new THREE.Quaternion(),
+  desiredWorldQ: new THREE.Quaternion(),
+  desiredLocalQ: new THREE.Quaternion()
+};
+
+function applyTwoHandWeaponIK(character, gripPose, dt) {
+  const { bones } = character;
+  if (
+    !gripPose?.aiming ||
+    !bones.rightUpperArm ||
+    !bones.rightLowerArm ||
+    !bones.rightHand ||
+    !bones.leftUpperArm ||
+    !bones.leftLowerArm ||
+    !bones.leftHand
+  ) {
+    return;
+  }
+
+  character.root.updateWorldMatrix(true, true);
+  character.root.getWorldQuaternion(IK_TMP.rootQ);
+
+  IK_TMP.right
+    .set(1, 0, 0)
+    .applyQuaternion(IK_TMP.rootQ)
+    .normalize();
+  IK_TMP.forward
+    .set(0, 0, -1)
+    .applyQuaternion(IK_TMP.rootQ)
+    .normalize();
+
+  // Right elbow stays slightly out/down from the body; left elbow opens the
+  // opposite way so the support hand reaches the foregrip naturally.
+  bones.rightUpperArm.getWorldPosition(IK_TMP.shoulder);
+  IK_TMP.pole
+    .copy(IK_TMP.shoulder)
+    .addScaledVector(IK_TMP.right, 0.34)
+    .addScaledVector(IK_TMP.down, 0.24)
+    .addScaledVector(IK_TMP.forward, 0.05);
+
+  solveTwoBoneIK(
+    character.root,
+    bones.rightUpperArm,
+    bones.rightLowerArm,
+    bones.rightHand,
+    gripPose.rightGrip,
+    IK_TMP.pole,
+    34,
+    dt
+  );
+
+  character.root.updateWorldMatrix(true, true);
+
+  bones.leftUpperArm.getWorldPosition(IK_TMP.shoulder);
+  IK_TMP.pole
+    .copy(IK_TMP.shoulder)
+    .addScaledVector(IK_TMP.right, -0.34)
+    .addScaledVector(IK_TMP.down, 0.22)
+    .addScaledVector(IK_TMP.forward, 0.08);
+
+  solveTwoBoneIK(
+    character.root,
+    bones.leftUpperArm,
+    bones.leftLowerArm,
+    bones.leftHand,
+    gripPose.leftGrip,
+    IK_TMP.pole,
+    34,
+    dt
+  );
+}
+
+function solveTwoBoneIK(
+  root,
+  upper,
+  lower,
+  hand,
+  targetWorld,
+  poleWorld,
+  lambda,
+  dt
+) {
+  root.updateWorldMatrix(true, true);
+
+  upper.getWorldPosition(IK_TMP.shoulder);
+  lower.getWorldPosition(IK_TMP.elbow);
+  hand.getWorldPosition(IK_TMP.hand);
+
+  const upperLen = Math.max(
+    0.001,
+    IK_TMP.shoulder.distanceTo(IK_TMP.elbow)
+  );
+  const lowerLen = Math.max(
+    0.001,
+    IK_TMP.elbow.distanceTo(IK_TMP.hand)
+  );
+
+  IK_TMP.toTarget
+    .copy(targetWorld)
+    .sub(IK_TMP.shoulder);
+
+  let targetDist = IK_TMP.toTarget.length();
+  if (targetDist < 0.001) return;
+
+  const minReach = Math.abs(upperLen - lowerLen) + 0.003;
+  const maxReach = upperLen + lowerLen - 0.003;
+  targetDist = THREE.MathUtils.clamp(
+    targetDist,
+    minReach,
+    maxReach
+  );
+
+  IK_TMP.dir
+    .copy(IK_TMP.toTarget)
+    .normalize();
+
+  IK_TMP.poleDir
+    .copy(poleWorld)
+    .sub(IK_TMP.shoulder);
+
+  // Remove component along the shoulder->hand direction to get the bend plane.
+  IK_TMP.poleDir.addScaledVector(
+    IK_TMP.dir,
+    -IK_TMP.poleDir.dot(IK_TMP.dir)
+  );
+
+  if (IK_TMP.poleDir.lengthSq() < 0.000001) {
+    IK_TMP.poleDir
+      .copy(IK_TMP.right)
+      .addScaledVector(
+        IK_TMP.dir,
+        -IK_TMP.right.dot(IK_TMP.dir)
+      );
+  }
+  IK_TMP.poleDir.normalize();
+
+  const cosShoulder = THREE.MathUtils.clamp(
+    (
+      upperLen * upperLen +
+      targetDist * targetDist -
+      lowerLen * lowerLen
+    ) /
+      (2 * upperLen * targetDist),
+    -1,
+    1
+  );
+
+  const along = cosShoulder * upperLen;
+  const bend = Math.sqrt(
+    Math.max(0, upperLen * upperLen - along * along)
+  );
+
+  IK_TMP.elbowTarget
+    .copy(IK_TMP.shoulder)
+    .addScaledVector(IK_TMP.dir, along)
+    .addScaledVector(IK_TMP.poleDir, bend);
+
+  rotateBoneChildToward(
+    root,
+    upper,
+    lower,
+    IK_TMP.elbowTarget,
+    lambda,
+    dt
+  );
+
+  root.updateWorldMatrix(true, true);
+
+  // Recompute after the upper-arm correction.
+  rotateBoneChildToward(
+    root,
+    lower,
+    hand,
+    targetWorld,
+    lambda,
+    dt
+  );
+
+  root.updateWorldMatrix(true, true);
+}
+
+function rotateBoneChildToward(
+  root,
+  bone,
+  child,
+  targetWorld,
+  lambda,
+  dt
+) {
+  bone.getWorldPosition(IK_TMP.shoulder);
+  child.getWorldPosition(IK_TMP.hand);
+
+  IK_TMP.currentDir
+    .copy(IK_TMP.hand)
+    .sub(IK_TMP.shoulder);
+
+  IK_TMP.desiredDir
+    .copy(targetWorld)
+    .sub(IK_TMP.shoulder);
+
+  if (
+    IK_TMP.currentDir.lengthSq() < 0.000001 ||
+    IK_TMP.desiredDir.lengthSq() < 0.000001
+  ) {
+    return;
+  }
+
+  IK_TMP.currentDir.normalize();
+  IK_TMP.desiredDir.normalize();
+
+  IK_TMP.deltaWorldQ.setFromUnitVectors(
+    IK_TMP.currentDir,
+    IK_TMP.desiredDir
+  );
+
+  bone.getWorldQuaternion(IK_TMP.boneWorldQ);
+  IK_TMP.desiredWorldQ
+    .copy(IK_TMP.deltaWorldQ)
+    .multiply(IK_TMP.boneWorldQ);
+
+  if (bone.parent) {
+    bone.parent.getWorldQuaternion(IK_TMP.parentWorldQ);
+    IK_TMP.parentWorldQInv
+      .copy(IK_TMP.parentWorldQ)
+      .invert();
+
+    IK_TMP.desiredLocalQ
+      .copy(IK_TMP.parentWorldQInv)
+      .multiply(IK_TMP.desiredWorldQ);
+  } else {
+    IK_TMP.desiredLocalQ.copy(IK_TMP.desiredWorldQ);
+  }
+
+  bone.quaternion.slerp(
+    IK_TMP.desiredLocalQ,
+    1 - Math.exp(-lambda * dt)
+  );
+
+  root.updateWorldMatrix(true, true);
 }
 
 function applyRealFangPose(bones, baseRotations, fang, dt) {

@@ -227,3 +227,18 @@ Browser-first third-person shooter prototype.
 - VRM update now runs after authored + gameplay pose layers so normalized-bone changes reach the rendered mesh in the same frame.
 - Existing procedural crouch, crouch-walk, slide and airborne poses remain as fallback states until authored versions are added.
 - If the animation library fails to load, Build 010.1 procedural locomotion remains available instead of breaking the character.
+
+
+## Build 010.4 — weapon-driven ADS + two-hand IK
+- Reworked ADS around the standard shooter hierarchy: crosshair/camera aim drives the weapon first, then both character arms follow weapon grip sockets.
+- Reviewed Epic Aim Offset / Layered Blend Per Bone guidance, a PUBG-style Unreal prototype with stance-specific aim offsets, and a technical-animation project using FABRIK for the support hand.
+- Every firearm now exposes a RightGripSocket and LeftForegripSocket.
+- While RMB ADS is active, the firearm is no longer positioned from the current hand location. It is raised to a firing-shoulder anchor and aligned directly with the camera aim quaternion.
+- The rear grip is positioned slightly forward/inward from the right shoulder so the rifle visibly rises to shoulder level.
+- The weapon model preserves subtle ADS sway/recoil after crosshair alignment.
+- Added final two-bone IK for both arms: shoulder -> elbow -> hand is solved against the weapon's live grip sockets every frame.
+- Elbow pole targets keep the right elbow slightly out/down and the left elbow open toward the foregrip instead of collapsing both elbows into the torso.
+- ADS upper-body aim now controls spine/chest/upper-chest/neck/shoulders only; upper arms, forearms and hands are owned by the final IK pass.
+- Final frame order: locomotion -> torso aim offset -> weapon crosshair transform -> grip sockets -> two-hand IK -> VRM propagation -> render.
+- Non-ADS gun carrying remains hand-led so this change is isolated to the aiming/shooting stance.
+- The existing camera-first bullet trace remains authoritative; the visual muzzle then traces toward the same camera-selected aim point.

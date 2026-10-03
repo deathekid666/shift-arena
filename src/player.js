@@ -457,6 +457,18 @@ export class PlayerController {
     return target;
   }
 
+  getBoneWorldPosition(name, target = new THREE.Vector3()) {
+    const bone = this.vrmCharacter?.bones?.[name];
+    if (!bone) return null;
+    bone.getWorldPosition(target);
+    return target;
+  }
+
+  applyWeaponIK(gripPose, dt) {
+    if (!this.vrmCharacter || !gripPose?.aiming) return;
+    this.vrmCharacter.applyWeaponIK?.(gripPose, dt);
+  }
+
   getCharacterVisualRoot() {
     return this.visualRoot ?? null;
   }

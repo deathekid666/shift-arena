@@ -30,6 +30,25 @@ export class WeaponSystem {
     this.handMounted = false;
     this.tmpHandWorld = new THREE.Vector3();
     this.tmpHandLocal = new THREE.Vector3();
+    this.tmpShoulderWorld = new THREE.Vector3();
+    this.tmpAimForward = new THREE.Vector3();
+    this.tmpAimRight = new THREE.Vector3();
+    this.tmpAimUp = new THREE.Vector3();
+    this.tmpGripWorld = new THREE.Vector3();
+    this.tmpGripLocal = new THREE.Vector3();
+    this.tmpParentWorldQ = new THREE.Quaternion();
+    this.tmpParentWorldQInv = new THREE.Quaternion();
+    this.tmpDesiredWorldQ = new THREE.Quaternion();
+    this.tmpDesiredLocalQ = new THREE.Quaternion();
+    this.tmpGripOffset = new THREE.Vector3();
+    this.gripPose = {
+      aiming: false,
+      rightGrip: new THREE.Vector3(),
+      leftGrip: new THREE.Vector3(),
+      muzzle: new THREE.Vector3(),
+      forward: new THREE.Vector3(),
+      weaponQuaternion: new THREE.Quaternion()
+    };
 
     this.entries = WEAPON_ORDER.map((key) => {
       const cfg = GAME_CONFIG.weapons[key];
@@ -202,74 +221,211 @@ export class WeaponSystem {
   updateWeaponPose(dt) {
     const cfg = this.cfg;
     const state = this.state;
-    const model = this.active.model.group;
+    const modelData = this.active.model;
+    const model = modelData.group;
     const speed = this.player.horizontalSpeed();
     const moving = Math.min(1, speed / 5.2);
 
     state.bobTime += dt * (3.5 + speed * 1.4);
-    const bobScale = cfg.bob * moving * (this.aiming ? 0.22 : 0.55);
+    const bobScale = cfg.bob * moving * (this.aiming ? 0.10 : 0.55);
     const bobX = Math.cos(state.bobTime) * bobScale;
-    const bobY = Math.abs(Math.sin(state.bobTime * 2)) * bobScale * 0.55;
+    const bobY = Math.abs(Math.sin(state.bobTime * 2)) * bobScale * 0.45;
 
-    const swayScale = cfg.sway * (this.aiming ? 0.30 : 0.62);
-    const swayX = THREE.MathUtils.clamp(-this.cameraRig.lookX * swayScale, -0.045, 0.045);
-    const swayY = THREE.MathUtils.clamp(this.cameraRig.lookY * swayScale * 0.45, -0.025, 0.025);
+    const swayScale = cfg.sway * (this.aiming ? 0.18 : 0.62);
+    const swayX = THREE.MathUtils.clamp(
+      -this.cameraRig.lookX * swayScale,
+      -0.032,
+      0.032
+    );
+    const swayY = THREE.MathUtils.clamp(
+      this.cameraRig.lookY * swayScale * 0.38,
+      -0.020,
+      0.020
+    );
 
+    if (this.aiming && this.handMounted) {
+      // Shooter architecture: crosshair/camera owns the weapon transform.
+      // Hands follow the weapon sockets via IK after this pose is resolved.
+      const shoulder =
+        this.player.getBoneWorldPosition?.('rightShoulder', this.tmpShoulderWorld) ??
+        this.player.getBoneWorldPosition?.('upperChest', this.tmpShoulderWorld);
+
+      if (shoulder) {
+        this.tmpAimForward
+          .set(0, 0, -1)
+          .applyQuaternion(this.camera.quaternion)
+          .normalize();
+        this.tmpAimRight
+          .set(1, 0, 0)
+          .applyQuaternion(this.camera.quaternion)
+          .normalize();
+        this.tmpAimUp
+          .set(0, 1, 0)
+          .applyQuaternion(this.camera.quaternion)
+          .normalize();
+
+        // The rear/pistol grip sits just forward and slightly inward from the
+        // firing shoulder, which visibly raises the rifle to a shooter stance.
+        this.tmpGripWorld
+          .copy(shoulder)
+          .addScaledVector(this.tmpAimForward, 0.23)
+          .addScaledVector(this.tmpAimRight, -0.035 + bobX + swayX)
+          .addScaledVector(this.tmpAimUp, -0.035 + bobY + swayY);
+
+        this.tmpDesiredWorldQ.copy(this.camera.quaternion);
+
+        // Small visual recoil around the camera-aligned aim axis.
+        const recoilQ = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(
+            -0.035 - state.visualKick * 0.72,
+            0,
+            -0.035 - swayX * 0.45,
+            'YXZ'
+          )
+        );
+        this.tmpDesiredWorldQ.multiply(recoilQ);
+
+        this.player.group.getWorldQuaternion(this.tmpParentWorldQ);
+        this.tmpParentWorldQInv
+          .copy(this.tmpParentWorldQ)
+          .invert();
+
+        this.tmpDesiredLocalQ
+          .copy(this.tmpParentWorldQInv)
+          .multiply(this.tmpDesiredWorldQ);
+
+        this.tmpGripLocal.copy(this.tmpGripWorld);
+        this.player.group.worldToLocal(this.tmpGripLocal);
+
+        this.tmpGripOffset
+          .copy(modelData.rightGrip.position)
+          .applyQuaternion(this.tmpDesiredLocalQ);
+
+        const targetPosition = this.tmpGripLocal
+          .clone()
+          .sub(this.tmpGripOffset);
+
+        model.position.x = THREE.MathUtils.damp(
+          model.position.x,
+          targetPosition.x,
+          30 / cfg.mass,
+          dt
+        );
+        model.position.y = THREE.MathUtils.damp(
+          model.position.y,
+          targetPosition.y,
+          30 / cfg.mass,
+          dt
+        );
+        model.position.z = THREE.MathUtils.damp(
+          model.position.z,
+          targetPosition.z,
+          32 / cfg.mass,
+          dt
+        );
+
+        model.quaternion.slerp(
+          this.tmpDesiredLocalQ,
+          1 - Math.exp(-(28 / cfg.mass) * dt)
+        );
+
+        model.updateWorldMatrix(true, true);
+        this.updateGripPose();
+        return;
+      }
+    }
+
+    // Non-ADS remains hand-led/relaxed.
     const handWorld = this.handMounted
       ? this.player.getHandWorldPosition?.('right', this.tmpHandWorld)
       : null;
 
     if (handWorld) {
-      // Weapon origin follows the real VRM hand. The firearm still aims along
-      // the character/camera forward direction, avoiding unpredictable hand
-      // bone local axes while visually staying in the hand.
       this.tmpHandLocal.copy(handWorld);
       this.player.group.worldToLocal(this.tmpHandLocal);
 
-      const targetX = this.tmpHandLocal.x + (this.aiming ? -0.015 : 0.018) + bobX + swayX;
+      const targetX = this.tmpHandLocal.x + 0.018 + bobX + swayX;
       const targetY = this.tmpHandLocal.y + 0.015 + bobY + swayY;
-      const targetZ = this.tmpHandLocal.z - (this.aiming ? 0.16 : 0.12) + state.visualKick;
+      const targetZ = this.tmpHandLocal.z - 0.12 + state.visualKick;
 
-      model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 28 / cfg.mass, dt);
-      model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 28 / cfg.mass, dt);
-      model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 30 / cfg.mass, dt);
+      model.position.x = THREE.MathUtils.damp(
+        model.position.x,
+        targetX,
+        28 / cfg.mass,
+        dt
+      );
+      model.position.y = THREE.MathUtils.damp(
+        model.position.y,
+        targetY,
+        28 / cfg.mass,
+        dt
+      );
+      model.position.z = THREE.MathUtils.damp(
+        model.position.z,
+        targetZ,
+        30 / cfg.mass,
+        dt
+      );
 
-      const targetPitch = THREE.MathUtils.clamp(this.camera.rotation.x * 0.78, -0.62, 0.58);
       model.rotation.x = THREE.MathUtils.damp(
         model.rotation.x,
-        targetPitch - 0.05 - state.visualKick * 0.70,
+        -0.08 - state.visualKick * 0.70,
         22 / cfg.mass,
         dt
       );
-      const aimYaw = this.aiming
-        ? (this.player.aimYawOffset ?? 0)
-        : 0;
       model.rotation.y = THREE.MathUtils.damp(
         model.rotation.y,
-        aimYaw,
+        0,
         24 / cfg.mass,
         dt
       );
-      model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -0.05 - swayX * 0.7, 20 / cfg.mass, dt);
+      model.rotation.z = THREE.MathUtils.damp(
+        model.rotation.z,
+        -0.08 - swayX * 0.7,
+        20 / cfg.mass,
+        dt
+      );
+
+      model.updateWorldMatrix(true, true);
+      this.updateGripPose();
       return;
     }
 
-    // Fallback positioning used only before/without the VRM hand.
-    const targetX = (this.aiming ? 0.28 : 0.34) + bobX + swayX;
+    const targetX = 0.34 + bobX + swayX;
     const targetY = 1.05 + bobY + swayY;
-    const targetZ = (this.aiming ? -0.60 : -0.48) + state.visualKick;
+    const targetZ = -0.48 + state.visualKick;
 
     model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 18 / cfg.mass, dt);
     model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / cfg.mass, dt);
     model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 22 / cfg.mass, dt);
     model.rotation.x = THREE.MathUtils.damp(model.rotation.x, -0.04 - state.visualKick * 0.75, 18 / cfg.mass, dt);
-    model.rotation.y = THREE.MathUtils.damp(
-      model.rotation.y,
-      this.aiming ? (this.player.aimYawOffset ?? 0) : 0,
-      18 / cfg.mass,
-      dt
-    );
+    model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 18 / cfg.mass, dt);
     model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / cfg.mass, dt);
+
+    model.updateWorldMatrix(true, true);
+    this.updateGripPose();
+  }
+
+  updateGripPose() {
+    const model = this.active.model;
+    model.rightGrip.getWorldPosition(this.gripPose.rightGrip);
+    model.leftGrip.getWorldPosition(this.gripPose.leftGrip);
+    model.muzzle.getWorldPosition(this.gripPose.muzzle);
+    model.group.getWorldQuaternion(this.gripPose.weaponQuaternion);
+
+    this.gripPose.forward
+      .set(0, 0, -1)
+      .applyQuaternion(this.gripPose.weaponQuaternion)
+      .normalize();
+
+    this.gripPose.aiming =
+      this.aiming &&
+      !this.visualHidden &&
+      !this.blocked;
+  }
+
+  getGripPose() {
+    return this.gripPose;
   }
 
   currentSpread() {
@@ -636,6 +792,20 @@ export class WeaponSystem {
       group.add(sight);
     }
 
+    const rightGrip = new THREE.Object3D();
+    rightGrip.name = 'RightGripSocket';
+    rightGrip.position.set(0, -0.090, 0.105);
+    group.add(rightGrip);
+
+    const leftGrip = new THREE.Object3D();
+    leftGrip.name = 'LeftForegripSocket';
+    leftGrip.position.set(
+      0,
+      -0.025,
+      -Math.min(0.34, Math.max(0.20, cfg.modelLength * 0.34))
+    );
+    group.add(leftGrip);
+
     const muzzle = new THREE.Object3D();
     muzzle.position.set(0, 0, -(cfg.modelLength / 2 + barrelLength + 0.04));
     group.add(muzzle);
@@ -651,7 +821,7 @@ export class WeaponSystem {
     group.position.set(0.34, 1.05, -0.48);
     group.rotation.x = -0.04;
 
-    return { group, muzzle, muzzleFlash };
+    return { group, muzzle, muzzleFlash, rightGrip, leftGrip };
   }
 }
 
