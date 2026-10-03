@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { createVrmLocomotionController } from './vrm-locomotion.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -72,7 +73,7 @@ async function loadVrmAvatar(url) {
   modelRoot.rotation.y = Math.PI;
 
   const bones = vrmBones(vrm);
-  return buildCharacterInterface({
+  const character = buildCharacterInterface({
     root,
     modelRoot,
     scene: vrm.scene,
@@ -80,6 +81,20 @@ async function loadVrmAvatar(url) {
     vrm,
     applyScoutAccessories: !isFinal
   });
+
+  character.authoredLocomotionReady =
+    createVrmLocomotionController(character, vrm)
+      .then((controller) => {
+        character.authoredLocomotion = controller;
+        return controller;
+      })
+      .catch((error) => {
+        console.warn('Authored VRM locomotion failed; using procedural fallback.', error);
+        character.authoredLocomotion = null;
+        return null;
+      });
+
+  return character;
 }
 
 async function loadHumanoidGlb(url) {
@@ -268,9 +283,12 @@ function buildCharacterInterface({
       landing: 0,
       moveBlend: 0
     },
+    authoredLocomotion: null,
+    authoredLocomotionReady: null,
     update(dt, state = {}) {
-      vrm?.update?.(dt);
+      this.authoredLocomotion?.update(dt, state);
       updatePose(this, dt, state);
+      vrm?.update?.(dt);
     },
     setVisible(visible) {
       root.visible = Boolean(visible);
@@ -724,7 +742,7 @@ function updatePose(character, dt, state) {
   const fang = state.fangAnimation ?? null;
 
   const locomotion = updateLocomotionLayer(character, dt, state);
-  const { cycle, moveBlend, stateName } = locomotion;
+  const { cycle, moveBlend, stateName, authored } = locomotion;
 
   const time = performance.now() * 0.001;
   const breathe = Math.sin(time * 2.4) * 0.025;
@@ -736,7 +754,7 @@ function updatePose(character, dt, state) {
     dampBoneEuler(bones.leftLowerArm, baseRotations, -0.82, -0.08, -0.16, 16, dt);
     dampBoneEuler(bones.rightUpperArm, baseRotations, -0.48, -0.10, 0.70, 16, dt);
     dampBoneEuler(bones.rightLowerArm, baseRotations, -0.76, 0.02, 0.18, 16, dt);
-  } else if (!fang) {
+  } else if (!fang && !authored) {
     const armAmplitude =
       stateName === 'RUN' ? 0.58 :
       stateName === 'WALK' ? 0.36 :
@@ -770,15 +788,17 @@ function updatePose(character, dt, state) {
 
   if (fang) applyRealFangPose(bones, baseRotations, fang, dt);
 
-  dampBoneEuler(
-    bones.head,
-    baseRotations,
-    breathe * 0.18,
-    Math.sin(time * 1.5) * 0.025,
-    Math.sin(time * 1.1) * 0.018,
-    7,
-    dt
-  );
+  if (!authored) {
+    dampBoneEuler(
+      bones.head,
+      baseRotations,
+      breathe * 0.18,
+      Math.sin(time * 1.5) * 0.025,
+      Math.sin(time * 1.1) * 0.018,
+      7,
+      dt
+    );
+  }
 
   animateScoutAccessories(character, locomotion, dt);
 }
@@ -791,6 +811,35 @@ function updateLocomotionLayer(character, dt, state) {
   const sliding = Boolean(state.sliding);
   const sprinting = Boolean(state.sprinting);
   const verticalSpeed = state.verticalSpeed ?? 0;
+
+  const speedForDirection = Math.max(0.001, speed);
+  const localForward = speed > 0.05
+    ? THREE.MathUtils.clamp(-(state.localZ ?? 0) / speedForDirection, -1, 1)
+    : 1;
+  const localStrafe = speed > 0.05
+    ? THREE.MathUtils.clamp((state.localX ?? 0) / speedForDirection, -1, 1)
+    : 0;
+
+  const authored = character.authoredLocomotion;
+  if (authored?.ready && authored.active) {
+    locomotion.state = authored.state;
+    locomotion.phase = authored.phase;
+    locomotion.moveBlend = THREE.MathUtils.damp(
+      locomotion.moveBlend,
+      authored.state === 'IDLE' ? 0 : 1,
+      14,
+      dt
+    );
+
+    return {
+      cycle: Math.sin(authored.phase),
+      moveBlend: locomotion.moveBlend,
+      stateName: authored.state,
+      localForward,
+      localStrafe,
+      authored: true
+    };
+  }
 
   const stateName = resolveLocomotionState({
     speed,
@@ -826,12 +875,6 @@ function updateLocomotionLayer(character, dt, state) {
   if (stateName === 'RUN') cadence = 12.4;
   if (stateName === 'CROUCH_WALK') cadence = 6.2;
 
-  const localForward = speed > 0.05
-    ? THREE.MathUtils.clamp(-(state.localZ ?? 0) / speed, -1, 1)
-    : 1;
-  const localStrafe = speed > 0.05
-    ? THREE.MathUtils.clamp((state.localX ?? 0) / speed, -1, 1)
-    : 0;
   const reverse = localForward < -0.25 ? -1 : 1;
 
   if (cadence > 0) locomotion.phase += dt * cadence * reverse;
@@ -1022,7 +1065,8 @@ function updateLocomotionLayer(character, dt, state) {
     moveBlend: locomotion.moveBlend,
     stateName,
     localForward,
-    localStrafe
+    localStrafe,
+    authored: false
   };
 }
 

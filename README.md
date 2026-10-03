@@ -212,3 +212,18 @@ Browser-first third-person shooter prototype.
 - Antennae lean/sway during movement and the segmented shell gets subtle run secondary motion.
 - Added live debug Anim state to the performance HUD.
 - Quaternius Universal Animation Library was reviewed as the clip source used by the GitHub starter; Quaternius publishes it under CC0. A later clip-retarget pass can replace the procedural gait without changing the movement-state architecture.
+
+
+## Build 010.2 — authored locomotion clips
+- Replaced the normal idle/walk/run procedural gait with real authored animation clips.
+- Uses the CC0 Quaternius Universal Animation Library via the pinned AnimationLibrary.glb from norio/vrm-game-starter.
+- Added src/vrm-locomotion.js with a VRM humanoid retargeter adapted from the MIT three-vrm / vrm-game-starter approach.
+- Authored clips: Idle_Loop, Walk_Loop and Jog_Fwd_Loop.
+- Animation state crossfades between idle, walk and run instead of snapping bone angles.
+- Playback rate follows actual SHIFT movement speed to reduce visible foot skating.
+- Backpedaling reverses clip playback when combat-facing movement is backward.
+- Horizontal hips/root translation from the source clip is stripped because SHIFT physics owns world movement; authored vertical weight transfer is preserved.
+- Mixer drives the full authored body first; gun/Fang upper-body overrides are applied afterward, so aiming can coexist with real leg animation.
+- VRM update now runs after authored + gameplay pose layers so normalized-bone changes reach the rendered mesh in the same frame.
+- Existing procedural crouch, crouch-walk, slide and airborne poses remain as fallback states until authored versions are added.
+- If the animation library fails to load, Build 010.1 procedural locomotion remains available instead of breaking the character.
