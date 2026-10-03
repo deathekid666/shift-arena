@@ -7,6 +7,7 @@ const ACTION_CODES = {
   sprint: ['ShiftLeft', 'ShiftRight'],
   crouch: ['ControlLeft', 'ControlRight'],
   reload: ['KeyR'],
+  toggleBot: ['KeyB'],
   slot1: ['Digit1'],
   slot2: ['Digit2'],
   slot3: ['Digit3'],

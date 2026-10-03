@@ -14,6 +14,7 @@ export class CombatBot {
     this.group = new THREE.Group();
     this.health = this.cfg.maxHealth;
     this.alive = true;
+    this.enabled = true;
     this.state = 'IDLE';
     this.fireCooldown = 0;
     this.respawnTimer = 0;
@@ -98,13 +99,45 @@ export class CombatBot {
     }
   }
 
+  setEnabled(enabled) {
+    this.enabled = Boolean(enabled);
+    this.muzzleFlash.visible = false;
+    this.lastSeen = null;
+    this.searchTimer = 0;
+    this.fireCooldown = 0;
+
+    if (!this.enabled) {
+      this.state = 'OFF';
+      this.group.visible = false;
+      this.body.userData.disabled = true;
+      this.head.userData.disabled = true;
+      return;
+    }
+
+    this.health = this.cfg.maxHealth;
+    this.alive = true;
+    this.state = 'IDLE';
+    this.respawnTimer = 0;
+    this.body.userData.disabled = false;
+    this.head.userData.disabled = false;
+    this.bodyMaterial.emissive.setHex(0x000000);
+    this.headMaterial.emissive.setHex(0x000000);
+    this.updateHealthBar();
+    this.resetPosition();
+  }
+
   resetPosition() {
     this.group.position.copy(this.spawnPoint);
-    this.group.visible = true;
+    this.group.visible = this.enabled && this.alive;
     this.group.rotation.set(0, 0, 0);
   }
 
   update(dt, camera) {
+    if (!this.enabled) {
+      this.state = 'OFF';
+      return;
+    }
+
     this.updateVisuals(dt, camera);
 
     if (!this.alive) {
@@ -252,7 +285,7 @@ export class CombatBot {
   }
 
   fire() {
-    if (!this.alive || !this.playerHealth.alive || !this.hasLineOfSight()) return;
+    if (!this.enabled || !this.alive || !this.playerHealth.alive || !this.hasLineOfSight()) return;
 
     this.fireCooldown = 1 / this.cfg.fireRate;
     this.muzzleTimer = 0.055;
@@ -279,7 +312,7 @@ export class CombatBot {
   }
 
   takeWeaponDamage(hitZone, baseDamage, headshotMultiplier) {
-    if (!this.alive) return null;
+    if (!this.enabled || !this.alive) return null;
 
     const headshot = hitZone === 'head';
     const damage = Math.round(baseDamage * (headshot ? headshotMultiplier : 1));

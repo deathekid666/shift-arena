@@ -34,3 +34,10 @@ Build 006 uses a single fixed baseline tier so we can compare weapon roles witho
 - Esc: release pointer
 
 No pickups or inventory limits yet. Build 007 will turn this test loadout into a real pickup/inventory system.
+
+
+## Test controls added
+- Combat Bot can be switched ON/OFF before entering the arena.
+- Press B during play to toggle the bot instantly.
+- OFF disables bot AI, shooting, visibility and hit registration.
+- Turning it back ON respawns it at full health.

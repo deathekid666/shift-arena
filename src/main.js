@@ -67,7 +67,7 @@ root.innerHTML = `
       <div id="reload-state"></div>
     </div>
 
-    <div id="controls">1–7 weapons · WASD move · LMB fire · RMB ADS · R reload · Shift sprint · Ctrl crouch/slide · Space jump</div>
+    <div id="controls">1–7 weapons · B bot on/off · WASD move · LMB fire · RMB ADS · R reload · Shift sprint · Ctrl crouch/slide · Space jump</div>
     <div id="touch-note">Touch device detected. Mobile combat controls will be added in the dedicated mobile-input phase.</div>
 
     <div id="start">
@@ -75,6 +75,15 @@ root.innerHTML = `
         <div class="build-tag">BUILD 006.1</div>
         <h1>SHIFT Arena</h1>
         <p>Weapon-feel rebuild: every class now has its own reticle, recoil pattern, accuracy behavior, camera treatment, handling weight and shot sound. The sniper enters a true scoped view.</p>
+        <label class="bot-toggle">
+          <span class="bot-toggle-copy">
+            <strong>COMBAT BOT</strong>
+            <small>Can also be toggled in-game with B</small>
+          </span>
+          <input id="bot-enabled" type="checkbox" checked>
+          <span class="bot-toggle-track"><i></i></span>
+          <b id="bot-toggle-label">ON</b>
+        </label>
         <button type="button">ENTER WEAPON FEEL TEST</button>
       </div>
     </div>
@@ -131,6 +140,9 @@ const elimination = document.querySelector('#elimination');
 const respawnCountdown = document.querySelector('#respawn-countdown');
 const botState = document.querySelector('#bot-state');
 const botHealth = document.querySelector('#bot-health');
+const botToggle = document.querySelector('#bot-enabled');
+const botToggleLabel = document.querySelector('#bot-toggle-label');
+const botDebug = document.querySelector('#bot-debug');
 const weaponSlots = [...document.querySelectorAll('.weapon-slot')];
 
 let weapon = null;
@@ -154,6 +166,11 @@ const health = new PlayerHealth({
 });
 
 bot = new CombatBot({ scene, world, player, playerHealth: health, targets });
+setBotEnabled(botToggle.checked);
+
+botToggle.addEventListener('change', () => {
+  setBotEnabled(botToggle.checked);
+});
 
 weapon = new WeaponSystem({
   scene, camera, cameraRig: thirdCam, player, input, world, targets,
@@ -179,6 +196,15 @@ let last = performance.now();
 let fps = 60;
 let frames = 0;
 let fpsTimer = 0;
+
+function setBotEnabled(enabled) {
+  bot.setEnabled(enabled);
+  botToggle.checked = enabled;
+  botToggleLabel.textContent = enabled ? 'ON' : 'OFF';
+  botDebug.classList.toggle('bot-off', !enabled);
+  botState.textContent = enabled ? bot.state : 'OFF';
+  botHealth.textContent = enabled ? String(Math.round(bot.health)) : '—';
+}
 
 function updateWeaponHud(info) {
   if (!weaponName) return;
@@ -265,6 +291,10 @@ function loop(now) {
     weapon.update(dt);
   }
 
+  if (input.consume('toggleBot')) {
+    setBotEnabled(!bot.enabled);
+  }
+
   health.update(dt);
   targets.update(dt);
   bot.update(dt, camera);
@@ -286,8 +316,8 @@ function loop(now) {
     ? `RELOADING ${Math.round(weapon.reloadProgress * 100)}%`
     : '';
 
-  botState.textContent = bot.state;
-  botHealth.textContent = String(Math.round(bot.health));
+  botState.textContent = bot.enabled ? bot.state : 'OFF';
+  botHealth.textContent = bot.enabled ? String(Math.round(bot.health)) : '—';
   if (!health.alive) respawnCountdown.textContent = health.respawnTimer.toFixed(1);
 
   frames += 1;

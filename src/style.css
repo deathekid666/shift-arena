@@ -614,3 +614,82 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 @media (pointer: coarse) {
   #scope-overlay { display:none; }
 }
+
+
+/* Bot test switch */
+.bot-toggle {
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 11px 12px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+.bot-toggle-copy {
+  display: grid;
+  gap: 2px;
+}
+.bot-toggle-copy strong {
+  color: #edf5fb;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+.bot-toggle-copy small {
+  color: #7f94a5;
+  font-size: 10px;
+}
+.bot-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.bot-toggle-track {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.12);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.bot-toggle-track i {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #d9e3eb;
+  transition: transform 140ms ease, background 140ms ease;
+}
+.bot-toggle input:checked + .bot-toggle-track {
+  background: rgba(74,190,104,.28);
+  border-color: rgba(96,222,127,.5);
+}
+.bot-toggle input:checked + .bot-toggle-track i {
+  transform: translateX(20px);
+  background: #71e28d;
+}
+#bot-toggle-label {
+  min-width: 28px;
+  color: #a9b9c6;
+  font-size: 10px;
+  text-align: right;
+  letter-spacing: .08em;
+}
+.bot-toggle input:checked ~ #bot-toggle-label {
+  color: #7be295;
+}
+#bot-debug.bot-off {
+  opacity: .62;
+}
+#bot-debug.bot-off b {
+  color: #8998a5 !important;
+}
