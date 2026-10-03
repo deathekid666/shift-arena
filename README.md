@@ -293,3 +293,16 @@ Browser-first third-person shooter prototype.
 - Standing transition is intentionally slower than crouch entry, avoiding a robotic pop-up.
 - Slide remains its own pose and is not overwritten by the crouch layer.
 - No jump, landing, climbing, Tin Fang, gun IK, or weapon-feedback mechanics were modified.
+
+
+## Build 010.7C — crouch IK fix
+- Fixed the Build 010.7B failure where the avatar visually sank toward the floor while the legs stayed nearly straight.
+- Removed the crouch's rig-axis-dependent thigh/knee Euler deformation as the main body solver.
+- Added src/crouch-pose.js, a world-space planted-feet crouch layer.
+- Crouch now captures both current foot positions first, lowers/moves the pelvis, then solves each thigh/knee chain back to its planted foot target with two-bone IK.
+- Knee pole targets are biased forward and slightly outward, forcing a visible athletic knee bend instead of allowing the whole body to translate downward.
+- Feet preserve their pre-crouch world orientation so soles stay flatter.
+- Pelvis drops roughly 0.285 m and shifts slightly back; spine/chest counter-lean forward for balance.
+- Crouch walking uses short world-space foot target offsets/lifts while preserving the squat.
+- The crouch pose is applied after the locomotion mixer/updatePose and before VRM propagation, preventing authored locomotion from erasing the bend.
+- Existing slide/jump/Tin Fang/weapon IK systems remain unchanged.

@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { createVrmLocomotionController } from './vrm-locomotion.js';
 import { createFangPoseLayer } from './fang-pose.js';
+import { createCrouchPoseLayer } from './crouch-pose.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -288,8 +289,22 @@ function buildCharacterInterface({
     authoredLocomotionReady: null,
     update(dt, state = {}) {
       this.fangPoseLayer?.restore();
+      this.crouchPoseLayer?.restore();
+
       this.authoredLocomotion?.update(dt, state);
       updatePose(this, dt, state);
+
+      this.crouchPoseLayer ??= createCrouchPoseLayer(this);
+      this.crouchPoseLayer.apply(
+        {
+          ...state,
+          speed: state.speed ?? 0,
+          localX: state.localX ?? 0,
+          localZ: state.localZ ?? 0
+        },
+        dt
+      );
+
       vrm?.update?.(dt);
     },
     setVisible(visible) {
@@ -1108,169 +1123,28 @@ function applyCrouchLocomotion(
   state,
   { speed, crouchBlend, localForward, localStrafe }
 ) {
-  const { bones, baseRotations, basePositions, locomotion } = character;
+  const { locomotion } = character;
   const moving = speed > 0.32;
-  const targetMoveBlend = moving ? 1 : 0;
 
   locomotion.moveBlend = THREE.MathUtils.damp(
     locomotion.moveBlend,
-    targetMoveBlend,
+    moving ? 1 : 0,
     10,
     dt
   );
 
-  // Short, deliberate crouch steps instead of a standing walk compressed down.
-  const cadence = moving ? 5.35 : 0;
-  const reverse = localForward < -0.25 ? -1 : 1;
-  if (cadence > 0) {
-    locomotion.phase += dt * cadence * reverse;
+  if (moving) {
+    const reverse = localForward < -0.25 ? -1 : 1;
+    locomotion.phase += dt * 5.35 * reverse;
   }
-
-  const cycle = Math.sin(locomotion.phase);
-  const opposite = -cycle;
-  const stepL = Math.max(0, cycle);
-  const stepR = Math.max(0, opposite);
-  const moveBlend = locomotion.moveBlend;
-
-  // Deep squat proportions. Values are intentionally stronger than the old
-  // shallow crouch: ~0.34 m pelvis drop on a 1.7 m visual character.
-  const hipDrop = 0.34 * crouchBlend;
-  const hipHinge = 0.16 * crouchBlend;
-  const thighBase = -0.70 * crouchBlend;
-  const kneeBase = 1.23 * crouchBlend;
-  const ankleBase = -0.50 * crouchBlend;
-  const torsoLean = 0.24 * crouchBlend;
-
-  const stride = 0.18 * crouchBlend * moveBlend;
-  const kneeStep = 0.19 * crouchBlend * moveBlend;
-  const strafe = localStrafe * 0.065 * crouchBlend * moveBlend;
-
-  const leftThigh =
-    thighBase +
-    cycle * stride -
-    stepR * 0.035 * crouchBlend;
-  const rightThigh =
-    thighBase +
-    opposite * stride -
-    stepL * 0.035 * crouchBlend;
-
-  const leftKnee =
-    kneeBase +
-    stepR * kneeStep;
-  const rightKnee =
-    kneeBase +
-    stepL * kneeStep;
-
-  dampBoneEuler(
-    bones.leftUpperLeg,
-    baseRotations,
-    leftThigh,
-    -localStrafe * 0.025 * crouchBlend,
-    0.075 * crouchBlend + strafe,
-    18,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightUpperLeg,
-    baseRotations,
-    rightThigh,
-    localStrafe * 0.025 * crouchBlend,
-    -0.075 * crouchBlend - strafe,
-    18,
-    dt
-  );
-
-  dampBoneEuler(
-    bones.leftLowerLeg,
-    baseRotations,
-    leftKnee,
-    0,
-    0,
-    20,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightLowerLeg,
-    baseRotations,
-    rightKnee,
-    0,
-    0,
-    20,
-    dt
-  );
-
-  // Counter-rotate ankles so the boots remain much flatter than the old pose.
-  dampBoneEuler(
-    bones.leftFoot,
-    baseRotations,
-    ankleBase - cycle * 0.055 * crouchBlend * moveBlend,
-    0,
-    -0.015 * crouchBlend,
-    20,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightFoot,
-    baseRotations,
-    ankleBase - opposite * 0.055 * crouchBlend * moveBlend,
-    0,
-    0.015 * crouchBlend,
-    20,
-    dt
-  );
-
-  // Pelvis sits back/down while torso folds forward to keep balance over feet.
-  dampBoneEuler(
-    bones.hips,
-    baseRotations,
-    -hipHinge,
-    localStrafe * 0.025 * crouchBlend,
-    localStrafe * -0.025 * crouchBlend,
-    18,
-    dt
-  );
-  dampBoneEuler(
-    bones.spine,
-    baseRotations,
-    torsoLean * 0.72,
-    localStrafe * -0.018 * crouchBlend,
-    0,
-    16,
-    dt
-  );
-  dampBoneEuler(
-    bones.chest,
-    baseRotations,
-    torsoLean * 0.28,
-    0,
-    localStrafe * -0.018 * crouchBlend,
-    15,
-    dt
-  );
-
-  const stepBob =
-    moving
-      ? Math.abs(Math.sin(locomotion.phase * 2)) *
-        0.008 *
-        crouchBlend *
-        moveBlend
-      : 0;
-
-  dampBonePosition(
-    bones.hips,
-    basePositions,
-    0,
-    -hipDrop + stepBob,
-    0.055 * crouchBlend,
-    20,
-    dt
-  );
 
   locomotion.state = moving ? 'CROUCH_WALK' : 'CROUCH';
 
+  // Actual body deformation is applied later by crouch-pose.js in world space,
+  // after locomotion, so the feet stay planted and knees are forced to bend.
   return {
-    cycle,
-    moveBlend,
+    cycle: Math.sin(locomotion.phase),
+    moveBlend: locomotion.moveBlend,
     stateName: locomotion.state,
     localForward,
     localStrafe,
