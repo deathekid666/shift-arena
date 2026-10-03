@@ -18,12 +18,12 @@ export class PlayerController {
     this.body.position.y = 0.9;
     this.group.add(this.body);
 
-    const visor = new THREE.Mesh(
+    this.visor = new THREE.Mesh(
       new THREE.BoxGeometry(0.52, 0.18, 0.12),
       new THREE.MeshStandardMaterial({ color: 0x16283a, metalness: 0.35, roughness: 0.28 })
     );
-    visor.position.set(0, 1.28, -0.37);
-    this.group.add(visor);
+    this.visor.position.set(0, 1.28, -0.37);
+    this.group.add(this.visor);
     this.resetAt(world.spawnPoint);
     world.scene.add(this.group);
   }
@@ -286,6 +286,12 @@ export class PlayerController {
     }
     this.group.position.x = p.x;
     this.group.position.z = p.z;
+  }
+
+  setCameraBodyHidden(hidden) {
+    const visible = !hidden;
+    this.body.visible = visible;
+    if (this.visor) this.visor.visible = visible;
   }
 
   horizontalSpeed() {

@@ -941,8 +941,8 @@ export class TinFangSystem {
     model.updateWorldMatrix(true, true);
 
     if (normal.y > 0.65) {
-      const bounds = new THREE.Box3().setFromObject(model);
-      if (Number.isFinite(bounds.min.y)) {
+      const bounds = visibleWorldBounds(model);
+      if (bounds && Number.isFinite(bounds.min.y)) {
         const desiredMinY = surfacePoint.y + margin;
         const lift = desiredMinY - bounds.min.y;
         if (lift > 0) model.position.y += lift;
@@ -1228,6 +1228,7 @@ function buildFangModel() {
   );
   hitbox.position.z = 0.02;
   hitbox.userData.disabled = true;
+  hitbox.userData.fangInvisibleHitbox = true;
   spinRoot.add(hitbox);
 
   group.userData.hitbox = hitbox;
@@ -1321,6 +1322,33 @@ function setFangGlow(group, strength) {
 function orientAlongDirection(object, direction) {
   const dir = direction.clone().normalize();
   object.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir);
+}
+
+function visibleWorldBounds(group) {
+  const bounds = new THREE.Box3();
+  let hasBounds = false;
+
+  group.updateWorldMatrix(true, true);
+  group.traverse((child) => {
+    if (
+      !child.isMesh ||
+      child.userData.fangInvisibleHitbox ||
+      !child.geometry
+    ) return;
+
+    if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+    if (!child.geometry.boundingBox) return;
+
+    const box = child.geometry.boundingBox.clone().applyMatrix4(child.matrixWorld);
+    if (!hasBounds) {
+      bounds.copy(box);
+      hasBounds = true;
+    } else {
+      bounds.union(box);
+    }
+  });
+
+  return hasBounds ? bounds : null;
 }
 
 function disposeGroup(group) {

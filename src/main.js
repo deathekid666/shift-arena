@@ -463,7 +463,9 @@ function loop(now) {
       adsShoulderOffset: fangAiming
         ? (fang.compactAim ? fang.cfg.compactAimShoulderOffset : fang.cfg.aimShoulderOffset)
         : weapon.adsShoulderOffset,
-      scoped: !fangAiming && weapon.scoped
+      scoped: !fangAiming && weapon.scoped,
+      smartAimCollision: fangAiming,
+      compactAim: fangAiming && fang.compactAim
     });
 
     fang.update(dt, !armor.using);
@@ -484,6 +486,11 @@ function loop(now) {
   bot.update(dt, camera);
 
   player.group.visible = health.alive && !weapon.scoped;
+  player.setCameraBodyHidden(
+    health.alive &&
+    !weapon.scoped &&
+    thirdCam.hidePlayerBody
+  );
   renderer.render(scene, camera);
 
   const fangAiming = health.alive && fang.aiming;

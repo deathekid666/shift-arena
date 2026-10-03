@@ -95,3 +95,13 @@ Browser-first third-person shooter prototype.
 - HUD shows FANG AIM · LOW when the compact pose is active.
 - Settled Fang now uses the actual collision surface point plus the model's world bounding box.
 - After bounce/fall animation, the blade is lifted until its lowest geometry sits above the floor, preventing visual sinking.
+
+
+## Build 008.4 — cramped camera + visible Fang floor fit
+- Fang aim camera no longer only collapses straight toward the player when furniture blocks it.
+- In cramped aim situations the camera searches alternate left/right shoulder positions and shorter clean distances.
+- Compact under-table aiming keeps fallback camera movement mostly horizontal to avoid the tabletop underside.
+- If no useful third-person camera position exists, only the placeholder player body/visor hides; the Fang arm/knife animation remains visible.
+- This prevents the giant yellow player body from covering the crosshair when camera collision gets tight.
+- Settled Fang floor fitting now ignores the invisible shootable hitbox and calculates bounds from visible blade/handle geometry only.
+- This prevents the visible knife from hovering or sinking because of the larger invisible hit sphere.
