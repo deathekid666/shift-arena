@@ -14,15 +14,7 @@ export class PlayerController {
     this.sliding = false;
     this.slideTimer = 0;
     this.slideElapsed = 0;
-    this.slideConsumedForCrouchHold = false;
-    this.slideDebug = {
-      shift: false,
-      ctrl: false,
-      move: false,
-      groundReady: true,
-      eligible: false,
-      consumed: false
-    };
+    this.sprintQualified = false;
     this.slideDirection = new THREE.Vector3(0, 0, -1);
     this.localMotion = new THREE.Vector3();
 
@@ -69,13 +61,7 @@ export class PlayerController {
     this.sliding = false;
     this.slideTimer = 0;
     this.slideElapsed = 0;
-    this.slideConsumedForCrouchHold = false;
-    this.slideDebug.shift = false;
-    this.slideDebug.ctrl = false;
-    this.slideDebug.move = false;
-    this.slideDebug.groundReady = true;
-    this.slideDebug.eligible = false;
-    this.slideDebug.consumed = false;
+    this.sprintQualified = false;
     this.slideDirection.set(0, 0, -1);
     this.body.scale.set(1, 1, 1);
     this.body.rotation.set(0, 0, 0);
@@ -101,21 +87,23 @@ export class PlayerController {
 
     const crouchDown = this.input.down('crouch');
     const crouchPressed = this.input.consume('crouch');
-    this.input.consume('sprint');
     const jumpPressed = this.input.consume('jump');
     const sprintDown = this.input.down('sprint');
 
     const movingIntent = move.lengthSq() > 0.01;
+    const horizontalSpeed = this.horizontalSpeed();
 
-    // Single unambiguous control rule:
-    // - Ctrl without sprint = CROUCH.
-    // - Shift + movement + Ctrl = SLIDE.
-    // - If Ctrl is already held, pressing Shift while moving upgrades crouch
-    //   into slide on the next frame.
-    // - One continuous Ctrl hold can trigger only one slide; releasing Ctrl
-    //   re-arms the next slide.
+    // Restore the proven slide trigger used by the last working build:
+    // slide is decided from the player's established sprint state / momentum,
+    // not from whether Shift is still reported on the exact Ctrl frame.
+    //
+    // Ctrl while not sprinting = crouch.
+    // Sprint first, then Ctrl = slide.
     if (!crouchDown) {
-      this.slideConsumedForCrouchHold = false;
+      this.sprintQualified = sprintDown && movingIntent;
+    } else if (!this.sprintQualified && sprintDown && horizontalSpeed >= cfg.slideMinSprintSpeed) {
+      // Fallback for key-order / browser modifier timing once Ctrl is already down.
+      this.sprintQualified = true;
     }
 
     const slideGroundReady =
@@ -126,36 +114,22 @@ export class PlayerController {
         this.velocity.y <= 0.5
       );
 
-    const sprintSlideEligible =
-      crouchDown &&
-      sprintDown &&
-      movingIntent &&
-      slideGroundReady;
-
-    this.slideDebug.shift = sprintDown;
-    this.slideDebug.ctrl = crouchDown;
-    this.slideDebug.move = movingIntent;
-    this.slideDebug.groundReady = slideGroundReady;
-    this.slideDebug.eligible = sprintSlideEligible;
-    this.slideDebug.consumed = this.slideConsumedForCrouchHold;
-
-    if (
+    const crouchJustPressed = crouchDown && !this.crouching;
+    const sprintMomentum = horizontalSpeed >= cfg.slideMinSprintSpeed;
+    const shouldStartSlide =
+      (crouchPressed || crouchJustPressed) &&
       !this.sliding &&
-      !this.slideConsumedForCrouchHold &&
-      sprintSlideEligible
-    ) {
-      // Tiny stair/ramp contact gaps should not turn a requested slide into
-      // crouch. If the feet are within the slide-entry tolerance, snap back
-      // to the detected support before starting the slide.
+      slideGroundReady &&
+      movingIntent &&
+      (this.sprintQualified || sprintMomentum);
+
+    if (shouldStartSlide) {
       if (!this.grounded && supportY !== null) {
         this.group.position.y = supportY;
         this.velocity.y = 0;
         this.grounded = true;
       }
-
       this.beginSlide(move);
-      this.slideConsumedForCrouchHold = true;
-      this.slideDebug.consumed = true;
     }
 
     if (this.sliding) {
@@ -176,6 +150,7 @@ export class PlayerController {
 
     // Crouch and slide are now mutually exclusive movement modes.
     this.crouching = crouchDown && !this.sliding;
+    if (!crouchDown && !sprintDown) this.sprintQualified = false;
 
     const crouchTarget = this.crouching ? 1 : 0;
     this.crouchVisual = THREE.MathUtils.damp(
