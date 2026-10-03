@@ -443,6 +443,99 @@ export class WeaponSystem {
       }
     }
 
+    // Long weapons such as the Scrap Eye are torso/shoulder owned in carry.
+    // Both hands follow weapon sockets via IK; no hand drives the weapon.
+    if (cfg.shoulderOwnedCarry && this.handMounted) {
+      const shoulder =
+        this.player.getBoneWorldPosition?.('rightShoulder', this.tmpShoulderWorld) ??
+        this.player.getBoneWorldPosition?.('upperChest', this.tmpShoulderWorld);
+
+      if (shoulder) {
+        this.player.group.getWorldQuaternion(this.tmpParentWorldQ);
+
+        this.tmpAimForward
+          .set(0, 0, -1)
+          .applyQuaternion(this.tmpParentWorldQ)
+          .normalize();
+        this.tmpAimRight
+          .set(1, 0, 0)
+          .applyQuaternion(this.tmpParentWorldQ)
+          .normalize();
+        this.tmpAimUp
+          .set(0, 1, 0)
+          .applyQuaternion(this.tmpParentWorldQ)
+          .normalize();
+
+        this.tmpGripWorld
+          .copy(shoulder)
+          .addScaledVector(
+            this.tmpAimForward,
+            cfg.carryShoulderForward ?? 0.31
+          )
+          .addScaledVector(
+            this.tmpAimRight,
+            (cfg.carryShoulderRight ?? -0.05) +
+              bobX * 0.28 +
+              swayX * 0.30
+          )
+          .addScaledVector(
+            this.tmpAimUp,
+            (cfg.carryShoulderUp ?? -0.18) +
+              bobY * 0.35 +
+              swayY * 0.25
+          );
+
+        this.tmpGripLocal.copy(this.tmpGripWorld);
+        this.player.group.worldToLocal(this.tmpGripLocal);
+
+        this.tmpDesiredLocalQ.setFromEuler(
+          new THREE.Euler(
+            cfg.carryPitch ?? -0.11,
+            cfg.carryYaw ?? 0,
+            (cfg.carryRoll ?? -0.055) - swayX * 0.24,
+            'YXZ'
+          )
+        );
+
+        this.tmpGripOffset
+          .copy(modelData.rightGrip.position)
+          .multiply(model.scale)
+          .applyQuaternion(this.tmpDesiredLocalQ);
+
+        const targetPosition = this.tmpGripLocal
+          .clone()
+          .sub(this.tmpGripOffset);
+
+        model.position.x = THREE.MathUtils.damp(
+          model.position.x,
+          targetPosition.x,
+          28 / cfg.mass,
+          dt
+        );
+        model.position.y = THREE.MathUtils.damp(
+          model.position.y,
+          targetPosition.y,
+          28 / cfg.mass,
+          dt
+        );
+        model.position.z = THREE.MathUtils.damp(
+          model.position.z,
+          targetPosition.z,
+          30 / cfg.mass,
+          dt
+        );
+
+        model.quaternion.slerp(
+          this.tmpDesiredLocalQ,
+          1 - Math.exp(-(24 / cfg.mass) * dt)
+        );
+
+        model.updateWorldMatrix(true, true);
+        this.updateGripPose(true, true);
+        return;
+      }
+    }
+
     // Normal equipped stance: anchor the pistol grip to the character's
     // dedicated right-hand socket. The gun center no longer decides placement.
     const weaponSocket = this.player.getWeaponSocket?.();
