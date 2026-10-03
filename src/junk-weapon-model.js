@@ -14,6 +14,10 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
     : (cfg.heldScale ?? 0.72);
 
   // Dedicated simple silhouettes for hero scavenged weapons.
+  if (style === 'stapleSlinger') {
+    return buildStapleSlingerAR(cfg, mats, scale);
+  }
+
   if (style === 'bugSprayer') {
     return buildBugSprayerShotgun(cfg, mats, scale);
   }
@@ -188,6 +192,271 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
     muzzle,
     barrelLength,
     primaryMesh: group.children.find((child) => child.isMesh) ?? null
+  };
+}
+
+function buildStapleSlingerAR(cfg, mats, scale) {
+  const group = new THREE.Group();
+  group.name = 'JunkWeapon_StapleSlingerAR';
+
+  const add = (mesh, pos, rot = null, parent = group) => {
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    parent.add(mesh);
+    mesh.castShadow = true;
+    return mesh;
+  };
+
+  // Simple cockroach-world palette matching the concept sketch.
+  const red = mat(0xb84b3d, 0.86, 0.28);
+  const redDark = mat(0x74352d, 0.92, 0.20);
+  const steel = mat(0x6f716d, 0.64, 0.72);
+  const brightSteel = mat(0xa1a39d, 0.48, 0.78);
+  const ruler = mat(0xb58a49, 0.90, 0.08);
+  const rulerDark = mat(0x4f4331, 0.92, 0.08);
+  const wrap = mat(0xc4aa78, 0.98, 0.01);
+
+  // === 1. STAPLER BODY ===
+  // Lower chassis: a single chunky red office-stapler base.
+  add(
+    box(0.21, 0.15, 0.58, red),
+    [0, 0.035, -0.055]
+  );
+
+  // Silver staple channel inside the stapler.
+  add(
+    box(0.145, 0.065, 0.43, brightSteel),
+    [0, 0.125, -0.095]
+  );
+
+  // Curved-looking top stapler arm represented by one bold low-poly plate.
+  add(
+    box(0.235, 0.105, 0.50, red),
+    [0, 0.205, -0.025],
+    [-0.055, 0, 0]
+  );
+
+  // Front hinge and rear hinge blocks.
+  add(
+    box(0.255, 0.16, 0.075, steel),
+    [0, 0.115, -0.315]
+  );
+  add(
+    box(0.24, 0.16, 0.085, steel),
+    [0, 0.115, 0.245]
+  );
+
+  // Large hinge bolts visible from both sides.
+  for (const x of [-0.132, 0.132]) {
+    add(
+      cylinder(0.027, 0.027, 0.028, 8, mats.bolt),
+      [x, 0.125, 0.245],
+      [0, 0, Math.PI / 2]
+    );
+  }
+
+  // === 2. EXPOSED SPRING ===
+  // Big spring on top: the most important mechanical-read detail.
+  for (let i = 0; i < 8; i++) {
+    const springRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.055, 0.010, 5, 12),
+      brightSteel
+    );
+    add(
+      springRing,
+      [0, 0.270, -0.17 + i * 0.050],
+      [0, Math.PI / 2, 0]
+    );
+  }
+
+  // Spring guide rod.
+  add(
+    cylinder(0.014, 0.014, 0.42, 8, steel),
+    [0, 0.270, 0.005],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // === 3. PEN / PIPE BARREL ===
+  add(
+    cylinder(0.043, 0.048, 0.54, 10, steel),
+    [0, 0.050, -0.58],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // Black marker-cap style muzzle.
+  add(
+    cylinder(0.060, 0.060, 0.135, 10, mats.dark),
+    [0, 0.050, -0.915],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // Brass clamp where the pen barrel meets the stapler.
+  add(
+    cylinder(0.057, 0.057, 0.070, 10, mats.brass),
+    [0, 0.050, -0.335],
+    [Math.PI / 2, 0, 0]
+  );
+
+  // Paperclip front sight.
+  const frontSight = new THREE.Mesh(
+    new THREE.TorusGeometry(
+      0.050,
+      0.008,
+      5,
+      10,
+      Math.PI
+    ),
+    brightSteel
+  );
+  add(
+    frontSight,
+    [0, 0.120, -0.880],
+    [0, 0, Math.PI / 2]
+  );
+
+  // === 4. STAPLE-STRIP MAGAZINE ===
+  const magRoot = new THREE.Group();
+  magRoot.position.set(0, -0.155, -0.055);
+  magRoot.rotation.x = -0.05;
+  group.add(magRoot);
+
+  add(
+    box(0.15, 0.33, 0.145, redDark),
+    [0, 0, 0],
+    null,
+    magRoot
+  );
+
+  // Visible silver staples stacked inside the magazine.
+  for (let i = 0; i < 8; i++) {
+    add(
+      box(0.122, 0.022, 0.105, brightSteel),
+      [0, 0.115 - i * 0.035, -0.006],
+      null,
+      magRoot
+    );
+  }
+
+  // Thin brass guide rails along the mag.
+  for (const x of [-0.066, 0.066]) {
+    add(
+      box(0.010, 0.30, 0.118, mats.brass),
+      [x, 0, 0],
+      null,
+      magRoot
+    );
+  }
+
+  // === 5. TAPED PISTOL GRIP ===
+  add(
+    box(0.115, 0.30, 0.14, mats.rubber),
+    [0, -0.215, 0.205],
+    [-0.12, 0, 0]
+  );
+
+  for (let i = 0; i < 4; i++) {
+    add(
+      box(0.126, 0.034, 0.152, wrap),
+      [0, -0.135 - i * 0.052, 0.205 + i * 0.006],
+      [-0.12, 0, i % 2 ? 0.035 : -0.03]
+    );
+  }
+
+  // Trigger guard.
+  const guard = new THREE.Mesh(
+    new THREE.TorusGeometry(
+      0.070,
+      0.010,
+      5,
+      10,
+      Math.PI * 1.45
+    ),
+    mats.bolt
+  );
+  add(
+    guard,
+    [0, -0.115, 0.115],
+    [Math.PI / 2, 0, -0.40]
+  );
+
+  // === 6. RULER STOCK ===
+  // Long ruler spine.
+  add(
+    box(0.135, 0.080, 0.50, ruler),
+    [0, 0.040, 0.505]
+  );
+
+  // Rear butt plate.
+  add(
+    box(0.175, 0.29, 0.070, rulerDark),
+    [0, -0.010, 0.760]
+  );
+
+  // Lower cut-out effect: two short rails instead of a solid military stock.
+  add(
+    box(0.055, 0.050, 0.34, ruler),
+    [0, -0.075, 0.545],
+    [0.10, 0, 0]
+  );
+
+  // Ruler tick marks kept intentionally chunky/readable.
+  for (let i = 0; i < 9; i++) {
+    const longTick = i % 2 === 0;
+    add(
+      box(
+        longTick ? 0.060 : 0.040,
+        0.012,
+        0.012,
+        rulerDark
+      ),
+      [
+        0,
+        0.086,
+        0.315 + i * 0.050
+      ]
+    );
+  }
+
+  // Rear ruler mounting clamp.
+  add(
+    box(0.22, 0.16, 0.080, steel),
+    [0, 0.045, 0.270]
+  );
+
+  // Gameplay sockets line up with visible modeled grips.
+  const rightGrip = new THREE.Object3D();
+  rightGrip.name = 'RightGripSocket';
+  rightGrip.position.set(
+    cfg.rightGripX ?? 0,
+    cfg.rightGripY ?? -0.205,
+    cfg.rightGripZ ?? 0.185
+  );
+  group.add(rightGrip);
+
+  const leftGrip = new THREE.Object3D();
+  leftGrip.name = 'LeftForegripSocket';
+  leftGrip.position.set(
+    cfg.leftGripX ?? 0,
+    cfg.leftGripY ?? -0.045,
+    cfg.foregripZ ?? -0.345
+  );
+  group.add(leftGrip);
+
+  const muzzle = new THREE.Object3D();
+  muzzle.name = 'MuzzleSocket';
+  muzzle.position.set(0, 0.050, -0.990);
+  group.add(muzzle);
+
+  group.scale.setScalar(scale);
+
+  return {
+    group,
+    rightGrip,
+    leftGrip,
+    muzzle,
+    barrelLength: 0.54,
+    primaryMesh:
+      group.children.find((child) => child.isMesh) ?? null
   };
 }
 
@@ -678,6 +947,7 @@ function inferStyle(cfg) {
   if (name.includes('SHOTGUN')) return 'doublePipe';
   if (name.includes('COMPACT')) return 'canSMG';
   if (name.includes('LONG')) return 'railSMG';
+  if (name.includes('STAPLE')) return 'stapleSlinger';
   if (name.includes('MECHANICAL')) return 'clockwork';
   return 'roachCarbine';
 }
