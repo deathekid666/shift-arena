@@ -115,8 +115,10 @@ export async function createVrmLocomotionController(character, vrm) {
     }
   );
 
-  const slideClips = slideLibrary
-    ? retargetHumanoidAnimationClips(
+  let slideClips = [];
+  if (slideLibrary) {
+    try {
+      slideClips = retargetHumanoidAnimationClips(
         slideLibrary.animations,
         vrm,
         SLIDE_CLIP_NAMES,
@@ -125,8 +127,15 @@ export async function createVrmLocomotionController(character, vrm) {
           sourcePelvisName: 'pelvis',
           useAnimatedRoot: false
         }
-      )
-    : [];
+      );
+    } catch (error) {
+      console.warn(
+        'UAL2 slide retarget failed; keeping UAL1 locomotion and procedural slide fallback.',
+        error
+      );
+      slideClips = [];
+    }
+  }
 
   const clips = [...baseClips, ...slideClips];
   const mixer = new THREE.AnimationMixer(character.root);

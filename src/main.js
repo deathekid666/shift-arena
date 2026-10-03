@@ -66,7 +66,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.9 · AUTHORED SLIDE FSM</div>
+    <div id="damage-test-hint">BUILD 010.9A · UAL2 SLIDE FSM</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -115,7 +115,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.9 · AUTHORED SLIDE FSM</div>
+        <div class="build-tag">BUILD 010.9A · UAL2 SLIDE FSM</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
@@ -281,7 +281,22 @@ player.characterReady.then((avatar) => {
           : 'CHARACTER · DEVELOPMENT VRM LOADED')
       : 'CHARACTER · LOAD FAILED · FALLBACK ACTIVE';
   }
-  if (avatar) showToast('ANIME VRM RIG LOADED');
+
+  if (avatar) {
+    showToast('ANIME VRM RIG LOADED');
+
+    avatar.authoredLocomotionReady?.then((controller) => {
+      if (!characterLoadStatus || !controller) return;
+
+      const base = avatar.finalAsset
+        ? `CHARACTER · FINAL ${avatar.assetType.toUpperCase()} LOADED`
+        : 'CHARACTER · DEVELOPMENT VRM LOADED';
+
+      characterLoadStatus.textContent = controller.hasAuthoredSlide
+        ? `${base} · UAL2 SLIDE READY`
+        : `${base} · SLIDE FALLBACK`;
+    });
+  }
 });
 
 const start = document.querySelector('#start');
