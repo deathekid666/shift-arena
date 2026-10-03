@@ -1,6 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG, WEAPON_ORDER } from './config.js';
-import { buildJunkWeaponVisual, disposeJunkWeaponVisual } from './junk-weapon-model.js';
+import { buildJunkWeaponVisual } from './junk-weapon-model.js';
 
 const AMMO_LABELS = {
   light: 'LIGHT AMMO',
@@ -33,9 +33,14 @@ export class PickupSystem {
   }
 
   buildTestArea() {
-    const xs = [-12, -8, -4, 0, 4, 8, 12];
+    // Testing phase: exactly four permanent weapon stations, one per
+    // hero weapon. They stay fixed even after the player equips from them.
+    const xs = [-6, -2, 2, 6];
     WEAPON_ORDER.forEach((key, i) => {
-      this.createWeaponPickup(key, new THREE.Vector3(xs[i], 0.32, 16.2));
+      this.createWeaponPickup(
+        key,
+        new THREE.Vector3(xs[i], 0.32, 16.2)
+      );
     });
 
     const ammo = [
@@ -142,15 +147,22 @@ export class PickupSystem {
         show: true,
         key: 'E',
         title: cfg.name,
-        subtitle: `${AMMO_LABELS[cfg.ammoType]} · MAG ${nearest.magazineAmmo}/${cfg.magazineSize}`,
-        action: 'SWAP ACTIVE SLOT'
+        subtitle:
+          `PERMANENT TEST SPAWN · ${AMMO_LABELS[cfg.ammoType]} · ` +
+          `MAG ${nearest.magazineAmmo}/${cfg.magazineSize}`,
+        action: 'EQUIP FOR TEST'
       });
 
       if (this.input.consume('interact')) {
-        const result = this.weapons.swapActiveWithPickup(nearest.weaponKey, nearest.magazineAmmo);
+        const result = this.weapons.swapActiveWithPickup(
+          nearest.weaponKey,
+          nearest.magazineAmmo
+        );
+
+        // Do not mutate the pedestal. During testing each station must
+        // always keep its assigned hero weapon available.
         if (result.accepted) {
-          this.setWeaponPickup(nearest, result.dropped.weaponKey, result.dropped.magazineAmmo);
-          this.onToast?.('WEAPON SWAPPED');
+          this.onToast?.(`${cfg.name} EQUIPPED`);
         } else if (result.reason === 'ALREADY EQUIPPED') {
           this.onToast?.('ALREADY EQUIPPED');
         }
@@ -199,23 +211,7 @@ export class PickupSystem {
     }
   }
 
-  setWeaponPickup(pickup, key, magazineAmmo) {
-    const cfg = GAME_CONFIG.weapons[key];
-    pickup.weaponKey = key;
-    pickup.magazineAmmo = magazineAmmo;
-    pickup.glow.material.color.setHex(cfg.color);
-
-    if (pickup.visual?.group) {
-      pickup.weaponGroup.remove(pickup.visual.group);
-      disposeJunkWeaponVisual(pickup.visual.group);
-    }
-
-    const visual = buildJunkWeaponVisual(cfg, { pickup: true });
-    visual.group.position.y = 0.34;
-    visual.group.rotation.z = 0.04;
-    pickup.weaponGroup.add(visual.group);
-    pickup.visual = visual;
-  }}
+}
 
 function flatDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
