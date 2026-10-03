@@ -17,6 +17,8 @@ root.innerHTML = `
     <div id="crosshair" data-type="rifle" data-mode="gun">
       <i class="arm top"></i><i class="arm right"></i><i class="arm bottom"></i><i class="arm left"></i>
       <span class="reticle-ring"></span><span class="reticle-dot"></span>
+      <span class="weapon-shape primary" aria-hidden="true"></span>
+      <span class="weapon-shape secondary" aria-hidden="true"></span>
       <span class="pellet-feedback" aria-hidden="true"></span>
       <div class="fang-reticle" aria-hidden="true">
         <i class="fang-charge-ring"></i>
@@ -67,7 +69,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.12 · FORTNITE-STYLE WEAPON RETICLES</div>
+    <div id="damage-test-hint">BUILD 010.12A · DISTINCT TARGET-AWARE RETICLES</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -116,7 +118,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.12 · FORTNITE-STYLE WEAPON RETICLES</div>
+        <div class="build-tag">BUILD 010.12A · DISTINCT TARGET-AWARE RETICLES</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
@@ -597,9 +599,14 @@ function loop(now) {
     'gun-ads',
     health.alive && !fangAiming && weapon.aiming && !scoped
   );
+  const targetHot =
+    health.alive &&
+    !fangAiming &&
+    weapon.targetUnderReticle;
+
   crosshair.classList.toggle(
-    'first-shot-ready',
-    health.alive && !fangAiming && weapon.firstShotReady
+    'target-hot',
+    targetHot && !scoped
   );
   crosshair.classList.toggle(
     'air-spread',
@@ -607,6 +614,7 @@ function loop(now) {
   );
   crosshair.classList.toggle('scoped-hidden', scoped);
   scopeOverlay.classList.toggle('show', scoped);
+  scopeOverlay.classList.toggle('target-hot', targetHot && scoped);
   scopeOverlay.classList.toggle('unstable', scoped && weapon.scopeUnstable);
   scopeOverlay.classList.toggle(
     'stable',

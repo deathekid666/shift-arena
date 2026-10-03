@@ -20,6 +20,8 @@ export class WeaponSystem {
     this.audio = new WeaponAudio();
     this.cameraRay = new THREE.Raycaster();
     this.muzzleRay = new THREE.Raycaster();
+    this.reticleRay = new THREE.Raycaster();
+    this.reticleDirection = new THREE.Vector3();
     this.center = new THREE.Vector2(0, 0);
     this.activeSlot = 0;
     this.loadout = ['tacticalAR', 'compactSMG'];
@@ -194,6 +196,32 @@ export class WeaponSystem {
       spread / Math.max(0.001, this.cfg.hipBloom * 1.8),
       0,
       1
+    );
+  }
+
+  get targetUnderReticle() {
+    if (
+      this.blocked ||
+      this.visualHidden ||
+      !this.input.pointerLocked
+    ) {
+      return false;
+    }
+
+    this.camera.getWorldDirection(this.reticleDirection);
+
+    const hit = firstValidHit(
+      this.reticleRay,
+      this.camera.position,
+      this.reticleDirection,
+      [...this.targets.hitMeshes, ...this.world.cameraObstacles],
+      this.cfg.range
+    );
+
+    return Boolean(
+      hit &&
+      hit.object?.userData?.combatTarget &&
+      !hit.object.userData.disabled
     );
   }
 

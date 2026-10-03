@@ -1772,3 +1772,281 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
   border-color: rgba(20,22,23,.98);
   box-shadow: 0 0 0 1px rgba(255,255,255,.12);
 }
+
+
+/* Build 010.12A — strongly distinct weapon silhouettes + target-only red.
+   Red is NEVER an ADS/first-shot state. It means the exact center ray has a
+   visible combat target before any world obstacle. */
+
+#crosshair .weapon-shape {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: none;
+  pointer-events: none;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+  transition:
+    width 55ms linear,
+    height 55ms linear,
+    border-color 55ms ease,
+    background 55ms ease,
+    opacity 55ms ease;
+}
+
+/* Kill the old 010.12 "first-shot = red" presentation completely. */
+#crosshair[data-mode="gun"].first-shot-ready > .arm {
+  background: rgba(255,255,255,.94);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.28),
+    0 1px 3px rgba(0,0,0,.58);
+}
+#crosshair[data-mode="gun"].first-shot-ready > .reticle-dot {
+  width: 2.5px;
+  height: 2.5px;
+  background: rgba(255,255,255,.98);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.34),
+    0 0 4px rgba(0,0,0,.46);
+}
+
+/* 1 — Tactical AR: classic four separated ticks. */
+#crosshair[data-mode="gun"][data-type="rifle"] > .arm {
+  display: block;
+  opacity: .96;
+  --v-len: 9px;
+  --h-len: 9px;
+}
+#crosshair[data-mode="gun"][data-type="rifle"] > .reticle-ring,
+#crosshair[data-mode="gun"][data-type="rifle"] > .weapon-shape {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="rifle"] > .reticle-dot {
+  display: block;
+  width: 2px;
+  height: 2px;
+}
+
+/* 2 — Mechanical AR: diamond center + left/right precision bars.
+   No top/bottom bars, so it cannot be mistaken for Tactical AR. */
+#crosshair[data-mode="gun"][data-type="precision"] > .top,
+#crosshair[data-mode="gun"][data-type="precision"] > .bottom {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="precision"] > .left,
+#crosshair[data-mode="gun"][data-type="precision"] > .right {
+  display: block;
+  --h-len: 8px;
+  height: 1px;
+  opacity: .92;
+}
+#crosshair[data-mode="gun"][data-type="precision"] > .reticle-dot {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="precision"] > .weapon-shape.primary {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(255,255,255,.96);
+  transform: translate(-50%, -50%) rotate(45deg);
+  box-shadow: 0 0 3px rgba(0,0,0,.58);
+}
+#crosshair[data-mode="gun"][data-type="precision"] > .weapon-shape.secondary {
+  display: block;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.98);
+}
+
+/* 3 — Tactical shotgun: four separated circular pellet arcs only. */
+#crosshair[data-mode="gun"][data-type="shotgun"] > .arm,
+#crosshair[data-mode="gun"][data-type="shotgun"] > .weapon-shape {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="shotgun"] > .reticle-ring {
+  display: block;
+  width: calc(var(--gap) * 2.08);
+  height: calc(var(--gap) * 2.08);
+  border: 0;
+  background:
+    repeating-conic-gradient(
+      from 31deg,
+      rgba(255,255,255,.94) 0deg 24deg,
+      transparent 24deg 90deg
+    );
+  -webkit-mask:
+    radial-gradient(circle, transparent 0 70%, #000 72% 84%, transparent 86%);
+  mask:
+    radial-gradient(circle, transparent 0 70%, #000 72% 84%, transparent 86%);
+}
+#crosshair[data-mode="gun"][data-type="shotgun"] > .reticle-dot {
+  display: block;
+  width: 3px;
+  height: 3px;
+  opacity: .86;
+}
+
+/* 4 — Pump shotgun: heavy open-top U / three-prong reticle.
+   Deliberately NO circular ring. */
+#crosshair[data-mode="gun"][data-type="pump"] > .reticle-ring,
+#crosshair[data-mode="gun"][data-type="pump"] > .top,
+#crosshair[data-mode="gun"][data-type="pump"] > .weapon-shape {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="pump"] > .left,
+#crosshair[data-mode="gun"][data-type="pump"] > .right {
+  display: block;
+  --h-len: 10px;
+  height: 3px;
+  opacity: .92;
+}
+#crosshair[data-mode="gun"][data-type="pump"] > .bottom {
+  display: block;
+  --v-len: 10px;
+  width: 3px;
+  opacity: .92;
+}
+#crosshair[data-mode="gun"][data-type="pump"] > .reticle-dot {
+  display: block;
+  width: 4px;
+  height: 4px;
+}
+
+/* 5 — Marksman sniper hip-fire: large thin circle + tiny center point.
+   ADS still switches to the dedicated scope. */
+#crosshair[data-mode="gun"][data-type="sniper"] > .arm {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="sniper"] > .reticle-ring {
+  display: block;
+  width: calc(var(--gap) * 1.72);
+  height: calc(var(--gap) * 1.72);
+  border: 1px solid rgba(255,255,255,.70);
+  background: transparent;
+  opacity: .82;
+}
+#crosshair[data-mode="gun"][data-type="sniper"] > .weapon-shape.primary {
+  display: block;
+  width: calc(var(--gap) * 1.72 + 10px);
+  height: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 23%,
+      rgba(255,255,255,.72) 23% 38%,
+      transparent 38% 62%,
+      rgba(255,255,255,.72) 62% 77%,
+      transparent 77% 100%
+    );
+}
+#crosshair[data-mode="gun"][data-type="sniper"] > .reticle-dot {
+  display: block;
+  width: 2px;
+  height: 2px;
+}
+
+/* 6 — Compact SMG: three-prong open-top reticle.
+   Much smaller/lighter than pump and with no ring. */
+#crosshair[data-mode="gun"][data-type="smg"] > .reticle-ring,
+#crosshair[data-mode="gun"][data-type="smg"] > .top,
+#crosshair[data-mode="gun"][data-type="smg"] > .weapon-shape {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="smg"] > .left,
+#crosshair[data-mode="gun"][data-type="smg"] > .right {
+  display: block;
+  --h-len: 5px;
+  height: 2px;
+  opacity: .80;
+}
+#crosshair[data-mode="gun"][data-type="smg"] > .bottom {
+  display: block;
+  --v-len: 5px;
+  width: 2px;
+  opacity: .80;
+}
+#crosshair[data-mode="gun"][data-type="smg"] > .reticle-dot {
+  display: block;
+  width: 2px;
+  height: 2px;
+}
+
+/* 7 — Long SMG: side bars + compact inner ring, no vertical prongs. */
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .top,
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .bottom,
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .reticle-ring {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .left,
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .right {
+  display: block;
+  --h-len: 7px;
+  height: 2px;
+  opacity: .90;
+}
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .weapon-shape.primary {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(255,255,255,.82);
+  border-radius: 50%;
+}
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .weapon-shape.secondary {
+  display: none;
+}
+#crosshair[data-mode="gun"][data-type="precision-smg"] > .reticle-dot {
+  display: block;
+  width: 2px;
+  height: 2px;
+}
+
+/* TARGET HOT — the only red firearm state. */
+#crosshair[data-mode="gun"].target-hot > .arm {
+  background: #ff4d48 !important;
+  box-shadow:
+    0 0 0 1px rgba(55,0,0,.28),
+    0 0 7px rgba(255,52,47,.46) !important;
+}
+#crosshair[data-mode="gun"].target-hot > .reticle-dot {
+  background: #ff4d48 !important;
+  box-shadow:
+    0 0 0 1px rgba(55,0,0,.26),
+    0 0 7px rgba(255,52,47,.55) !important;
+}
+#crosshair[data-mode="gun"].target-hot > .reticle-ring {
+  border-color: #ff4d48 !important;
+}
+#crosshair[data-mode="gun"].target-hot[data-type="shotgun"] > .reticle-ring {
+  background:
+    repeating-conic-gradient(
+      from 31deg,
+      #ff4d48 0deg 24deg,
+      transparent 24deg 90deg
+    ) !important;
+}
+#crosshair[data-mode="gun"].target-hot > .weapon-shape.primary {
+  border-color: #ff4d48 !important;
+  background-color: transparent;
+  filter: drop-shadow(0 0 4px rgba(255,52,47,.40));
+}
+#crosshair[data-mode="gun"].target-hot > .weapon-shape.secondary {
+  border-color: #ff4d48 !important;
+  background: #ff4d48 !important;
+}
+
+/* Scope turns red only when the exact scope center has a clear enemy. */
+#scope-overlay.target-hot .scope-reticle .scope-h,
+#scope-overlay.target-hot .scope-reticle .scope-v,
+#scope-overlay.target-hot .scope-reticle .mil {
+  background: #d92925 !important;
+}
+#scope-overlay.target-hot .scope-reticle b {
+  border-color: #d92925 !important;
+  box-shadow: 0 0 5px rgba(217,41,37,.35);
+}
+
+/* When not target-hot, ADS and first-shot-ready remain neutral white. */
+#crosshair[data-mode="gun"]:not(.target-hot) > .arm {
+  color: white;
+}
