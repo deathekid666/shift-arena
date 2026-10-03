@@ -380,24 +380,30 @@ function attachRoachAccessories(bones) {
   const mats = {
     // Shell is the hero material: richer highlights than the temporary toon
     // primitives, but still low-poly/cartoon through flatShading.
-    shell: new THREE.MeshStandardMaterial({
-      color: 0x55291f,
-      roughness: 0.34,
-      metalness: 0.08,
-      flatShading: true
-    }),
-    shellLight: new THREE.MeshStandardMaterial({
-      color: 0x7b3d28,
+    shell: new THREE.MeshPhysicalMaterial({
+      color: 0x4d251d,
       roughness: 0.30,
-      metalness: 0.06,
+      metalness: 0.04,
+      clearcoat: 0.52,
+      clearcoatRoughness: 0.32,
       flatShading: true
     }),
-    shellHighlight: new THREE.MeshStandardMaterial({
-      color: 0xa85630,
-      roughness: 0.26,
-      metalness: 0.05,
+    shellLight: new THREE.MeshPhysicalMaterial({
+      color: 0x7b3d28,
+      roughness: 0.27,
+      metalness: 0.03,
+      clearcoat: 0.44,
+      clearcoatRoughness: 0.30,
+      flatShading: true
+    }),
+    shellHighlight: new THREE.MeshPhysicalMaterial({
+      color: 0xb45a31,
+      roughness: 0.24,
+      metalness: 0.02,
+      clearcoat: 0.38,
+      clearcoatRoughness: 0.26,
       emissive: 0x1b0803,
-      emissiveIntensity: 0.16,
+      emissiveIntensity: 0.14,
       flatShading: true
     }),
     orange: new THREE.MeshStandardMaterial({
@@ -535,6 +541,34 @@ function attachRoachAccessories(bones) {
       cheekGuard.castShadow = true;
       browShell.add(cheekGuard);
     }
+    // Crown cap carries the shell material over the top of the skull so the
+    // head reads as one designed roach silhouette, not goggles on a human head.
+    const crown = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 16, 10),
+      mats.shellLight
+    );
+    crown.name = 'RoachScoutCrownShell';
+    crown.scale.set(0.135, 0.070, 0.115);
+    crown.position.set(0, 0.105, -0.008);
+    crown.rotation.x = -0.10;
+    crown.castShadow = true;
+    crown.receiveShadow = true;
+    browShell.add(crown);
+
+    for (const side of [-1, 1]) {
+      const socket = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.032, 0.045, 8),
+        mats.metal
+      );
+      socket.name =
+        side < 0 ? 'LeftAntennaSocket' : 'RightAntennaSocket';
+      socket.position.set(side * 0.072, 0.112, -0.012);
+      socket.rotation.z = side * -0.28;
+      socket.rotation.x = 0.14;
+      socket.castShadow = true;
+      browShell.add(socket);
+    }
+
     refs.browShell = browShell;
 
     // Extra stylized hair crest to push the temporary base toward our sheet.
@@ -629,6 +663,18 @@ function attachRoachAccessories(bones) {
     flap.position.set(0, -0.090, 0.080);
     flap.castShadow = true;
     scarf.add(flap);
+    for (const side of [-1, 1]) {
+      const collarPlate = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5, 12, 8),
+        mats.shell
+      );
+      collarPlate.scale.set(0.060, 0.035, 0.070);
+      collarPlate.position.set(side * 0.070, -0.006, 0.015);
+      collarPlate.rotation.z = side * 0.28;
+      collarPlate.castShadow = true;
+      scarf.add(collarPlate);
+    }
+
     refs.scarf = scarf;
   }
 
@@ -687,6 +733,19 @@ function attachRoachAccessories(bones) {
       ribPlate.rotation.z = side * 0.15;
       ribPlate.castShadow = true;
       torsoGear.add(ribPlate);
+    }
+
+    // Clavicle shell plates visually connect chest armor to the shoulder caps.
+    for (const side of [-1, 1]) {
+      const clavicle = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5, 12, 8),
+        mats.shell
+      );
+      clavicle.scale.set(0.082, 0.040, 0.034);
+      clavicle.position.set(side * 0.085, 0.095, 0.128);
+      clavicle.rotation.z = side * -0.18;
+      clavicle.castShadow = true;
+      torsoGear.add(clavicle);
     }
 
     // Crossed dark harness straps.
@@ -778,6 +837,32 @@ function attachRoachAccessories(bones) {
     );
     centerRidge.position.set(0, -0.045, -0.082);
     shellRoot.add(centerRidge);
+
+    // Twin elytra are the main back silhouette: long tapered roach wing-cases
+    // sitting over the smaller segmented foundation.
+    for (const side of [-1, 1]) {
+      const elytron = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.105, 0.34, 7, 12),
+        side < 0 ? mats.shell : mats.shellLight
+      );
+      elytron.name =
+        side < 0 ? 'LeftElytron' : 'RightElytron';
+      elytron.scale.set(0.78, 1.0, 0.40);
+      elytron.position.set(side * 0.080, -0.055, -0.082);
+      elytron.rotation.z = side * 0.035;
+      elytron.rotation.x = -0.035;
+      elytron.castShadow = true;
+      elytron.receiveShadow = true;
+      shellRoot.add(elytron);
+
+      const elytraStripe = new THREE.Mesh(
+        new THREE.BoxGeometry(0.012, 0.380, 0.014),
+        mats.shellHighlight
+      );
+      elytraStripe.position.set(side * 0.084, -0.040, -0.124);
+      elytraStripe.rotation.z = side * 0.025;
+      shellRoot.add(elytraStripe);
+    }
     // Bright perimeter accents stop the backpack from reading as a brown blob.
     for (const side of [-1, 1]) {
       const shellRail = new THREE.Mesh(
@@ -864,6 +949,43 @@ function attachRoachAccessories(bones) {
     refs.belt = belt;
   }
 
+  // Forearm carapace makes the arms match the chest/leg visual weight.
+  for (const [armNode, side] of [
+    [bones.leftLowerArm, -1],
+    [bones.rightLowerArm, 1]
+  ]) {
+    if (!armNode) continue;
+
+    const forearmShell = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 14, 9),
+      mats.shellLight
+    );
+    forearmShell.name =
+      side < 0 ? 'LeftForearmShell' : 'RightForearmShell';
+    forearmShell.scale.set(0.055, 0.115, 0.040);
+    forearmShell.position.set(side * 0.008, -0.100, 0.040);
+    forearmShell.rotation.z = side * 0.035;
+    forearmShell.castShadow = true;
+    forearmShell.receiveShadow = true;
+    armNode.add(forearmShell);
+
+    const forearmRidge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.016, 0.160, 0.018),
+      mats.orangeBright
+    );
+    forearmRidge.position.set(side * 0.045, -0.100, 0.068);
+    forearmRidge.rotation.z = side * 0.030;
+    armNode.add(forearmRidge);
+
+    const wrap = new THREE.Mesh(
+      new THREE.TorusGeometry(0.050, 0.010, 6, 14),
+      mats.creamDark
+    );
+    wrap.rotation.y = Math.PI / 2;
+    wrap.position.set(0, -0.185, 0.005);
+    armNode.add(wrap);
+  }
+
   // Wrist cuffs / bracers.
   for (const [handNode, side] of [[bones.leftHand, -1], [bones.rightHand, 1]]) {
     if (!handNode) continue;
@@ -920,6 +1042,35 @@ function attachRoachAccessories(bones) {
     legNode.add(thighStripe);
   }
 
+  // Long shin guards balance the large forearms and make the lower-body
+  // silhouette read clearly during sprint/crouch.
+  for (const [legNode, side] of [
+    [bones.leftLowerLeg, -1],
+    [bones.rightLowerLeg, 1]
+  ]) {
+    if (!legNode) continue;
+
+    const shin = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 14, 9),
+      mats.shellLight
+    );
+    shin.name =
+      side < 0 ? 'LeftShinShell' : 'RightShinShell';
+    shin.scale.set(0.060, 0.145, 0.036);
+    shin.position.set(0, -0.155, 0.045);
+    shin.castShadow = true;
+    shin.receiveShadow = true;
+    legNode.add(shin);
+
+    const shinRidge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.018, 0.195, 0.015),
+      mats.orangeBright
+    );
+    shinRidge.position.set(side * 0.043, -0.155, 0.073);
+    shinRidge.rotation.z = side * 0.025;
+    legNode.add(shinRidge);
+  }
+
   // Knee armor.
   for (const [legNode, side] of [[bones.leftLowerLeg, -1], [bones.rightLowerLeg, 1]]) {
     if (!legNode) continue;
@@ -967,6 +1118,16 @@ function attachRoachAccessories(bones) {
     toe.castShadow = true;
     boot.add(toe);
 
+    const toeShell = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 12, 8),
+      mats.shellLight
+    );
+    toeShell.scale.set(0.060, 0.030, 0.082);
+    toeShell.position.set(0, 0.026, 0.090);
+    toeShell.castShadow = true;
+    toeShell.receiveShadow = true;
+    boot.add(toeShell);
+
     const ankle = new THREE.Mesh(
       new THREE.BoxGeometry(0.090, 0.075, 0.060),
       mats.orange
@@ -998,6 +1159,13 @@ function attachRoachAccessories(bones) {
     bootCuff.rotation.x = Math.PI / 2;
     bootCuff.position.set(0, 0.070, -0.005);
     boot.add(bootCuff);
+
+    const bootEdge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.014, 0.050, 0.120),
+      mats.shellHighlight
+    );
+    bootEdge.position.set(side * 0.052, 0.018, 0.050);
+    boot.add(bootEdge);
   }
 
   return refs;
