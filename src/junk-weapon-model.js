@@ -13,6 +13,12 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
     ? (cfg.pickupScale ?? 0.92)
     : (cfg.heldScale ?? 0.72);
 
+  // The sniper has its own authored procedural silhouette so it reads like
+  // the approved Scrap-Eye concept instead of a generic rifle with a scope.
+  if (style === 'antenna') {
+    return buildScrapEyeSniper(cfg, mats, scale);
+  }
+
   const receiverLength = Math.max(0.36, cfg.modelLength * 0.72);
   const barrelLength =
     cfg.scope ? 0.78 :
@@ -104,16 +110,6 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
     }
   }
 
-  if (style === 'antenna') {
-    // Long improvised scope from cans plus antenna wire.
-    const scope = cylinder(0.066, 0.071, 0.34, 10, mats.dark);
-    add(scope, [0, 0.185, -0.13], [Math.PI / 2, 0, 0]);
-    add(cylinder(0.077, 0.077, 0.055, 10, mats.brass), [0, 0.185, -0.31], [Math.PI / 2, 0, 0]);
-    const lens = cylinder(0.058, 0.058, 0.012, 12, mats.glass);
-    add(lens, [0, 0.185, -0.344], [Math.PI / 2, 0, 0]);
-    add(box(0.025, 0.025, 0.42, mats.bolt), [0.095, 0.205, 0.01], [-0.42, 0, 0.04]);
-  }
-
   if (style === 'canSMG') {
     // Main body gains a visibly repurposed tin-cylinder housing.
     add(cylinder(0.105, 0.105, 0.33, 12, mats.can), [0, 0.012, -0.13], [Math.PI / 2, 0, 0]);
@@ -188,6 +184,255 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
     leftGrip,
     muzzle,
     barrelLength,
+    primaryMesh: group.children.find((child) => child.isMesh) ?? null
+  };
+}
+
+function buildScrapEyeSniper(cfg, mats, scale) {
+  const group = new THREE.Group();
+  group.name = 'JunkWeapon_ScrapEyeSniper';
+
+  const add = (mesh, pos, rot = null, parent = group) => {
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    parent.add(mesh);
+    mesh.castShadow = true;
+    return mesh;
+  };
+
+  const redPaint = mat(0xa94c37, 0.84, 0.34);
+  const redDark = mat(0x713427, 0.90, 0.28);
+  const warmSteel = mat(0x574c42, 0.78, 0.64);
+  const bronze = mat(0x9a6a35, 0.66, 0.58);
+  const blueGlass = new THREE.MeshStandardMaterial({
+    color: 0x2f8ed0,
+    emissive: 0x082b4c,
+    emissiveIntensity: 0.55,
+    roughness: 0.10,
+    metalness: 0.12,
+    transparent: true,
+    opacity: 0.88
+  });
+  const creamWrap = mat(0xc5ad7c, 0.98, 0.01);
+
+  // --- Receiver: layered, mismatched scrap plates ---
+  add(box(0.25, 0.22, 0.58, mats.iron), [0, 0.015, -0.03]);
+  add(box(0.268, 0.080, 0.48, redPaint), [0.012, 0.115, -0.065], [0.015, 0, -0.018]);
+  add(box(0.030, 0.155, 0.36, warmSteel), [-0.142, 0.030, -0.06], [0.02, 0, 0.03]);
+  add(box(0.032, 0.135, 0.28, redDark), [0.145, 0.015, -0.115], [-0.02, 0, -0.025]);
+
+  // Patch plates and large bolts like the concept art.
+  const plateA = add(box(0.032, 0.135, 0.17, bronze), [0.147, 0.020, 0.125], [0, 0, 0.04]);
+  const plateB = add(box(0.032, 0.115, 0.19, redPaint), [-0.147, 0.045, -0.15], [0, 0, -0.035]);
+  for (const z of [-0.22, -0.06, 0.10, 0.22]) {
+    add(cylinder(0.018, 0.018, 0.035, 8, mats.bolt), [0.158, 0.073, z], [0, 0, Math.PI / 2]);
+  }
+
+  // Vent holes on the red receiver plate.
+  for (const z of [-0.14, -0.04, 0.06]) {
+    add(cylinder(0.022, 0.022, 0.035, 10, mats.dark), [0.153, 0.105, z], [0, 0, Math.PI / 2]);
+  }
+
+  // --- Pistol grip + taped field wrap ---
+  add(box(0.115, 0.30, 0.135, mats.rubber), [0, -0.215, 0.195], [-0.12, 0, 0]);
+  for (let i = 0; i < 5; i++) {
+    add(
+      box(0.128, 0.032, 0.148, i % 2 ? creamWrap : mats.tapeDark),
+      [0, -0.118 - i * 0.050, 0.194 + i * 0.006],
+      [-0.12, 0, i % 2 ? 0.035 : -0.03]
+    );
+  }
+
+  // Trigger guard.
+  const guard = new THREE.Mesh(
+    new THREE.TorusGeometry(0.082, 0.012, 5, 12, Math.PI * 1.55),
+    mats.bolt
+  );
+  add(guard, [0, -0.118, 0.105], [Math.PI / 2, 0, -0.40]);
+
+  // --- Box magazine with scrap bands ---
+  add(box(0.145, 0.255, 0.17, mats.dark), [0, -0.185, -0.055], [-0.10, 0, 0.01]);
+  add(box(0.156, 0.050, 0.182, redPaint), [0, -0.095, -0.055], [-0.10, 0, 0.01]);
+  add(box(0.156, 0.038, 0.182, bronze), [0, -0.265, -0.055], [-0.10, 0, 0.01]);
+
+  // Small dangling red tag under the receiver.
+  const tagRoot = new THREE.Group();
+  tagRoot.position.set(0.12, -0.10, 0.02);
+  group.add(tagRoot);
+  add(cylinder(0.018, 0.018, 0.014, 8, mats.bolt), [0, 0, 0], [Math.PI / 2, 0, 0], tagRoot);
+  add(box(0.052, 0.105, 0.024, redPaint), [0, -0.065, 0], [0, 0, 0.08], tagRoot);
+
+  // --- Long pipe barrel, visibly assembled from sections ---
+  const barrelCenterZ = -0.93;
+  add(cylinder(0.047, 0.051, 1.20, 10, mats.pipe), [0, 0.035, barrelCenterZ], [Math.PI / 2, 0, 0]);
+
+  // Receiver-to-barrel collar.
+  add(cylinder(0.075, 0.075, 0.09, 10, bronze), [0, 0.035, -0.37], [Math.PI / 2, 0, 0]);
+
+  // Pipe couplers along the barrel.
+  for (const z of [-0.58, -0.87, -1.12]) {
+    add(cylinder(0.067, 0.067, 0.060, 10, z === -0.87 ? bronze : mats.rust), [0, 0.035, z], [Math.PI / 2, 0, 0]);
+  }
+
+  // Cloth wraps around the front half.
+  for (let i = 0; i < 5; i++) {
+    const wrap = cylinder(
+      0.058 + (i % 2) * 0.004,
+      0.058 + (i % 2) * 0.004,
+      0.060,
+      8,
+      i === 2 ? redPaint : creamWrap
+    );
+    add(wrap, [0, 0.035, -1.24 - i * 0.055], [Math.PI / 2, 0, (i - 2) * 0.05]);
+  }
+
+  // Chunky rectangular muzzle brake with three visible vent slots.
+  const muzzleZ = -1.59;
+  add(box(0.18, 0.135, 0.23, warmSteel), [0, 0.035, muzzleZ]);
+  add(box(0.150, 0.095, 0.055, mats.dark), [0, 0.035, muzzleZ - 0.118]);
+  for (const x of [-0.050, 0, 0.050]) {
+    add(box(0.030, 0.070, 0.245, mats.dark), [x, 0.035, muzzleZ], [0, 0, 0]);
+  }
+  // Side plates keep the brake from becoming a solid dark block.
+  add(box(0.024, 0.145, 0.225, bronze), [0.100, 0.035, muzzleZ]);
+  add(box(0.024, 0.145, 0.225, redDark), [-0.100, 0.035, muzzleZ]);
+
+  // --- Skeletal stock: frame rather than a generic wooden block ---
+  const stockRoot = new THREE.Group();
+  stockRoot.position.set(0, 0, 0.34);
+  group.add(stockRoot);
+
+  // Rear spine and lower brace.
+  add(box(0.090, 0.085, 0.54, warmSteel), [0, 0.055, 0.18], [-0.03, 0, 0], stockRoot);
+  add(box(0.075, 0.070, 0.42, bronze), [0, -0.095, 0.17], [0.34, 0, 0], stockRoot);
+
+  // Triangular open frame side rails.
+  add(box(0.040, 0.040, 0.42, mats.iron), [0.105, 0.010, 0.20], [0.12, 0.08, 0], stockRoot);
+  add(box(0.040, 0.040, 0.42, mats.iron), [-0.105, 0.010, 0.20], [0.12, -0.08, 0], stockRoot);
+
+  // Butt plate / rubber pad.
+  add(box(0.20, 0.30, 0.095, mats.rubber), [0, -0.005, 0.48], [0.02, 0, 0], stockRoot);
+  add(box(0.165, 0.235, 0.035, redPaint), [0, -0.005, 0.423], [0.02, 0, 0], stockRoot);
+
+  // Stock strap.
+  add(box(0.235, 0.040, 0.11, creamWrap), [0, 0.015, 0.34], [0, 0, -0.10], stockRoot);
+
+  // --- Oversized scavenged camera-lens scope ---
+  const scopeRoot = new THREE.Group();
+  scopeRoot.position.set(0, 0.245, -0.10);
+  group.add(scopeRoot);
+
+  // Mount rail.
+  add(box(0.105, 0.045, 0.58, mats.dark), [0, -0.085, 0.00], [0.01, 0, 0], scopeRoot);
+
+  // Main lens tube from mismatched cylinders.
+  add(cylinder(0.082, 0.088, 0.33, 12, mats.dark), [0, 0, 0.02], [Math.PI / 2, 0, 0], scopeRoot);
+  add(cylinder(0.105, 0.095, 0.18, 12, bronze), [0, 0, -0.22], [Math.PI / 2, 0, 0], scopeRoot);
+  add(cylinder(0.075, 0.068, 0.16, 12, mats.dark), [0, 0, 0.25], [Math.PI / 2, 0, 0], scopeRoot);
+
+  // Giant red camera-lens hood at the front.
+  add(cylinder(0.155, 0.120, 0.17, 10, redPaint), [0, 0, -0.405], [Math.PI / 2, 0, 0], scopeRoot);
+  add(cylinder(0.122, 0.122, 0.040, 16, mats.dark), [0, 0, -0.500], [Math.PI / 2, 0, 0], scopeRoot);
+  add(cylinder(0.104, 0.104, 0.018, 18, blueGlass), [0, 0, -0.526], [Math.PI / 2, 0, 0], scopeRoot);
+
+  // Small rear eyepiece glass.
+  add(cylinder(0.058, 0.058, 0.015, 14, blueGlass), [0, 0, 0.340], [Math.PI / 2, 0, 0], scopeRoot);
+
+  // Clamp rings.
+  for (const z of [-0.12, 0.12, -0.30]) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(z === -0.30 ? 0.113 : 0.092, 0.013, 6, 14),
+      z === -0.30 ? redDark : bronze
+    );
+    add(ring, [0, 0, z], [0, 0, 0], scopeRoot);
+  }
+
+  // Scope mounting brackets.
+  for (const z of [-0.16, 0.12]) {
+    add(box(0.150, 0.055, 0.045, warmSteel), [0, -0.085, z], [0, 0, 0], scopeRoot);
+    add(box(0.050, 0.080, 0.042, mats.bolt), [0, -0.045, z], [0, 0, 0], scopeRoot);
+  }
+
+  // Adjustment turret + little side knob.
+  add(cylinder(0.040, 0.040, 0.070, 10, bronze), [0, 0.105, -0.02], [0, 0, 0], scopeRoot);
+  add(cylinder(0.032, 0.032, 0.060, 10, mats.bolt), [0.105, 0.020, -0.02], [0, 0, Math.PI / 2], scopeRoot);
+
+  // Tape strips crossing the scope body.
+  for (const z of [-0.05, 0.07]) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.096, 0.010, 5, 12),
+      creamWrap
+    );
+    add(ring, [0, 0, z], [0, 0, 0.08], scopeRoot);
+  }
+
+  // --- Folded bipod/support rod like the concept ---
+  const bipodRoot = new THREE.Group();
+  bipodRoot.position.set(0, -0.075, -0.56);
+  group.add(bipodRoot);
+
+  for (const side of [-1, 1]) {
+    const rail = box(0.030, 0.030, 0.78, warmSteel);
+    rail.position.set(side * 0.055, -0.055, -0.26);
+    rail.rotation.set(-0.13, side * 0.035, side * 0.03);
+    bipodRoot.add(rail);
+
+    const foot = box(0.085, 0.045, 0.085, mats.rubber);
+    foot.position.set(side * 0.075, -0.110, -0.66);
+    foot.rotation.z = side * 0.08;
+    bipodRoot.add(foot);
+  }
+
+  // Front pivot hardware.
+  add(cylinder(0.048, 0.048, 0.16, 10, mats.bolt), [0, -0.01, 0.04], [0, 0, Math.PI / 2], bipodRoot);
+
+  // --- Exposed junk cable ---
+  const cablePoints = [
+    new THREE.Vector3(-0.13, 0.10, 0.12),
+    new THREE.Vector3(-0.16, 0.04, -0.08),
+    new THREE.Vector3(-0.14, -0.02, -0.24),
+    new THREE.Vector3(-0.10, 0.02, -0.38)
+  ];
+  const cableCurve = new THREE.CatmullRomCurve3(cablePoints);
+  const cable = new THREE.Mesh(
+    new THREE.TubeGeometry(cableCurve, 14, 0.009, 5, false),
+    mats.rubber
+  );
+  cable.castShadow = true;
+  group.add(cable);
+
+  // --- Gameplay sockets: preserve existing weapon/IK contract ---
+  const rightGrip = new THREE.Object3D();
+  rightGrip.name = 'RightGripSocket';
+  rightGrip.position.set(
+    cfg.rightGripX ?? 0,
+    cfg.rightGripY ?? -0.09,
+    cfg.rightGripZ ?? 0.105
+  );
+  group.add(rightGrip);
+
+  const leftGrip = new THREE.Object3D();
+  leftGrip.name = 'LeftForegripSocket';
+  leftGrip.position.set(
+    cfg.leftGripX ?? 0,
+    cfg.leftGripY ?? -0.025,
+    cfg.foregripZ ?? -0.405
+  );
+  group.add(leftGrip);
+
+  const muzzle = new THREE.Object3D();
+  muzzle.name = 'MuzzleSocket';
+  muzzle.position.set(0, 0.035, muzzleZ - 0.135);
+  group.add(muzzle);
+
+  group.scale.setScalar(scale);
+
+  return {
+    group,
+    rightGrip,
+    leftGrip,
+    muzzle,
+    barrelLength: 1.20,
     primaryMesh: group.children.find((child) => child.isMesh) ?? null
   };
 }

@@ -168,9 +168,9 @@ export const GAME_CONFIG = {
     },
     marksmanSniper: {
       junkStyle: 'antenna',
-      junkPaint: 0x554a72,
-      heldScale: 0.66,
-      pickupScale: 0.90,
+      junkPaint: 0xa94c37,
+      heldScale: 0.58,
+      pickupScale: 0.82,
       foregripZ: -0.405,
       combatGripForward: 0.190,
       combatGripRight: -0.020,
