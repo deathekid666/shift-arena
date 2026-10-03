@@ -239,7 +239,13 @@ export class TinFangSystem {
     this.actionTime = 0;
     this.armRig.visible = !this.useRealHand;
     this.player.setFangArmOverride?.(true);
-    this.player.setFangAnimation?.({ mode: 'aim', t: 0, compact: false });
+    this.player.setFangAnimation?.({
+      mode: 'aim',
+      t: 0,
+      compact: false,
+      aimPitch: this.cameraRig.pitch,
+      aimYaw: angleDelta(this.player.group.rotation.y, this.cameraRig.yaw)
+    });
     this.handFang.visible = true;
     this.sheath.visible = false;
     this.trajectoryLine.visible = false;
@@ -282,7 +288,9 @@ export class TinFangSystem {
       this.player.setFangAnimation?.({
         mode: 'aim',
         t: charge,
-        compact: this.compactAim
+        compact: this.compactAim,
+        aimPitch: this.cameraRig.pitch,
+        aimYaw: angleDelta(this.player.group.rotation.y, this.cameraRig.yaw)
       });
     } else {
       this.dampArmPose(target, aiming ? 16 : 20, dt);
@@ -342,7 +350,9 @@ export class TinFangSystem {
       this.player.setFangAnimation?.({
         mode: 'release',
         t,
-        compact: this.releaseCompact
+        compact: this.releaseCompact,
+        aimPitch: this.cameraRig.pitch,
+        aimYaw: angleDelta(this.player.group.rotation.y, this.cameraRig.yaw)
       });
     }
 
@@ -1208,6 +1218,13 @@ export class TinFangSystem {
       bearing
     });
   }
+}
+
+function angleDelta(current, target) {
+  return Math.atan2(
+    Math.sin(target - current),
+    Math.cos(target - current)
+  );
 }
 
 function buildFangModel() {

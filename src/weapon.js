@@ -112,6 +112,13 @@ export class WeaponSystem {
     return !this.blocked && this.input.pointerLocked && this.input.mouseDown(2);
   }
 
+  get combatPoseActive() {
+    if (this.blocked || !this.input.pointerLocked) return false;
+    const firingNow = this.input.mouseDown(0);
+    const recentShot = this.state.sinceShot < 0.30;
+    return this.aiming || firingNow || recentShot;
+  }
+
   get firing() {
     if (this.blocked || !this.input.pointerLocked) return false;
     return this.cfg.automatic ? this.input.mouseDown(0) : this.input.consumeMouse(0);
@@ -227,11 +234,12 @@ export class WeaponSystem {
     const moving = Math.min(1, speed / 5.2);
 
     state.bobTime += dt * (3.5 + speed * 1.4);
-    const bobScale = cfg.bob * moving * (this.aiming ? 0.10 : 0.55);
+    const shoulderPose = this.combatPoseActive;
+    const bobScale = cfg.bob * moving * (shoulderPose ? 0.10 : 0.55);
     const bobX = Math.cos(state.bobTime) * bobScale;
     const bobY = Math.abs(Math.sin(state.bobTime * 2)) * bobScale * 0.45;
 
-    const swayScale = cfg.sway * (this.aiming ? 0.18 : 0.62);
+    const swayScale = cfg.sway * (shoulderPose ? 0.18 : 0.62);
     const swayX = THREE.MathUtils.clamp(
       -this.cameraRig.lookX * swayScale,
       -0.032,
@@ -243,7 +251,7 @@ export class WeaponSystem {
       0.020
     );
 
-    if (this.aiming && this.handMounted) {
+    if (shoulderPose && this.handMounted) {
       // Shooter architecture: crosshair/camera owns the weapon transform.
       // Hands follow the weapon sockets via IK after this pose is resolved.
       const shoulder =
@@ -266,11 +274,18 @@ export class WeaponSystem {
 
         // The rear/pistol grip sits just forward and slightly inward from the
         // firing shoulder, which visibly raises the rifle to a shooter stance.
+        const ads = this.aiming;
         this.tmpGripWorld
           .copy(shoulder)
-          .addScaledVector(this.tmpAimForward, 0.23)
-          .addScaledVector(this.tmpAimRight, -0.035 + bobX + swayX)
-          .addScaledVector(this.tmpAimUp, -0.035 + bobY + swayY);
+          .addScaledVector(this.tmpAimForward, ads ? 0.23 : 0.20)
+          .addScaledVector(
+            this.tmpAimRight,
+            (ads ? -0.035 : 0.010) + bobX + swayX
+          )
+          .addScaledVector(
+            this.tmpAimUp,
+            (ads ? -0.035 : -0.075) + bobY + swayY
+          );
 
         this.tmpDesiredWorldQ.copy(this.camera.quaternion);
 
@@ -419,7 +434,7 @@ export class WeaponSystem {
       .normalize();
 
     this.gripPose.aiming =
-      this.aiming &&
+      this.combatPoseActive &&
       !this.visualHidden &&
       !this.blocked;
   }

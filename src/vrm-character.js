@@ -1479,37 +1479,64 @@ function applyRealFangPose(bones, baseRotations, fang, dt) {
   const mode = fang.mode ?? 'aim';
   const t = THREE.MathUtils.clamp(fang.t ?? 0, 0, 1);
   const compact = Boolean(fang.compact);
+  const pitch = THREE.MathUtils.clamp(fang.aimPitch ?? 0, -0.68, 0.86);
+  const yaw = THREE.MathUtils.clamp(fang.aimYaw ?? 0, -1.05, 1.05);
+
   let upper;
   let lower;
   let hand;
-  let chest = [0, 0, 0];
+  let shoulder;
+  let chest;
 
   if (mode === 'release') {
-    const snap = easeInOut(Math.min(1, t / 0.72));
-    const follow = t > 0.72 ? easeOut((t - 0.72) / 0.28) : 0;
-    const start = compact
-      ? [-0.72, -0.42, 0.78]
-      : [-1.06, -0.26, 0.96];
-    const end = compact
-      ? [0.18, 0.18, 0.34]
-      : [0.38, 0.22, 0.28];
+    const snap = easeInOut(Math.min(1, t / 0.70));
+    const follow = t > 0.70 ? easeOut((t - 0.70) / 0.30) : 0;
+
+    const startUpper = compact
+      ? [-1.02, -0.34, 0.94]
+      : [-1.72, -0.24, 1.14];
+    const startLower = compact
+      ? [-1.10, 0.02, -0.18]
+      : [-1.38, 0.08, 0.30];
+    const startHand = compact
+      ? [-0.32, 0.02, 0.14]
+      : [-0.56, 0.12, 0.34];
+
+    const endUpper = compact
+      ? [0.24, 0.16, 0.26]
+      : [0.48, 0.22, 0.24];
+    const endLower = compact
+      ? [-0.18, -0.06, -0.08]
+      : [-0.16, -0.10, -0.12];
+    const endHand = compact
+      ? [0.22, -0.04, -0.18]
+      : [0.34, -0.05, -0.24];
 
     upper = [
-      THREE.MathUtils.lerp(start[0], end[0], snap),
-      THREE.MathUtils.lerp(start[1], end[1], snap),
-      THREE.MathUtils.lerp(start[2], end[2], snap)
+      THREE.MathUtils.lerp(startUpper[0], endUpper[0], snap),
+      THREE.MathUtils.lerp(startUpper[1], endUpper[1], snap),
+      THREE.MathUtils.lerp(startUpper[2], endUpper[2], snap)
     ];
     lower = [
-      THREE.MathUtils.lerp(compact ? -0.98 : -1.22, -0.22, snap),
-      THREE.MathUtils.lerp(0.02, -0.08, snap),
-      THREE.MathUtils.lerp(compact ? -0.22 : 0.18, -0.12, snap)
+      THREE.MathUtils.lerp(startLower[0], endLower[0], snap),
+      THREE.MathUtils.lerp(startLower[1], endLower[1], snap),
+      THREE.MathUtils.lerp(startLower[2], endLower[2], snap)
     ];
     hand = [
-      THREE.MathUtils.lerp(-0.32, 0.34, snap),
-      THREE.MathUtils.lerp(0.06, -0.04, snap),
-      THREE.MathUtils.lerp(0.18, -0.24, snap)
+      THREE.MathUtils.lerp(startHand[0], endHand[0], snap),
+      THREE.MathUtils.lerp(startHand[1], endHand[1], snap),
+      THREE.MathUtils.lerp(startHand[2], endHand[2], snap)
     ];
-    chest = [0, THREE.MathUtils.lerp(compact ? 0.05 : 0.13, -0.08, snap) * (1 - follow * 0.7), 0];
+    shoulder = [
+      THREE.MathUtils.lerp(compact ? -0.12 : -0.22, 0.02, snap),
+      THREE.MathUtils.lerp(compact ? -0.04 : -0.10, 0.04, snap),
+      THREE.MathUtils.lerp(compact ? 0.18 : 0.28, 0.04, snap)
+    ];
+    chest = [
+      -pitch * THREE.MathUtils.lerp(0.20, 0.05, snap),
+      yaw * THREE.MathUtils.lerp(0.34, -0.12, snap) * (1 - follow * 0.65),
+      THREE.MathUtils.lerp(compact ? 0.02 : 0.08, -0.05, snap)
+    ];
   } else if (mode === 'slash') {
     const swing = easeInOut(t);
     upper = [
@@ -1522,25 +1549,70 @@ function applyRealFangPose(bones, baseRotations, fang, dt) {
       0,
       THREE.MathUtils.lerp(0.20, -0.26, swing)
     ];
-    hand = [THREE.MathUtils.lerp(-0.22, 0.28, swing), 0, THREE.MathUtils.lerp(0.18, -0.20, swing)];
+    hand = [
+      THREE.MathUtils.lerp(-0.22, 0.28, swing),
+      0,
+      THREE.MathUtils.lerp(0.18, -0.20, swing)
+    ];
+    shoulder = [-0.06, 0, 0.10];
     chest = [0, THREE.MathUtils.lerp(0.10, -0.10, swing), 0];
   } else {
+    // Real throwing wind-up: hand rises above/behind the head, elbow bends,
+    // chest turns toward the crosshair and pitch follows camera elevation.
     upper = compact
-      ? [-0.72, -0.42, 0.78]
-      : [-1.06, -0.26, 0.96];
+      ? [-1.02 - pitch * 0.10, -0.34 + yaw * 0.08, 0.94]
+      : [-1.72 - pitch * 0.16, -0.24 + yaw * 0.10, 1.14];
     lower = compact
-      ? [-0.98, 0.02, -0.22]
-      : [-1.22, 0.04, 0.18];
+      ? [-1.10, 0.02, -0.18]
+      : [-1.38, 0.08, 0.30];
     hand = compact
-      ? [-0.30, 0.02, 0.10]
-      : [-0.38, 0.08, 0.22];
-    chest = [0, compact ? 0.05 : 0.13, 0];
+      ? [-0.32, 0.02, 0.14]
+      : [-0.56, 0.12, 0.34];
+    shoulder = compact
+      ? [-0.12, -0.04, 0.18]
+      : [-0.22, -0.10, 0.28];
+    chest = [
+      -pitch * 0.20,
+      yaw * 0.34,
+      compact ? 0.02 : 0.08
+    ];
   }
 
-  dampBoneEuler(bones.rightUpperArm, baseRotations, ...upper, 22, dt);
-  dampBoneEuler(bones.rightLowerArm, baseRotations, ...lower, 22, dt);
-  dampBoneEuler(bones.rightHand, baseRotations, ...hand, 24, dt);
-  dampBoneEuler(bones.upperChest ?? bones.chest, baseRotations, ...chest, 16, dt);
+  dampBoneEuler(
+    bones.rightShoulder,
+    baseRotations,
+    ...shoulder,
+    24,
+    dt
+  );
+  dampBoneEuler(
+    bones.rightUpperArm,
+    baseRotations,
+    ...upper,
+    26,
+    dt
+  );
+  dampBoneEuler(
+    bones.rightLowerArm,
+    baseRotations,
+    ...lower,
+    28,
+    dt
+  );
+  dampBoneEuler(
+    bones.rightHand,
+    baseRotations,
+    ...hand,
+    28,
+    dt
+  );
+  dampBoneEuler(
+    bones.upperChest ?? bones.chest,
+    baseRotations,
+    ...chest,
+    20,
+    dt
+  );
 }
 
 function easeOut(t) {

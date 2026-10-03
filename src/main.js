@@ -66,7 +66,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.4 · WEAPON-DRIVEN ADS IK</div>
+    <div id="damage-test-hint">BUILD 010.5 · UNIFIED COMBAT POSES</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -115,7 +115,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.4 · WEAPON-DRIVEN ADS</div>
+        <div class="build-tag">BUILD 010.5 · COMBAT POSES</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
@@ -484,17 +484,21 @@ function loop(now) {
     weapon.setBlocked(preFangBlock);
     weapon.setVisualHidden(fang.blocksWeapons);
 
+    const weaponCombatPose =
+      !fang.blocksWeapons &&
+      weapon.combatPoseActive;
+
     const combatFacing =
       input.pointerLocked &&
       !armor.using &&
-      (input.mouseDown(2) || input.mouseDown(0) || fang.blocksWeapons);
+      (weaponCombatPose || fang.blocksWeapons);
 
     player.update(
       dt,
       thirdCam.yaw,
       combatFacing,
       thirdCam.pitch,
-      weapon.aiming && !fang.blocksWeapons
+      weaponCombatPose
     );
     weapon.updateSelection();
 
@@ -520,7 +524,7 @@ function loop(now) {
 
     // Final ADS hand placement happens after the weapon has been aligned to
     // the camera/crosshair. The gun owns the grip sockets; both arms solve to it.
-    if (!armor.using && !fangBlocking && weapon.aiming) {
+    if (!armor.using && !fangBlocking && weapon.combatPoseActive) {
       player.applyWeaponIK(weapon.getGripPose(), dt);
     }
 

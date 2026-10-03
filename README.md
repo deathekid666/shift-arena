@@ -242,3 +242,17 @@ Browser-first third-person shooter prototype.
 - Final frame order: locomotion -> torso aim offset -> weapon crosshair transform -> grip sockets -> two-hand IK -> VRM propagation -> render.
 - Non-ADS gun carrying remains hand-led so this change is isolated to the aiming/shooting stance.
 - The existing camera-first bullet trace remains authoritative; the visual muzzle then traces toward the same camera-selected aim point.
+
+
+## Build 010.5 — unified firearm + Tin Fang combat poses
+- Firearm shoulder stance is no longer RMB-only.
+- Added WeaponSystem.combatPoseActive: true while ADS, while LMB is held, and for 0.30 s after the most recent shot.
+- Hip-fire shooting now raises the firearm into the same two-hand shoulder shooting architecture as ADS, while keeping the normal third-person camera/FOV and hip-fire accuracy rules.
+- The camera still zooms only on RMB; LMB fire changes character/weapon pose without pretending the player entered ADS.
+- Final two-hand weapon IK now runs whenever combatPoseActive is true, so both hands grip the weapon while firing even without RMB.
+- Combat facing/orientation warping also persists through the brief post-shot recovery window instead of dropping immediately after a semi-auto click.
+- Tin Fang PRIMING/AIMING/RELEASE now carry the live camera pitch and relative camera yaw into the VRM animation layer.
+- The real throwing hand now raises above/behind the head, elbow bends into a wind-up, right shoulder lifts, and upper chest twists toward the crosshair.
+- Release starts from that raised pose and whips the real arm forward toward the cursor before follow-through.
+- Low-ceiling compact throw keeps the same logic with a lower/tucked wind-up.
+- Tap-V slash remains its own melee pose and does not reuse the throw wind-up.
