@@ -57,27 +57,15 @@ export class TestWorld {
   }
 
   addRamp(x, z, width, length, height, direction, color) {
-    const geom = new THREE.BufferGeometry();
-    const w = width;
-    const d = length;
-    const h = height;
-
-    const verts = new Float32Array([
-      -w/2,0,-d/2,  w/2,0,-d/2, -w/2,0,d/2,
-       w/2,0,-d/2,  w/2,0,d/2,  -w/2,0,d/2,
-
-      -w/2,0,-d/2, -w/2,h,d/2,  w/2,0,-d/2,
-       w/2,0,-d/2, -w/2,h,d/2,  w/2,h,d/2,
-
-      -w/2,0,d/2,   w/2,0,d/2, -w/2,h,d/2,
-       w/2,0,d/2,   w/2,h,d/2, -w/2,h,d/2
-    ]);
-
-    geom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-    geom.computeVertexNormals();
-
-    const mesh = new THREE.Mesh(geom, this.material(color, 0.68, 0.02));
-    mesh.position.set(x, 0, z);
+    // Render ramps as actual cutting-board/plank geometry instead of a
+    // paper-thin custom triangle surface. Collision still uses the analytical
+    // slope data below, so visual thickness does not turn the ramp into a wedge.
+    const thickness = 0.24;
+    const slopedLength = Math.hypot(length, height);
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(width, thickness, slopedLength),
+      this.material(color, 0.66, 0.025)
+    );
 
     let axis = 'z';
     let dir = 1;
@@ -91,26 +79,64 @@ export class TestWorld {
       minZ = z - length/2; maxZ = z + length/2;
       axis = 'z'; dir = 1;
     } else if (direction === '-z') {
-      mesh.rotation.y = Math.PI;
       minX = x - width/2; maxX = x + width/2;
       minZ = z - length/2; maxZ = z + length/2;
       axis = 'z'; dir = -1;
     } else if (direction === '+x') {
-      mesh.rotation.y = Math.PI / 2;
       minX = x - length/2; maxX = x + length/2;
       minZ = z - width/2; maxZ = z + width/2;
       axis = 'x'; dir = 1;
     } else {
-      mesh.rotation.y = -Math.PI / 2;
       minX = x - length/2; maxX = x + length/2;
       minZ = z - width/2; maxZ = z + width/2;
       axis = 'x'; dir = -1;
     }
 
+    // Build an orthonormal basis for the plank:
+    // local Z = uphill direction, local X = board width, local Y = top normal.
+    const rise = height / slopedLength;
+    const run = length / slopedLength;
+    const uphill = axis === 'z'
+      ? new THREE.Vector3(0, rise, dir * run)
+      : new THREE.Vector3(dir * run, rise, 0);
+
+    let across = axis === 'z'
+      ? new THREE.Vector3(1, 0, 0)
+      : new THREE.Vector3(0, 0, 1);
+
+    let normal = uphill.clone().cross(across).normalize();
+    if (normal.y < 0) {
+      across.multiplyScalar(-1);
+      normal = uphill.clone().cross(across).normalize();
+    }
+
+    const basis = new THREE.Matrix4().makeBasis(across, normal, uphill);
+    mesh.quaternion.setFromRotationMatrix(basis);
+
+    // Shift the board down by half its vertical top-normal thickness so the
+    // analytical walking surface still runs exactly from baseY=0 to topY=height.
+    mesh.position.set(
+      x,
+      height / 2 - normal.y * thickness / 2,
+      z
+    );
+
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     this.scene.add(mesh);
     this.cameraObstacles.push(mesh);
+
+    // A slightly darker underside accent makes the board thickness readable
+    // from the cockroach's low camera angle.
+    const underside = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.985, 0.035, slopedLength * 0.992),
+      this.material(0x7b5133, 0.78, 0.01)
+    );
+    underside.quaternion.copy(mesh.quaternion);
+    underside.position.copy(mesh.position).addScaledVector(normal, -thickness * 0.52);
+    underside.castShadow = true;
+    underside.receiveShadow = true;
+    this.scene.add(underside);
 
     this.ramps.push({
       minX, maxX, minZ, maxZ,
@@ -118,7 +144,7 @@ export class TestWorld {
       topY: height,
       axis,
       direction: dir,
-      thickness: 0.14,
+      thickness,
       mesh
     });
 
