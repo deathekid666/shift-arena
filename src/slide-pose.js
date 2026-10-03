@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-// Fortnite-style low skid pose applied after locomotion.
+// Tactical one-knee combat slide inspired by modern third-person shooters.
 // Lower body only: weapon/Fang upper-body layers remain free to aim/fire.
 export function createSlidePoseLayer(character) {
   const { bones: b, root } = character;
@@ -26,7 +26,7 @@ export function createSlidePoseLayer(character) {
     blend = THREE.MathUtils.damp(
       blend,
       target,
-      target > blend ? 18 : 11,
+      target > blend ? 19 : 10,
       dt
     );
 
@@ -41,42 +41,78 @@ export function createSlidePoseLayer(character) {
     root.updateWorldMatrix(true, true);
 
     const rootQ = root.getWorldQuaternion(new THREE.Quaternion());
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(rootQ).normalize();
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(rootQ).normalize();
+    const forward = new THREE.Vector3(0, 0, -1)
+      .applyQuaternion(rootQ)
+      .normalize();
+    const right = new THREE.Vector3(1, 0, 0)
+      .applyQuaternion(rootQ)
+      .normalize();
 
     const leftFootBase = b.leftFoot.getWorldPosition(new THREE.Vector3());
     const rightFootBase = b.rightFoot.getWorldPosition(new THREE.Vector3());
     const leftFootQ = b.leftFoot.getWorldQuaternion(new THREE.Quaternion());
     const rightFootQ = b.rightFoot.getWorldQuaternion(new THREE.Quaternion());
 
-    // Pelvis drops hard and shifts backward. This creates the low-profile slide
-    // silhouette instead of looking like a crouch that happens to move fast.
+    const progress = THREE.MathUtils.clamp(state?.slideProgress ?? 0, 0, 1);
+
+    // Fast drop into the knee slide, stable middle, softer recovery.
+    const enter = smooth01(THREE.MathUtils.clamp(progress / 0.18, 0, 1));
+    const exit = smooth01(
+      THREE.MathUtils.clamp((1 - progress) / 0.20, 0, 1)
+    );
+    const phaseBlend = Math.min(enter, exit + 0.08);
+    const poseBlend = THREE.MathUtils.clamp(blend * phaseBlend, 0, 1);
+
+    // Low pelvis, but centered over the kneeling/right leg rather than thrown
+    // far backward like the old skid pose.
     const baseHip = underlyingP.get(b.hips);
     b.hips.position.copy(baseHip);
-    b.hips.position.y -= 0.34 * blend;
-    b.hips.position.z += 0.13 * blend;
+    b.hips.position.y -= 0.31 * poseBlend;
+    b.hips.position.z += 0.045 * poseBlend;
+    b.hips.position.x += 0.035 * poseBlend;
 
-    rotateLocal(b.hips, underlyingQ.get(b.hips), 0.16 * blend, 0, 0);
+    // Torso stays upright enough to keep a weapon-ready silhouette.
+    rotateLocal(
+      b.hips,
+      underlyingQ.get(b.hips),
+      0.08 * poseBlend,
+      0,
+      -0.03 * poseBlend
+    );
     if (b.spine) {
-      rotateLocal(b.spine, underlyingQ.get(b.spine), -0.16 * blend, 0, 0);
+      rotateLocal(
+        b.spine,
+        underlyingQ.get(b.spine),
+        -0.055 * poseBlend,
+        0,
+        0.025 * poseBlend
+      );
     }
     if (b.chest) {
-      rotateLocal(b.chest, underlyingQ.get(b.chest), -0.06 * blend, 0, 0);
+      rotateLocal(
+        b.chest,
+        underlyingQ.get(b.chest),
+        -0.025 * poseBlend,
+        0,
+        0.015 * poseBlend
+      );
     }
 
     root.updateWorldMatrix(true, true);
 
-    // Character slides with right leg extended forward and left leg tucked.
-    // Targets are world-space so this works regardless of VRM bone axes.
+    // Reference-style silhouette:
+    // - right knee under the body, close to the floor
+    // - right lower leg/foot trails backward
+    // - left leg reaches forward-left with a strong but not locked knee bend
     const rightTarget = rightFootBase.clone()
-      .addScaledVector(forward, 0.31 * blend)
-      .addScaledVector(right, 0.035 * blend);
-    rightTarget.y += 0.012 * blend;
+      .addScaledVector(forward, -0.30 * poseBlend)
+      .addScaledVector(right, 0.05 * poseBlend);
+    rightTarget.y += 0.018 * poseBlend;
 
     const leftTarget = leftFootBase.clone()
-      .addScaledVector(forward, -0.15 * blend)
-      .addScaledVector(right, -0.10 * blend);
-    leftTarget.y += 0.065 * blend;
+      .addScaledVector(forward, 0.24 * poseBlend)
+      .addScaledVector(right, -0.10 * poseBlend);
+    leftTarget.y += 0.020 * poseBlend;
 
     solveLeg(
       root,
@@ -85,8 +121,14 @@ export function createSlidePoseLayer(character) {
       b.rightFoot,
       rightTarget,
       1,
-      0.18
+      {
+        compression: 0.52,
+        poleForward: 0.52,
+        poleOut: 0.12,
+        poleDown: 0.18
+      }
     );
+
     solveLeg(
       root,
       b.leftUpperLeg,
@@ -94,27 +136,47 @@ export function createSlidePoseLayer(character) {
       b.leftFoot,
       leftTarget,
       -1,
-      0.44
+      {
+        compression: 0.26,
+        poleForward: 0.36,
+        poleOut: 0.18,
+        poleDown: 0.06
+      }
     );
 
-    // Extended leg stays flatter; tucked leg's toe rotates slightly inward.
-    setWorldQuaternion(b.rightFoot, rightFootQ);
-    const tuckedQ = leftFootQ.clone().multiply(
+    // Kneeling leg foot points backward naturally. Lead foot stays flatter.
+    const kneelFootQ = rightFootQ.clone().multiply(
       new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(-0.10 * blend, 0.10 * blend, 0)
+        new THREE.Euler(
+          -0.18 * poseBlend,
+          -0.05 * poseBlend,
+          0.05 * poseBlend
+        )
       )
     );
-    setWorldQuaternion(b.leftFoot, tuckedQ);
+    setWorldQuaternion(b.rightFoot, kneelFootQ);
 
+    const leadFootQ = leftFootQ.clone().multiply(
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          -0.04 * poseBlend,
+          0.02 * poseBlend,
+          -0.03 * poseBlend
+        )
+      )
+    );
+    setWorldQuaternion(b.leftFoot, leadFootQ);
+
+    // Blend solved knee-slide over the underlying locomotion pose.
     for (const node of nodes) {
       const solvedQ = node.quaternion.clone();
       const baseQ = underlyingQ.get(node);
-      if (baseQ) node.quaternion.copy(baseQ).slerp(solvedQ, blend);
+      if (baseQ) node.quaternion.copy(baseQ).slerp(solvedQ, poseBlend);
 
       if (node === b.hips) {
         const solvedP = node.position.clone();
         const baseP = underlyingP.get(node);
-        if (baseP) node.position.copy(baseP).lerp(solvedP, blend);
+        if (baseP) node.position.copy(baseP).lerp(solvedP, poseBlend);
       }
     }
 
@@ -124,16 +186,7 @@ export function createSlidePoseLayer(character) {
   return { apply, restore };
 }
 
-function rotateLocal(node, baseQ, x, y, z) {
-  if (!node || !baseQ) return;
-  node.quaternion.copy(baseQ).multiply(
-    new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(x, y, z, 'XYZ')
-    )
-  );
-}
-
-function solveLeg(root, upper, lower, foot, targetFoot, side, tuck) {
+function solveLeg(root, upper, lower, foot, targetFoot, side, options) {
   root.updateWorldMatrix(true, true);
 
   const hip = upper.getWorldPosition(new THREE.Vector3());
@@ -148,21 +201,29 @@ function solveLeg(root, upper, lower, foot, targetFoot, side, tuck) {
   if (d < 0.001) return;
 
   const dir = toTarget.normalize();
+  const compression = THREE.MathUtils.clamp(options.compression ?? 0.25, 0, 0.65);
+
   d = THREE.MathUtils.clamp(
     d,
     Math.abs(a - b) + 0.003,
-    (a + b) * (0.96 - tuck * 0.12)
+    (a + b) * (0.97 - compression * 0.24)
   );
 
   const rootQ = root.getWorldQuaternion(new THREE.Quaternion());
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(rootQ).normalize();
-  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(rootQ).normalize();
+  const forward = new THREE.Vector3(0, 0, -1)
+    .applyQuaternion(rootQ)
+    .normalize();
+  const right = new THREE.Vector3(1, 0, 0)
+    .applyQuaternion(rootQ)
+    .normalize();
 
-  // Tucked leg gets a much stronger forward/outward knee pole.
   const pole = hip.clone()
-    .addScaledVector(forward, 0.30 + tuck * 0.46)
-    .addScaledVector(right, side * (0.12 + tuck * 0.12))
-    .addScaledVector(new THREE.Vector3(0, -1, 0), 0.02 + tuck * 0.08);
+    .addScaledVector(forward, options.poleForward ?? 0.36)
+    .addScaledVector(right, side * (options.poleOut ?? 0.14))
+    .addScaledVector(
+      new THREE.Vector3(0, -1, 0),
+      options.poleDown ?? 0.08
+    );
 
   const bend = pole.sub(hip);
   bend.addScaledVector(dir, -bend.dot(dir));
@@ -181,10 +242,23 @@ function solveLeg(root, upper, lower, foot, targetFoot, side, tuck) {
   root.updateWorldMatrix(true, true);
 }
 
+function rotateLocal(node, baseQ, x, y, z) {
+  if (!node || !baseQ) return;
+  node.quaternion.copy(baseQ).multiply(
+    new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(x, y, z, 'XYZ')
+    )
+  );
+}
+
 function pointBone(node, child, target) {
   const origin = node.getWorldPosition(new THREE.Vector3());
-  const current = child.getWorldPosition(new THREE.Vector3()).sub(origin).normalize();
-  const desired = target.clone().sub(origin).normalize();
+  const current = child.getWorldPosition(new THREE.Vector3())
+    .sub(origin)
+    .normalize();
+  const desired = target.clone()
+    .sub(origin)
+    .normalize();
 
   if (current.lengthSq() < 1e-6 || desired.lengthSq() < 1e-6) return;
 
@@ -197,6 +271,11 @@ function setWorldQuaternion(node, worldQ) {
   const parentQ = node.parent
     ? node.parent.getWorldQuaternion(new THREE.Quaternion())
     : new THREE.Quaternion();
+
   node.quaternion.copy(parentQ.invert().multiply(worldQ));
   node.updateWorldMatrix(false, true);
+}
+
+function smooth01(t) {
+  return t * t * (3 - 2 * t);
 }

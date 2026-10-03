@@ -331,3 +331,15 @@ Browser-first third-person shooter prototype.
   - smooth enter/exit blend
 - Slide pose only owns lower body, leaving gun/Fang upper-body aiming and firing free.
 - Existing crouch IK, gun IK, Tin Fang mechanics, jump velocity and collision systems are preserved.
+
+
+## Build 010.8A — tactical one-knee slide pose
+- Replaced the previous split/skid silhouette with a tactical one-knee combat slide matching the provided visual reference.
+- Right knee now folds under the body near the ground while the right lower leg trails backward.
+- Left leg reaches forward-left with a strong bend instead of locking straight.
+- Pelvis stays low and centered over the kneeling leg rather than being thrown far backward.
+- Torso remains mostly upright with only a slight forward counter-lean, preserving a weapon-ready silhouette.
+- Upper body is still untouched by the slide layer, so gun/Fang aiming and two-hand weapon IK remain available while sliding.
+- Added phase shaping with slideProgress: fast drop-in, stable middle knee-slide, and softer recovery instead of a single frozen pose for the full slide.
+- Leg placement remains world-space IK based, so the pose does not depend on VRM bone-axis conventions.
+- Slide movement physics from Build 010.8 are unchanged.
