@@ -17,8 +17,6 @@ export const GAME_CONFIG = {
     slideSteering: 3.6,
     slideDownhillAcceleration: 10.5,
     slideUphillBrake: 12.5,
-    slideGroundEntryTolerance: 0.18,
-    slideMinSprintSpeed: 6.0,
     radius: 0.45,
     standingHeight: 1.8,
     crouchHeight: 1.15

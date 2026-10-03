@@ -13,8 +13,6 @@ export class PlayerController {
     this.crouchVisual = 0;
     this.sliding = false;
     this.slideTimer = 0;
-    this.slideElapsed = 0;
-    this.sprintQualified = false;
     this.slideDirection = new THREE.Vector3(0, 0, -1);
     this.localMotion = new THREE.Vector3();
 
@@ -60,8 +58,6 @@ export class PlayerController {
     this.crouchVisual = 0;
     this.sliding = false;
     this.slideTimer = 0;
-    this.slideElapsed = 0;
-    this.sprintQualified = false;
     this.slideDirection.set(0, 0, -1);
     this.body.scale.set(1, 1, 1);
     this.body.rotation.set(0, 0, 0);
@@ -87,72 +83,29 @@ export class PlayerController {
 
     const crouchDown = this.input.down('crouch');
     const crouchPressed = this.input.consume('crouch');
+    const sprintPressed = this.input.consume('sprint');
     const jumpPressed = this.input.consume('jump');
-    const sprintDown = this.input.down('sprint');
 
-    const movingIntent = move.lengthSq() > 0.01;
-    const horizontalSpeed = this.horizontalSpeed();
-
-    // Restore the proven slide trigger used by the last working build:
-    // slide is decided from the player's established sprint state / momentum,
-    // not from whether Shift is still reported on the exact Ctrl frame.
-    //
-    // Ctrl while not sprinting = crouch.
-    // Sprint first, then Ctrl = slide.
-    if (!crouchDown) {
-      this.sprintQualified = sprintDown && movingIntent;
-    } else if (!this.sprintQualified && sprintDown && horizontalSpeed >= cfg.slideMinSprintSpeed) {
-      // Fallback for key-order / browser modifier timing once Ctrl is already down.
-      this.sprintQualified = true;
-    }
-
-    const slideGroundReady =
-      this.grounded ||
-      (
-        supportY !== null &&
-        this.group.position.y <= supportY + cfg.slideGroundEntryTolerance &&
-        this.velocity.y <= 0.5
-      );
-
+    // Use both the input controller's pressed edge and the player's own state
+    // edge. This makes slide entry robust even if Ctrl and Shift arrive in the
+    // same browser frame.
     const crouchJustPressed = crouchDown && !this.crouching;
-    const sprintMomentum = horizontalSpeed >= cfg.slideMinSprintSpeed;
-    const shouldStartSlide =
+    let startedSlide = false;
+
+    if (
       (crouchPressed || crouchJustPressed) &&
       !this.sliding &&
-      slideGroundReady &&
-      movingIntent &&
-      (this.sprintQualified || sprintMomentum);
-
-    if (shouldStartSlide) {
-      if (!this.grounded && supportY !== null) {
-        this.group.position.y = supportY;
-        this.velocity.y = 0;
-        this.grounded = true;
-      }
+      this.grounded &&
+      this.horizontalSpeed() >= cfg.slideMinStartSpeed
+    ) {
       this.beginSlide(move);
+      startedSlide = true;
     }
 
-    if (this.sliding) {
-      this.updateSlide(dt, move);
+    this.crouching = crouchDown;
 
-      if (jumpPressed && this.grounded) {
-        this.sliding = false;
-        this.velocity.y = cfg.jumpVelocity;
-        this.grounded = false;
-      } else if (
-        this.slideTimer <= 0 ||
-        !crouchDown ||
-        this.horizontalSpeed() < cfg.crouchSpeed
-      ) {
-        this.sliding = false;
-      }
-    }
-
-    // Crouch and slide are now mutually exclusive movement modes.
-    this.crouching = crouchDown && !this.sliding;
-    if (!crouchDown && !sprintDown) this.sprintQualified = false;
-
-    const crouchTarget = this.crouching ? 1 : 0;
+    // Visual crouch remains separate from slide; the slide gets its own pose layer.
+    const crouchTarget = this.crouching && !this.sliding ? 1 : 0;
     this.crouchVisual = THREE.MathUtils.damp(
       this.crouchVisual,
       crouchTarget,
@@ -163,28 +116,34 @@ export class PlayerController {
       this.crouchVisual = crouchTarget;
     }
 
-    if (!this.sliding) {
+    if (this.sliding) {
+      this.updateSlide(dt, move);
+
+      // Fortnite-style early cancels. Jump keeps the existing jump impulse;
+      // sprint simply exits the skid and returns control to normal movement.
+      if (jumpPressed && this.grounded) {
+        this.sliding = false;
+        this.velocity.y = cfg.jumpVelocity;
+        this.grounded = false;
+      } else if (sprintPressed && !startedSlide) {
+        this.sliding = false;
+      } else if (
+        this.slideTimer <= 0 ||
+        !crouchDown ||
+        this.horizontalSpeed() < cfg.crouchSpeed
+      ) {
+        this.sliding = false;
+      }
+    } else {
       const targetSpeed = this.crouching
         ? cfg.crouchSpeed
-        : (sprintDown ? cfg.sprintSpeed : cfg.walkSpeed);
-
+        : (this.input.down('sprint') ? cfg.sprintSpeed : cfg.walkSpeed);
       const target = move.multiplyScalar(targetSpeed);
       const accel = this.grounded
         ? (target.lengthSq() > 0 ? cfg.acceleration : cfg.deceleration)
         : cfg.airAcceleration;
-
-      this.velocity.x = THREE.MathUtils.damp(
-        this.velocity.x,
-        target.x,
-        accel,
-        dt
-      );
-      this.velocity.z = THREE.MathUtils.damp(
-        this.velocity.z,
-        target.z,
-        accel,
-        dt
-      );
+      this.velocity.x = THREE.MathUtils.damp(this.velocity.x, target.x, accel, dt);
+      this.velocity.z = THREE.MathUtils.damp(this.velocity.z, target.z, accel, dt);
     }
 
     if (jumpPressed && this.grounded && !this.sliding) {
@@ -335,7 +294,6 @@ export class PlayerController {
     const cfg = GAME_CONFIG.movement;
     this.sliding = true;
     this.slideTimer = cfg.slideDuration;
-    this.slideElapsed = 0;
 
     const hs = this.horizontalSpeed();
 
@@ -361,7 +319,6 @@ export class PlayerController {
   updateSlide(dt, move) {
     const cfg = GAME_CONFIG.movement;
     this.slideTimer -= dt;
-    this.slideElapsed += dt;
 
     let speed = this.horizontalSpeed();
     if (speed < 0.001) return;
