@@ -11,6 +11,8 @@ import { ShellArmorSystem } from './loadout.js';
 import { PickupSystem } from './pickups.js';
 import { TinFangSystem } from './fang.js';
 
+// Deploy trigger for Build 010.18C.
+
 const root = document.querySelector('#app');
 root.innerHTML = `
   <div id="hud">
