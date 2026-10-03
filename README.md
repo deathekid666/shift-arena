@@ -151,3 +151,17 @@ Browser-first third-person shooter prototype.
 - The Fang model is reparented to the actual VRM right-hand Fang socket.
 - Hold/release/slash animate the real VRM shoulder, forearm, hand and upper chest.
 - The improvised Tin Fang mesh was rebuilt with a tapered asymmetric metal shard, sharpened edge, spine, six cord wraps, guard and ring pommel.
+
+
+## Build 009.3 — context-aware combat reticle
+- Reticle is now state-driven instead of reusing the firearm crosshair for every action.
+- Normal state always uses the active firearm's own weapon-driven reticle and spread gap.
+- PRIMING switches to a restrained Fang draw mark without promising throw accuracy before the throw is actually aimed.
+- AIMING replaces the gun crosshair with a knife-shaped center mark plus circular charge progress.
+- Fang charge ring is driven by the exact Tin Fang charge ratio.
+- Full charge gets a steady bright lock cue rather than a distracting continuous pulse.
+- RELEASE contracts the Fang reticle at the throw moment.
+- As soon as the Fang leaves the hand, THROWN/STUCK/FALLING/DROPPED states return immediately to the equipped firearm reticle.
+- Quick Tin Fang melee and missing-Fang claw attacks use a short dual-slash melee indicator.
+- Existing ballistic trajectory remains the spatial landing predictor, using the same projectile solution as the actual throw.
+- Design references: weapon-driven reticles/accuracy feedback in Fortnite and held-throw trajectory guidance in Apex-style throwable systems.

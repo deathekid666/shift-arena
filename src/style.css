@@ -1252,3 +1252,203 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 .fang-action b:not(.missing) {
   text-shadow: 0 0 8px rgba(224,153,75,.18);
 }
+
+
+/* Build 009.3 — context-aware combat reticle */
+#crosshair {
+  --fang-charge: 0;
+  --fang-charge-angle: 0deg;
+}
+
+#crosshair .fang-reticle {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(.88);
+  transition: opacity 90ms ease, transform 110ms ease;
+}
+
+#crosshair .fang-reticle i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  pointer-events: none;
+}
+
+/* Gun is the default. Fang UI is completely gone while the firearm is usable. */
+#crosshair[data-mode="gun"] .fang-reticle {
+  opacity: 0;
+}
+
+/* When drawing/aiming/releasing the Fang, remove firearm spread graphics. */
+#crosshair[data-mode="fang-draw"] > .arm,
+#crosshair[data-mode="fang-draw"] > .reticle-ring,
+#crosshair[data-mode="fang-draw"] > .reticle-dot,
+#crosshair[data-mode="fang-aim"] > .arm,
+#crosshair[data-mode="fang-aim"] > .reticle-ring,
+#crosshair[data-mode="fang-aim"] > .reticle-dot,
+#crosshair[data-mode="fang-release"] > .arm,
+#crosshair[data-mode="fang-release"] > .reticle-ring,
+#crosshair[data-mode="fang-release"] > .reticle-dot,
+#crosshair[data-mode="melee"] > .arm,
+#crosshair[data-mode="melee"] > .reticle-ring,
+#crosshair[data-mode="melee"] > .reticle-dot {
+  opacity: 0;
+}
+
+#crosshair[data-mode="fang-draw"] .fang-reticle,
+#crosshair[data-mode="fang-aim"] .fang-reticle,
+#crosshair[data-mode="fang-release"] .fang-reticle,
+#crosshair[data-mode="melee"] .fang-reticle {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Small knife-shaped center mark. It points upward-right rather than looking
+   like another firearm cross. */
+#crosshair .fang-blade-mark {
+  width: 3px;
+  height: 19px;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(to bottom, #fff4dd 0 58%, #a56d43 59% 100%);
+  box-shadow: 0 0 5px rgba(0,0,0,.45);
+  transform: translate(-50%, -50%) rotate(42deg);
+  transform-origin: 50% 72%;
+  opacity: 0;
+  transition: opacity 80ms ease, transform 100ms ease;
+}
+
+#crosshair .fang-center-pip {
+  width: 4px;
+  height: 4px;
+  border: 1px solid rgba(255,237,210,.95);
+  border-radius: 50%;
+  background: rgba(32,22,16,.88);
+  box-shadow: 0 0 7px rgba(255,185,105,.42);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+}
+
+#crosshair .fang-charge-ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  background:
+    conic-gradient(
+      rgba(255,196,119,.98) 0 var(--fang-charge-angle),
+      rgba(255,255,255,.16) var(--fang-charge-angle) 360deg
+    );
+  -webkit-mask:
+    radial-gradient(circle, transparent 58%, #000 60%);
+  mask:
+    radial-gradient(circle, transparent 58%, #000 60%);
+  opacity: 0;
+  filter: drop-shadow(0 0 4px rgba(255,170,72,.22));
+}
+
+/* Drawing: tiny blade appears, no fake precision promise yet. */
+#crosshair[data-mode="fang-draw"] .fang-blade-mark {
+  opacity: .72;
+  transform: translate(-50%, -50%) rotate(42deg) scale(.82);
+}
+#crosshair[data-mode="fang-draw"] .fang-center-pip {
+  opacity: .55;
+}
+
+/* Aiming: trajectory is the spatial predictor; the ring is charge/timing. */
+#crosshair[data-mode="fang-aim"] .fang-charge-ring,
+#crosshair[data-mode="fang-aim"] .fang-center-pip {
+  opacity: 1;
+}
+#crosshair[data-mode="fang-aim"] .fang-blade-mark {
+  opacity: .88;
+  transform: translate(-50%, -50%) rotate(42deg) scale(.72);
+}
+
+/* Full charge becomes steady/bright instead of endlessly pulsing. */
+#crosshair.fang-full .fang-charge-ring {
+  filter: drop-shadow(0 0 7px rgba(255,194,112,.72));
+}
+#crosshair.fang-full .fang-center-pip {
+  background: #fff1cf;
+  border-color: #fff8e7;
+  box-shadow: 0 0 10px rgba(255,190,97,.88);
+}
+
+/* Release contracts around the exact launch frame, then the next state becomes
+   gun immediately because the Fang no longer occupies the hand. */
+#crosshair[data-mode="fang-release"] .fang-charge-ring {
+  opacity: .95;
+  animation: fangReticleRelease 180ms ease-out both;
+}
+#crosshair[data-mode="fang-release"] .fang-center-pip {
+  opacity: 1;
+  animation: fangPipRelease 180ms ease-out both;
+}
+#crosshair[data-mode="fang-release"] .fang-blade-mark {
+  opacity: .9;
+  animation: fangBladeRelease 180ms ease-out both;
+}
+
+@keyframes fangReticleRelease {
+  from { transform: translate(-50%, -50%) rotate(-90deg) scale(1); }
+  to { transform: translate(-50%, -50%) rotate(-90deg) scale(.42); opacity: 0; }
+}
+@keyframes fangPipRelease {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  45% { transform: translate(-50%, -50%) scale(1.8); }
+  100% { transform: translate(-50%, -50%) scale(.6); opacity: 0; }
+}
+@keyframes fangBladeRelease {
+  from { transform: translate(-50%, -50%) rotate(42deg) scale(.72); }
+  to { transform: translate(12px, -18px) rotate(42deg) scale(.45); opacity: 0; }
+}
+
+/* Quick melee/claw: no gun crosshair and no throw charge ring. */
+#crosshair[data-mode="melee"] .fang-charge-ring,
+#crosshair[data-mode="melee"] .fang-blade-mark,
+#crosshair[data-mode="melee"] .fang-center-pip {
+  opacity: 0;
+}
+#crosshair .fang-melee-a,
+#crosshair .fang-melee-b {
+  width: 3px;
+  height: 25px;
+  border-radius: 999px;
+  background: rgba(255,231,196,.95);
+  box-shadow: 0 0 6px rgba(0,0,0,.42);
+  opacity: 0;
+}
+#crosshair .fang-melee-a {
+  transform: translate(-50%, -50%) rotate(48deg) translateX(-7px);
+}
+#crosshair .fang-melee-b {
+  transform: translate(-50%, -50%) rotate(-48deg) translateX(7px);
+}
+#crosshair[data-mode="melee"] .fang-melee-a,
+#crosshair[data-mode="melee"] .fang-melee-b {
+  opacity: .92;
+  animation: fangMeleeFlash 220ms ease-out both;
+}
+@keyframes fangMeleeFlash {
+  from { filter: brightness(1.5); }
+  to { opacity: .15; filter: brightness(1); }
+}
+
+/* Retire the old Build 008 Fang crosshair overrides. The data-mode state
+   above now owns all Fang/melee reticle presentation. */
+#crosshair.fang-aiming,
+#crosshair.fang-charging {
+  --gap: inherit;
+}
+#crosshair.fang-aiming .arm,
+#crosshair.fang-charging .arm,
+#crosshair.fang-aiming .reticle-dot,
+#crosshair.fang-charging .reticle-dot,
+#crosshair.fang-aiming .reticle-ring,
+#crosshair.fang-charging .reticle-ring {
+  animation: none;
+}

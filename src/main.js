@@ -14,9 +14,16 @@ import { TinFangSystem } from './fang.js';
 const root = document.querySelector('#app');
 root.innerHTML = `
   <div id="hud">
-    <div id="crosshair" data-type="rifle">
+    <div id="crosshair" data-type="rifle" data-mode="gun">
       <i class="arm top"></i><i class="arm right"></i><i class="arm bottom"></i><i class="arm left"></i>
       <span class="reticle-ring"></span><span class="reticle-dot"></span>
+      <div class="fang-reticle" aria-hidden="true">
+        <i class="fang-charge-ring"></i>
+        <i class="fang-blade-mark"></i>
+        <i class="fang-center-pip"></i>
+        <i class="fang-melee-a"></i>
+        <i class="fang-melee-b"></i>
+      </div>
     </div>
 
     <div id="scope-overlay">
@@ -59,7 +66,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 009.2 · REAL HANDS + AIM CAMERA</div>
+    <div id="damage-test-hint">BUILD 009.3 · CONTEXT RETICLE</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
 
@@ -108,7 +115,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 009.2 · HANDS + AIM</div>
+        <div class="build-tag">BUILD 009.3 · CONTEXT RETICLE</div>
         <h1>SHIFT Arena</h1>
         <p>The primitive character has been replaced as the normal path by a real skinned anime VRM pipeline. This build uses a temporary VRoid rig base for pipeline validation, with Roach Scout antennae/shell attached to real humanoid bones. The final custom Roach Scout asset will replace this base without changing gameplay code.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">CHARACTER · LOADING VRM…</div>
@@ -350,11 +357,27 @@ function updateFangHud(state) {
     : (labels[state.state] ?? state.state);
   fangState.classList.toggle('missing', !state.hasFang);
 
+  const fangMode =
+    state.state === 'PRIMING'
+      ? 'fang-draw'
+      : state.state === 'AIMING'
+        ? 'fang-aim'
+        : state.state === 'RELEASE'
+          ? 'fang-release'
+          : (state.state === 'SLASH' || state.state === 'CLAW')
+            ? 'melee'
+            : 'gun';
+
+  crosshair.dataset.mode = fangMode;
+
+  const charge = Math.max(0, Math.min(1, state.charge || 0));
+  crosshair.style.setProperty('--fang-charge', String(charge));
+  crosshair.style.setProperty('--fang-charge-angle', `${charge * 360}deg`);
+  crosshair.classList.toggle('fang-full', fangMode === 'fang-aim' && charge >= 0.985);
+
   const aiming = state.state === 'AIMING' || state.state === 'RELEASE';
   fangCharge.classList.toggle('show', aiming);
-  fangChargeFill.style.width = `${Math.max(0, Math.min(1, state.charge)) * 100}%`;
-  crosshair.classList.toggle('fang-charging', aiming);
-  crosshair.classList.toggle('fang-aiming', aiming);
+  fangChargeFill.style.width = `${charge * 100}%`;
 
   const showMarker =
     (state.state === 'STUCK' || state.state === 'DROPPED') &&
