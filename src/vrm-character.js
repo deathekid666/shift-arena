@@ -1352,9 +1352,9 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
   bones.rightUpperArm.getWorldPosition(IK_TMP.shoulder);
   IK_TMP.pole
     .copy(IK_TMP.shoulder)
-    .addScaledVector(IK_TMP.right, 0.34)
-    .addScaledVector(IK_TMP.down, 0.24)
-    .addScaledVector(IK_TMP.forward, 0.05);
+    .addScaledVector(IK_TMP.right, 0.27)
+    .addScaledVector(IK_TMP.down, 0.18)
+    .addScaledVector(IK_TMP.forward, 0.04);
 
   solveTwoBoneIK(
     character.root,
@@ -1372,9 +1372,9 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
   bones.leftUpperArm.getWorldPosition(IK_TMP.shoulder);
   IK_TMP.pole
     .copy(IK_TMP.shoulder)
-    .addScaledVector(IK_TMP.right, -0.34)
-    .addScaledVector(IK_TMP.down, 0.22)
-    .addScaledVector(IK_TMP.forward, 0.08);
+    .addScaledVector(IK_TMP.right, -0.25)
+    .addScaledVector(IK_TMP.down, 0.16)
+    .addScaledVector(IK_TMP.forward, 0.065);
 
   solveTwoBoneIK(
     character.root,

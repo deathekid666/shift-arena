@@ -122,6 +122,14 @@ export class WeaponSystem {
     return this.aiming || firingNow || recentShot;
   }
 
+  get holdPoseActive() {
+    return (
+      !this.blocked &&
+      !this.visualHidden &&
+      this.input.pointerLocked
+    );
+  }
+
   get firing() {
     if (this.blocked || !this.input.pointerLocked) return false;
     return this.cfg.automatic ? this.input.mouseDown(0) : this.input.consumeMouse(0);
@@ -299,19 +307,29 @@ export class WeaponSystem {
           .applyQuaternion(this.camera.quaternion)
           .normalize();
 
-        // The rear/pistol grip sits just forward and slightly inward from the
-        // firing shoulder, which visibly raises the rifle to a shooter stance.
+        // Fit the actual pistol grip near the firing shoulder. Different
+        // weapon families get small offsets instead of sharing one giant pose.
         const ads = this.aiming;
+        const gripForward =
+          (cfg.combatGripForward ?? 0.17) +
+          (ads ? (cfg.adsGripForwardAdd ?? 0.035) : 0);
+        const gripRight =
+          (cfg.combatGripRight ?? 0.0) +
+          (ads ? (cfg.adsGripRightAdd ?? -0.030) : 0);
+        const gripUp =
+          (cfg.combatGripUp ?? -0.060) +
+          (ads ? (cfg.adsGripUpAdd ?? 0.030) : 0);
+
         this.tmpGripWorld
           .copy(shoulder)
-          .addScaledVector(this.tmpAimForward, ads ? 0.23 : 0.20)
+          .addScaledVector(this.tmpAimForward, gripForward)
           .addScaledVector(
             this.tmpAimRight,
-            (ads ? -0.035 : 0.010) + bobX + swayX
+            gripRight + bobX + swayX
           )
           .addScaledVector(
             this.tmpAimUp,
-            (ads ? -0.035 : -0.075) + bobY + swayY
+            gripUp + bobY + swayY
           );
 
         this.tmpDesiredWorldQ.copy(this.camera.quaternion);
@@ -341,6 +359,7 @@ export class WeaponSystem {
 
         this.tmpGripOffset
           .copy(modelData.rightGrip.position)
+          .multiply(model.scale)
           .applyQuaternion(this.tmpDesiredLocalQ);
 
         const targetPosition = this.tmpGripLocal
@@ -377,55 +396,76 @@ export class WeaponSystem {
       }
     }
 
-    // Non-ADS remains hand-led/relaxed.
-    const handWorld = this.handMounted
-      ? this.player.getHandWorldPosition?.('right', this.tmpHandWorld)
-      : null;
+    // Normal equipped stance: anchor the pistol grip to the character's
+    // dedicated right-hand socket. The gun center no longer decides placement.
+    const weaponSocket = this.player.getWeaponSocket?.();
+    let handWorld = null;
+
+    if (weaponSocket) {
+      weaponSocket.getWorldPosition(this.tmpHandWorld);
+      handWorld = this.tmpHandWorld;
+    } else if (this.handMounted) {
+      handWorld =
+        this.player.getHandWorldPosition?.('right', this.tmpHandWorld) ??
+        null;
+    }
 
     if (handWorld) {
-      this.tmpHandLocal.copy(handWorld);
-      this.player.group.worldToLocal(this.tmpHandLocal);
+      this.tmpGripLocal.copy(handWorld);
+      this.player.group.worldToLocal(this.tmpGripLocal);
 
-      const targetX = this.tmpHandLocal.x + 0.018 + bobX + swayX;
-      const targetY = this.tmpHandLocal.y + 0.015 + bobY + swayY;
-      const targetZ = this.tmpHandLocal.z - 0.12 + state.visualKick;
+      this.tmpGripLocal.x +=
+        (cfg.carryGripX ?? 0) +
+        bobX +
+        swayX;
+      this.tmpGripLocal.y +=
+        (cfg.carryGripY ?? 0.005) +
+        bobY +
+        swayY;
+      this.tmpGripLocal.z +=
+        (cfg.carryGripZ ?? -0.015) +
+        state.visualKick;
+
+      this.tmpDesiredLocalQ.setFromEuler(
+        new THREE.Euler(
+          cfg.carryPitch ?? -0.11,
+          cfg.carryYaw ?? 0,
+          (cfg.carryRoll ?? -0.055) - swayX * 0.45,
+          'YXZ'
+        )
+      );
+
+      this.tmpGripOffset
+        .copy(modelData.rightGrip.position)
+        .multiply(model.scale)
+        .applyQuaternion(this.tmpDesiredLocalQ);
+
+      const targetPosition = this.tmpGripLocal
+        .clone()
+        .sub(this.tmpGripOffset);
 
       model.position.x = THREE.MathUtils.damp(
         model.position.x,
-        targetX,
-        28 / cfg.mass,
+        targetPosition.x,
+        30 / cfg.mass,
         dt
       );
       model.position.y = THREE.MathUtils.damp(
         model.position.y,
-        targetY,
-        28 / cfg.mass,
+        targetPosition.y,
+        30 / cfg.mass,
         dt
       );
       model.position.z = THREE.MathUtils.damp(
         model.position.z,
-        targetZ,
-        30 / cfg.mass,
+        targetPosition.z,
+        32 / cfg.mass,
         dt
       );
 
-      model.rotation.x = THREE.MathUtils.damp(
-        model.rotation.x,
-        -0.08 - state.visualKick * 0.70,
-        22 / cfg.mass,
-        dt
-      );
-      model.rotation.y = THREE.MathUtils.damp(
-        model.rotation.y,
-        0,
-        24 / cfg.mass,
-        dt
-      );
-      model.rotation.z = THREE.MathUtils.damp(
-        model.rotation.z,
-        -0.08 - swayX * 0.7,
-        20 / cfg.mass,
-        dt
+      model.quaternion.slerp(
+        this.tmpDesiredLocalQ,
+        1 - Math.exp(-(26 / cfg.mass) * dt)
       );
 
       model.updateWorldMatrix(true, true);
@@ -461,7 +501,7 @@ export class WeaponSystem {
       .normalize();
 
     this.gripPose.aiming =
-      this.combatPoseActive &&
+      this.holdPoseActive &&
       !this.visualHidden &&
       !this.blocked;
   }

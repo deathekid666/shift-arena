@@ -9,7 +9,9 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
 
   const mats = createMaterials(cfg);
   const style = cfg.junkStyle ?? inferStyle(cfg);
-  const scale = pickup ? 0.92 : 1;
+  const scale = pickup
+    ? (cfg.pickupScale ?? 0.92)
+    : (cfg.heldScale ?? 0.72);
 
   const receiverLength = Math.max(0.36, cfg.modelLength * 0.72);
   const barrelLength =
@@ -156,15 +158,20 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
   // Hand sockets remain compatible with existing IK.
   const rightGrip = new THREE.Object3D();
   rightGrip.name = 'RightGripSocket';
-  rightGrip.position.set(0, -0.09, 0.105);
+  rightGrip.position.set(
+    cfg.rightGripX ?? 0,
+    cfg.rightGripY ?? -0.09,
+    cfg.rightGripZ ?? 0.105
+  );
   group.add(rightGrip);
 
   const leftGrip = new THREE.Object3D();
   leftGrip.name = 'LeftForegripSocket';
   leftGrip.position.set(
-    0,
-    -0.025,
-    -Math.min(0.36, Math.max(0.20, cfg.modelLength * 0.34))
+    cfg.leftGripX ?? 0,
+    cfg.leftGripY ?? -0.025,
+    cfg.foregripZ ??
+      -Math.min(0.36, Math.max(0.20, cfg.modelLength * 0.34))
   );
   group.add(leftGrip);
 
