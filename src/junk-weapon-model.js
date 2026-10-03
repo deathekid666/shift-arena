@@ -208,6 +208,7 @@ function buildStapleSlingerAR(cfg, mats, scale) {
     if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
     parent.add(mesh);
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
     return mesh;
   };
 
@@ -233,12 +234,11 @@ function buildStapleSlingerAR(cfg, mats, scale) {
     [0, 0.125, -0.095]
   );
 
-  // Curved-looking top stapler arm represented by one bold low-poly plate.
-  add(
-    box(0.235, 0.105, 0.50, red),
-    [0, 0.205, -0.025],
-    [-0.055, 0, 0]
-  );
+  // Hero stapler arm: six-sided low-poly prism for a cleaner molded silhouette.
+  const staplerTop = cylinder(0.092, 0.104, 0.50, 6, red);
+  staplerTop.scale.x = 1.28;
+  add(staplerTop, [0, 0.195, -0.025], [Math.PI / 2, 0, 0]);
+  add(box(0.165, 0.030, 0.405, redDark), [0, 0.132, -0.055]);
 
   // Front hinge and rear hinge blocks.
   add(
@@ -260,25 +260,15 @@ function buildStapleSlingerAR(cfg, mats, scale) {
   }
 
   // === 2. EXPOSED SPRING ===
-  // Big spring on top: the most important mechanical-read detail.
-  for (let i = 0; i < 8; i++) {
-    const springRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.055, 0.010, 5, 12),
-      brightSteel
-    );
-    add(
-      springRing,
-      [0, 0.270, -0.17 + i * 0.050],
-      [0, Math.PI / 2, 0]
-    );
-  }
-
-  // Spring guide rod.
+  // One continuous helix reads as a real spring instead of floating rings.
+  add(coilSpring(0.38, 0.052, 7.2, 0.010, brightSteel, 52), [0, 0.270, 0.015]);
   add(
-    cylinder(0.014, 0.014, 0.42, 8, steel),
-    [0, 0.270, 0.005],
+    cylinder(0.014, 0.014, 0.43, 8, steel),
+    [0, 0.270, 0.015],
     [Math.PI / 2, 0, 0]
   );
+  add(box(0.145, 0.095, 0.045, steel), [0, 0.270, -0.195]);
+  add(box(0.145, 0.095, 0.045, steel), [0, 0.270, 0.225]);
 
   // === 3. PEN / PIPE BARREL ===
   add(
@@ -427,6 +417,10 @@ function buildStapleSlingerAR(cfg, mats, scale) {
     [0, 0.045, 0.270]
   );
 
+  // Controlled side depth instead of random scrap clutter.
+  add(box(0.024, 0.125, 0.300, redDark), [-0.122, 0.040, -0.055], [0.01, 0, 0.02]);
+  add(box(0.055, 0.038, 0.105, mats.dark), [0, 0.125, 0.165]);
+
   // Gameplay sockets line up with visible modeled grips.
   const rightGrip = new THREE.Object3D();
   rightGrip.name = 'RightGripSocket';
@@ -473,6 +467,7 @@ function buildTapeRattlerSMG(cfg, mats, scale) {
     if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
     parent.add(mesh);
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
     return mesh;
   };
 
@@ -485,6 +480,14 @@ function buildTapeRattlerSMG(cfg, mats, scale) {
   const blackMetal = mat(0x252a29, 0.82, 0.58);
   const wrap = mat(0xb29a69, 0.98, 0.01);
   const redWire = mat(0x9d4937, 0.88, 0.18);
+  const tapeFilm = new THREE.MeshStandardMaterial({
+    color: 0xe7d9ad,
+    roughness: 0.48,
+    metalness: 0.01,
+    transparent: true,
+    opacity: 0.72,
+    side: THREE.DoubleSide
+  });
 
   // === 1. TAPE-DISPENSER BODY ===
   // One chunky orange plastic shell is the main receiver.
@@ -508,6 +511,12 @@ function buildTapeRattlerSMG(cfg, mats, scale) {
     box(0.255, 0.075, 0.34, orangeDark),
     [0, 0.170, 0.015],
     [-0.10, 0, 0]
+  );
+
+  add(
+    box(0.018, 0.145, 0.270, orangeDark),
+    [-0.134, 0.045, -0.005],
+    [0, 0, 0.02]
   );
 
   // Big exposed body screws.
@@ -567,10 +576,33 @@ function buildTapeRattlerSMG(cfg, mats, scale) {
   outerEdge.castShadow = true;
   tapeWheel.add(outerEdge);
 
+  const hubCap = cylinder(0.070, 0.070, 0.026, 12, orangeDark);
+  hubCap.rotation.x = Math.PI / 2;
+  hubCap.position.z = 0.043;
+  tapeWheel.add(hubCap);
+
+  const hubBolt = cylinder(0.022, 0.022, 0.034, 10, mats.bolt);
+  hubBolt.rotation.x = Math.PI / 2;
+  hubBolt.position.z = 0.060;
+  tapeWheel.add(hubBolt);
+
+  // Translucent tape visibly feeds toward the cutter.
+  add(
+    box(0.014, 0.075, 0.355, tapeFilm),
+    [0.153, 0.105, -0.190],
+    [-0.08, 0, 0.015]
+  );
+
   // === 3. SHORT PEN / PIPE BARREL ===
   add(
     cylinder(0.045, 0.050, 0.42, 10, steel),
     [0, 0.050, -0.480],
+    [Math.PI / 2, 0, 0]
+  );
+
+  add(
+    cylinder(0.066, 0.066, 0.070, 10, orangeDark),
+    [0, 0.050, -0.300],
     [Math.PI / 2, 0, 0]
   );
 
@@ -748,6 +780,7 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
     if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
     parent.add(mesh);
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
     return mesh;
   };
 
@@ -772,12 +805,26 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
     [Math.PI / 2, 0, 0]
   );
 
+  for (const z of [-0.222, 0.222]) {
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.146, 12, 6),
+      redDark
+    );
+    cap.scale.set(1, 1, 0.33);
+    add(cap, [0, 0.035, z]);
+  }
+
   // Cream center band makes the tank read like a repurposed household sprayer.
   add(
     cylinder(0.151, 0.151, 0.18, 12, cream),
     [0, 0.035, -0.015],
     [Math.PI / 2, 0, 0]
   );
+
+  // Simple crossed warning badge keeps the household bug-sprayer identity.
+  add(cylinder(0.052, 0.052, 0.015, 12, redDark), [-0.154, 0.035, -0.015], [0, 0, Math.PI / 2]);
+  add(box(0.014, 0.075, 0.012, cream), [-0.166, 0.035, -0.015], [0.65, 0, 0]);
+  add(box(0.014, 0.075, 0.012, cream), [-0.166, 0.035, -0.015], [-0.65, 0, 0]);
 
   // Two crude metal tank straps.
   for (const z of [-0.165, 0.165]) {
@@ -826,6 +873,25 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
     redDark
   );
   add(nozzleLip, [0, 0.035, -0.945]);
+
+  // Dark inner horn gives the nozzle visible depth.
+  add(
+    new THREE.Mesh(
+      new THREE.CylinderGeometry(0.054, 0.125, 0.145, 10, 1, true),
+      mats.dark
+    ),
+    [0, 0.035, -0.865],
+    [Math.PI / 2, 0, 0]
+  );
+
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    add(
+      cylinder(0.012, 0.012, 0.018, 7, mats.dark),
+      [Math.cos(a) * 0.105, 0.035 + Math.sin(a) * 0.105, -0.958],
+      [Math.PI / 2, 0, 0]
+    );
+  }
 
   // === 4. PUMP HANDLE ===
   // This is a real moving assembly. The support-hand target is parented to it,
@@ -892,6 +958,18 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
     [0, 0, Math.PI / 2],
     gaugeRoot
   );
+
+  const gaugeGlass = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.044, 0.044, 0.008, 14),
+    new THREE.MeshStandardMaterial({
+      color: 0xa9d5df,
+      roughness: 0.08,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 0.34
+    })
+  );
+  add(gaugeGlass, [0.030, 0, 0], [0, 0, Math.PI / 2], gaugeRoot);
 
   // Simple needle on visible gauge face.
   add(
@@ -968,6 +1046,7 @@ function buildScrapEyeSniper(cfg, mats, scale) {
     if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
     parent.add(mesh);
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
     return mesh;
   };
 
@@ -1026,13 +1105,6 @@ function buildScrapEyeSniper(cfg, mats, scale) {
   add(box(0.156, 0.050, 0.182, redPaint), [0, -0.095, -0.055], [-0.10, 0, 0.01]);
   add(box(0.156, 0.038, 0.182, bronze), [0, -0.265, -0.055], [-0.10, 0, 0.01]);
 
-  // Small dangling red tag under the receiver.
-  const tagRoot = new THREE.Group();
-  tagRoot.position.set(0.12, -0.10, 0.02);
-  group.add(tagRoot);
-  add(cylinder(0.018, 0.018, 0.014, 8, mats.bolt), [0, 0, 0], [Math.PI / 2, 0, 0], tagRoot);
-  add(box(0.052, 0.105, 0.024, redPaint), [0, -0.065, 0], [0, 0, 0.08], tagRoot);
-
   // --- Long pipe barrel, visibly assembled from sections ---
   const barrelCenterZ = -0.93;
   add(cylinder(0.047, 0.051, 1.20, 10, mats.pipe), [0, 0.035, barrelCenterZ], [Math.PI / 2, 0, 0]);
@@ -1088,6 +1160,13 @@ function buildScrapEyeSniper(cfg, mats, scale) {
   // Stock strap.
   add(box(0.235, 0.040, 0.11, creamWrap), [0, 0.015, 0.34], [0, 0, -0.10], stockRoot);
 
+  add(
+    box(0.18, 0.075, 0.30, redDark),
+    [0, 0.120, 0.225],
+    [-0.04, 0, 0],
+    stockRoot
+  );
+
   // --- Oversized scavenged camera-lens scope ---
   const scopeRoot = new THREE.Group();
   scopeRoot.position.set(0, 0.245, -0.10);
@@ -1105,6 +1184,25 @@ function buildScrapEyeSniper(cfg, mats, scale) {
   add(cylinder(0.155, 0.120, 0.17, 10, redPaint), [0, 0, -0.405], [Math.PI / 2, 0, 0], scopeRoot);
   add(cylinder(0.122, 0.122, 0.040, 16, mats.dark), [0, 0, -0.500], [Math.PI / 2, 0, 0], scopeRoot);
   add(cylinder(0.104, 0.104, 0.018, 18, blueGlass), [0, 0, -0.526], [Math.PI / 2, 0, 0], scopeRoot);
+
+  const lensBezel = new THREE.Mesh(
+    new THREE.TorusGeometry(0.112, 0.009, 6, 18),
+    bronze
+  );
+  add(lensBezel, [0, 0, -0.540], [0, 0, 0], scopeRoot);
+
+  const lensGlint = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.085, 0.018),
+    new THREE.MeshBasicMaterial({
+      color: 0xbde8ff,
+      transparent: true,
+      opacity: 0.58,
+      depthWrite: false
+    })
+  );
+  lensGlint.position.set(-0.020, 0.028, -0.548);
+  lensGlint.rotation.z = -0.42;
+  scopeRoot.add(lensGlint);
 
   // Small rear eyepiece glass.
   add(cylinder(0.058, 0.058, 0.015, 14, blueGlass), [0, 0, 0.340], [Math.PI / 2, 0, 0], scopeRoot);
@@ -1127,15 +1225,6 @@ function buildScrapEyeSniper(cfg, mats, scale) {
   // Adjustment turret + little side knob.
   add(cylinder(0.040, 0.040, 0.070, 10, bronze), [0, 0.105, -0.02], [0, 0, 0], scopeRoot);
   add(cylinder(0.032, 0.032, 0.060, 10, mats.bolt), [0.105, 0.020, -0.02], [0, 0, Math.PI / 2], scopeRoot);
-
-  // Tape strips crossing the scope body.
-  for (const z of [-0.05, 0.07]) {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.096, 0.010, 5, 12),
-      creamWrap
-    );
-    add(ring, [0, 0, z], [0, 0, 0.08], scopeRoot);
-  }
 
   // --- Folded bipod/support rod like the concept ---
   const bipodRoot = new THREE.Group();
@@ -1265,7 +1354,8 @@ function mat(color, roughness, metalness) {
   return new THREE.MeshStandardMaterial({
     color,
     roughness,
-    metalness
+    metalness,
+    flatShading: true
   });
 }
 
@@ -1278,6 +1368,27 @@ function cylinder(r1, r2, h, segments, material) {
     new THREE.CylinderGeometry(r1, r2, h, segments),
     material
   );
+}
+
+function coilSpring(length, radius, turns, thickness, material, segments = 48) {
+  const points = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const a = t * turns * Math.PI * 2;
+    points.push(new THREE.Vector3(
+      Math.cos(a) * radius,
+      Math.sin(a) * radius,
+      -length * 0.5 + length * t
+    ));
+  }
+  const curve = new THREE.CatmullRomCurve3(points);
+  const mesh = new THREE.Mesh(
+    new THREE.TubeGeometry(curve, segments, thickness, 5, false),
+    material
+  );
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 function buildStock(group, mats, cfg, style) {
