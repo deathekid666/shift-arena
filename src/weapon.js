@@ -90,9 +90,11 @@ export class WeaponSystem {
     return this.cfg.automatic ? this.input.mouseDown(0) : this.input.consumeMouse(0);
   }
 
-  update(dt) {
+  updateSelection() {
     this.processWeaponSwitch();
+  }
 
+  update(dt) {
     for (const entry of this.entries) {
       entry.state.fireCooldown = Math.max(0, entry.state.fireCooldown - dt);
 

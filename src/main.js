@@ -259,8 +259,9 @@ function loop(now) {
   if (health.alive) {
     const combatFacing = input.pointerLocked && (input.mouseDown(2) || input.mouseDown(0));
     player.update(dt, thirdCam.yaw, combatFacing);
-    weapon.update(dt);
+    weapon.updateSelection();
     thirdCam.update(dt, weapon.aiming, weapon.adsFov);
+    weapon.update(dt);
   }
 
   health.update(dt);
