@@ -130,9 +130,9 @@ export class TinFangSystem {
 
     // Temporary fallback placement before the humanoid skeleton is available.
     // Keep it close and small instead of the old oversized floating prop.
-    this.sheath.position.set(0.23, -0.18, 0.035);
-    this.sheath.rotation.set(-0.08, 0.06, 0.16);
-    this.sheath.scale.setScalar(0.56);
+    this.sheath.position.set(0.17, -0.14, -0.045);
+    this.sheath.rotation.set(0.04, -0.22, -0.30);
+    this.sheath.scale.setScalar(0.46);
     this.player.body.add(this.sheath);
 
     // READY means holstered. The real knife must not remain rendered in-hand.
@@ -160,7 +160,7 @@ export class TinFangSystem {
       holsterSocket.add(this.sheath);
       this.sheath.position.set(0, 0, 0);
       this.sheath.rotation.set(0, 0, 0);
-      this.sheath.scale.setScalar(0.54);
+      this.sheath.scale.setScalar(0.46);
     }
 
     this.player.setFangArmOverride?.(false);
@@ -1387,7 +1387,7 @@ function buildFangModel() {
   }
 
   const guard = new THREE.Mesh(
-    new THREE.BoxGeometry(0.19, 0.035, 0.065),
+    new THREE.BoxGeometry(0.135, 0.028, 0.050),
     spineMat
   );
   guard.position.z = 0.055;
@@ -1453,52 +1453,60 @@ function buildSheath() {
 
   // Slightly tapered scabbard reads as a real sheath instead of a floating box.
   const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.070, 0.092, 0.46, 6),
+    new THREE.CylinderGeometry(0.052, 0.068, 0.38, 6),
     leatherMat
   );
-  body.scale.z = 0.62;
+  body.scale.z = 0.48;
   body.castShadow = true;
   group.add(body);
 
   const mouth = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.092, 0.092, 0.045, 6),
+    new THREE.CylinderGeometry(0.069, 0.069, 0.035, 6),
     metalMat
   );
-  mouth.scale.z = 0.68;
-  mouth.position.y = 0.225;
+  mouth.scale.z = 0.52;
+  mouth.position.y = 0.190;
   group.add(mouth);
 
   const wrap = new THREE.Mesh(
-    new THREE.BoxGeometry(0.19, 0.075, 0.11),
+    new THREE.BoxGeometry(0.135, 0.052, 0.072),
     wrapMat
   );
-  wrap.position.y = 0.06;
+  wrap.position.y = 0.045;
   wrap.rotation.z = 0.08;
   group.add(wrap);
 
   const lowerBand = new THREE.Mesh(
-    new THREE.BoxGeometry(0.17, 0.055, 0.10),
+    new THREE.BoxGeometry(0.120, 0.044, 0.066),
     wrapMat
   );
-  lowerBand.position.y = -0.12;
+  lowerBand.position.y = -0.095;
   lowerBand.rotation.z = -0.07;
   group.add(lowerBand);
 
   // Short leather hanger that visually joins the scabbard to the belt/hip.
   const beltLoop = new THREE.Mesh(
-    new THREE.BoxGeometry(0.060, 0.18, 0.032),
+    new THREE.BoxGeometry(0.045, 0.135, 0.026),
     leatherMat
   );
-  beltLoop.position.set(-0.055, 0.235, -0.045);
+  beltLoop.position.set(-0.038, 0.185, -0.032);
   beltLoop.rotation.z = -0.08;
   group.add(beltLoop);
 
   const beltLoopCap = new THREE.Mesh(
-    new THREE.BoxGeometry(0.105, 0.035, 0.040),
+    new THREE.BoxGeometry(0.082, 0.028, 0.032),
     metalMat
   );
-  beltLoopCap.position.set(-0.055, 0.315, -0.045);
+  beltLoopCap.position.set(-0.038, 0.245, -0.032);
   group.add(beltLoopCap);
+
+  const beltBridge = new THREE.Mesh(
+    new THREE.BoxGeometry(0.14, 0.035, 0.030),
+    leatherMat
+  );
+  beltBridge.position.set(-0.030, 0.255, 0.010);
+  beltBridge.rotation.z = 0.08;
+  group.add(beltBridge);
 
   // Only the part of the knife that should protrude from the sheath is modeled
   // here. It is toggled independently from the real hand/projectile knife.
@@ -1510,34 +1518,34 @@ function buildSheath() {
     new THREE.BoxGeometry(0.19, 0.035, 0.065),
     metalMat
   );
-  guard.position.y = 0.265;
+  guard.position.y = 0.218;
   holsteredFang.add(guard);
 
   const handle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.050, 0.058, 0.25, 10),
+    new THREE.CylinderGeometry(0.038, 0.044, 0.18, 10),
     gripMat
   );
-  handle.position.y = 0.405;
+  handle.position.y = 0.318;
   handle.castShadow = true;
   holsteredFang.add(handle);
 
   for (let i = 0; i < 5; i++) {
     const cord = new THREE.Mesh(
-      new THREE.TorusGeometry(0.057, 0.008, 5, 12),
+      new THREE.TorusGeometry(0.044, 0.006, 5, 12),
       cordMat
     );
     cord.rotation.x = Math.PI / 2;
-    cord.position.y = 0.315 + i * 0.048;
+    cord.position.y = 0.258 + i * 0.034;
     cord.rotation.z = (i % 2 ? 1 : -1) * 0.10;
     holsteredFang.add(cord);
   }
 
   const pommel = new THREE.Mesh(
-    new THREE.TorusGeometry(0.047, 0.013, 6, 14),
+    new THREE.TorusGeometry(0.036, 0.010, 6, 14),
     metalMat
   );
   pommel.rotation.x = Math.PI / 2;
-  pommel.position.y = 0.535;
+  pommel.position.y = 0.410;
   holsteredFang.add(pommel);
 
   group.userData.holsteredFang = holsteredFang;
