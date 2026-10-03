@@ -130,7 +130,7 @@ export class PlayerController {
       } else if (
         this.slideTimer <= 0 ||
         !crouchDown ||
-        this.horizontalSpeed() < cfg.crouchSpeed
+        this.horizontalSpeed() < cfg.slideExitSpeed
       ) {
         this.sliding = false;
       }
@@ -306,11 +306,13 @@ export class PlayerController {
         .applyAxisAngle(Y_AXIS, this.group.rotation.y);
     }
 
-    // Preserve existing momentum and add only the minimum Fortnite-style entry push.
-    const startSpeed = Math.min(
-      cfg.slideMaxSpeed,
-      Math.max(hs, cfg.slideInitialSpeed)
+    // Preserve sprint momentum and add a small entry push rather than
+    // teleporting every valid slide to the same speed.
+    const boostedSpeed = Math.max(
+      hs,
+      Math.min(cfg.slideInitialSpeed, hs + cfg.slideEntryBoost)
     );
+    const startSpeed = Math.min(cfg.slideMaxSpeed, boostedSpeed);
 
     this.velocity.x = this.slideDirection.x * startSpeed;
     this.velocity.z = this.slideDirection.z * startSpeed;
@@ -327,10 +329,28 @@ export class PlayerController {
       .set(this.velocity.x, 0, this.velocity.z)
       .normalize();
 
-    // Limited air-like steering. Sliding keeps momentum instead of snapping to WASD.
+    // Steering redirects existing momentum; it does not create speed.
+    // Opposite input acts as a brake instead of letting the character pivot
+    // 180 degrees while still sliding at full speed.
     if (move.lengthSq() > 0.001) {
       const desired = move.clone().normalize();
-      const steer = 1 - Math.exp(-cfg.slideSteering * dt);
+      const alignment = THREE.MathUtils.clamp(
+        this.slideDirection.dot(desired),
+        -1,
+        1
+      );
+
+      if (alignment < 0) {
+        speed = Math.max(
+          0,
+          speed - cfg.slideReverseBrake * (-alignment) * dt
+        );
+      }
+
+      const steerStrength =
+        cfg.slideSteering *
+        THREE.MathUtils.lerp(0.22, 1, Math.max(0, alignment));
+      const steer = 1 - Math.exp(-steerStrength * dt);
       this.slideDirection.lerp(desired, steer).normalize();
     }
 
@@ -340,17 +360,21 @@ export class PlayerController {
       GAME_CONFIG.movement.radius * 0.25
     );
 
+    let slopeDrive = 0;
+
     if (rampSurface) {
       const r = rampSurface.ramp;
       const run = r.axis === 'z'
         ? new THREE.Vector3(0, 0, r.direction)
         : new THREE.Vector3(r.direction, 0, 0);
 
-      // Ramp rises along +run, therefore downhill is the opposite direction.
       const downhill = run.multiplyScalar(-1);
       const slopeStrength = THREE.MathUtils.clamp(
         (r.topY - r.baseY) /
-          Math.max(0.001, r.axis === 'z' ? r.maxZ - r.minZ : r.maxX - r.minX),
+          Math.max(
+            0.001,
+            r.axis === 'z' ? r.maxZ - r.minZ : r.maxX - r.minX
+          ),
         0,
         1
       );
@@ -358,29 +382,33 @@ export class PlayerController {
       const alongDownhill = this.slideDirection.dot(downhill);
 
       if (alongDownhill > 0) {
-        speed +=
+        slopeDrive =
           cfg.slideDownhillAcceleration *
           slopeStrength *
-          alongDownhill *
-          dt;
+          alongDownhill;
       } else if (alongDownhill < 0) {
-        speed +=
+        slopeDrive =
           cfg.slideUphillBrake *
           slopeStrength *
-          alongDownhill *
-          dt;
+          alongDownhill;
       }
+
+      speed += slopeDrive * dt;
     }
 
-    // On flat ground Fortnite's slide settles toward normal run speed instead of
-    // decaying all the way to a slow crouch immediately.
+    // Flat terrain settles toward normal running speed, matching Fortnite's
+    // documented behavior. Downhill drive can keep the slide faster.
     if (speed > cfg.slideFlatTargetSpeed) {
+      const frictionScale = slopeDrive > 0 ? cfg.slideDownhillFrictionScale : 1;
       speed = Math.max(
         cfg.slideFlatTargetSpeed,
-        speed - cfg.slideFriction * dt
+        speed - cfg.slideFriction * frictionScale * dt
       );
-    } else {
-      speed = Math.max(0, speed - cfg.slideFriction * 0.22 * dt);
+    } else if (slopeDrive <= 0) {
+      speed = Math.max(
+        0,
+        speed - cfg.slideLowSpeedFriction * dt
+      );
     }
 
     speed = THREE.MathUtils.clamp(speed, 0, cfg.slideMaxSpeed);
