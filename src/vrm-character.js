@@ -5,16 +5,53 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
 // avatars are redistributed under their own VRM metadata terms).
+export const FINAL_VRM_URL = '/assets/characters/roach-scout.vrm';
+export const FINAL_GLB_URL = '/assets/characters/roach-scout.glb';
+
+// Temporary rig remains the safety fallback only.
 export const DEVELOPMENT_VRM_URL =
   'https://cdn.jsdelivr.net/gh/norio/vrm-game-starter@b14c236fd8150855348ad085b7820c298eac4b30/src/assets/sample2.vrm';
 
-export async function loadRoachScoutVrmBase(url = DEVELOPMENT_VRM_URL) {
+export async function loadRoachScoutVrmBase() {
+  const candidates = [
+    { type: 'vrm', url: FINAL_VRM_URL, final: true },
+    { type: 'glb', url: FINAL_GLB_URL, final: true },
+    { type: 'vrm', url: DEVELOPMENT_VRM_URL, final: false }
+  ];
+
+  let lastError = null;
+
+  for (const candidate of candidates) {
+    try {
+      const avatar = candidate.type === 'vrm'
+        ? await loadVrmAvatar(candidate.url)
+        : await loadHumanoidGlb(candidate.url);
+
+      avatar.sourceUrl = candidate.url;
+      avatar.finalAsset = candidate.final;
+      avatar.assetType = candidate.type;
+      return avatar;
+    } catch (error) {
+      lastError = error;
+      if (candidate.final) {
+        console.info(
+          `Roach Scout final ${candidate.type.toUpperCase()} unavailable; trying next source.`,
+          error
+        );
+      }
+    }
+  }
+
+  throw lastError ?? new Error('No character source could be loaded.');
+}
+
+async function loadVrmAvatar(url) {
   const loader = new GLTFLoader();
   loader.register((parser) => new VRMLoaderPlugin(parser));
 
   const gltf = await loader.loadAsync(url);
   const vrm = gltf.userData.vrm;
-  if (!vrm) throw new Error('Loaded avatar has no VRM metadata.');
+  if (!vrm) throw new Error(`No VRM metadata in ${url}`);
 
   if (vrm.meta?.metaVersion === '0') VRMUtils.rotateVRM0(vrm);
 
@@ -27,14 +64,70 @@ export async function loadRoachScoutVrmBase(url = DEVELOPMENT_VRM_URL) {
   modelRoot.add(vrm.scene);
 
   prepareAvatar(vrm.scene);
-  retintAvatar(vrm.scene);
-  fitAvatar(vrm.scene, modelRoot, 1.72);
 
-  // VRM 1.x avatars use +Z as their authored front. SHIFT's weapon/camera
-  // presentation uses -Z as character forward.
+  const isFinal = url === FINAL_VRM_URL;
+  if (!isFinal) retintAvatar(vrm.scene);
+
+  fitAvatar(vrm.scene, modelRoot, 1.72);
   modelRoot.rotation.y = Math.PI;
 
-  const bones = {
+  const bones = vrmBones(vrm);
+  return buildCharacterInterface({
+    root,
+    modelRoot,
+    scene: vrm.scene,
+    bones,
+    vrm,
+    applyScoutAccessories: !isFinal
+  });
+}
+
+async function loadHumanoidGlb(url) {
+  const loader = new GLTFLoader();
+  const gltf = await loader.loadAsync(url);
+  const scene = gltf.scene;
+
+  prepareAvatar(scene);
+
+  const bones = glbBones(scene);
+  const required = [
+    'head',
+    'leftHand',
+    'rightHand',
+    'hips',
+    'leftUpperArm',
+    'rightUpperArm'
+  ];
+  const missing = required.filter((key) => !bones[key]);
+
+  if (missing.length) {
+    throw new Error(
+      `Final GLB loaded but is not a usable humanoid rig. Missing: ${missing.join(', ')}`
+    );
+  }
+
+  const root = new THREE.Group();
+  root.name = 'RoachScoutGlbRoot';
+
+  const modelRoot = new THREE.Group();
+  modelRoot.name = 'RoachScoutGlbModel';
+  root.add(modelRoot);
+  modelRoot.add(scene);
+
+  fitAvatar(scene, modelRoot, 1.72);
+
+  return buildCharacterInterface({
+    root,
+    modelRoot,
+    scene,
+    bones,
+    vrm: null,
+    applyScoutAccessories: false
+  });
+}
+
+function vrmBones(vrm) {
+  return {
     head: bone(vrm, 'head'),
     neck: bone(vrm, 'neck'),
     chest: bone(vrm, 'chest') ?? bone(vrm, 'upperChest'),
@@ -53,17 +146,69 @@ export async function loadRoachScoutVrmBase(url = DEVELOPMENT_VRM_URL) {
     leftFoot: bone(vrm, 'leftFoot'),
     rightFoot: bone(vrm, 'rightFoot')
   };
+}
 
+function glbBones(scene) {
+  const aliases = {
+    head: ['head', 'head_end'],
+    neck: ['neck'],
+    chest: ['upperchest', 'chest', 'spine2', 'spine_02'],
+    upperChest: ['upperchest', 'spine2', 'spine_02', 'chest'],
+    leftUpperArm: ['leftupperarm', 'leftarm', 'upperarm_l', 'mixamorigleftarm'],
+    rightUpperArm: ['rightupperarm', 'rightarm', 'upperarm_r', 'mixamorigrightarm'],
+    leftLowerArm: ['leftlowerarm', 'leftforearm', 'lowerarm_l', 'mixamorigleftforearm'],
+    rightLowerArm: ['rightlowerarm', 'rightforearm', 'lowerarm_r', 'mixamorigrightforearm'],
+    leftHand: ['lefthand', 'hand_l', 'mixamoriglefthand'],
+    rightHand: ['righthand', 'hand_r', 'mixamorigrighthand'],
+    hips: ['hips', 'pelvis', 'mixamorigHips'],
+    leftUpperLeg: ['leftupperleg', 'leftupleg', 'thigh_l', 'mixamorigleftupleg'],
+    rightUpperLeg: ['rightupperleg', 'rightupleg', 'thigh_r', 'mixamorigrightupleg'],
+    leftLowerLeg: ['leftlowerleg', 'leftleg', 'calf_l', 'mixamorigleftleg'],
+    rightLowerLeg: ['rightlowerleg', 'rightleg', 'calf_r', 'mixamorigrightleg'],
+    leftFoot: ['leftfoot', 'foot_l', 'mixamorigleftfoot'],
+    rightFoot: ['rightfoot', 'foot_r', 'mixamorigrightfoot']
+  };
+
+  const nodes = [];
+  scene.traverse((node) => {
+    if (node.isBone || node.type === 'Bone') nodes.push(node);
+  });
+
+  const normalize = (value) =>
+    String(value ?? '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+  const byName = new Map(nodes.map((node) => [normalize(node.name), node]));
+  const result = {};
+
+  for (const [key, names] of Object.entries(aliases)) {
+    result[key] = names
+      .map(normalize)
+      .map((name) => byName.get(name))
+      .find(Boolean) ?? null;
+  }
+
+  return result;
+}
+
+function buildCharacterInterface({
+  root,
+  modelRoot,
+  scene,
+  bones,
+  vrm,
+  applyScoutAccessories
+}) {
   const baseRotations = new Map();
   for (const node of Object.values(bones)) {
     if (node) baseRotations.set(node, node.quaternion.clone());
   }
 
-  const rightArmScale = bones.rightUpperArm?.scale.clone() ?? new THREE.Vector3(1, 1, 1);
+  const accessories = applyScoutAccessories
+    ? attachRoachAccessories(bones)
+    : {};
 
-  const accessories = attachRoachAccessories(bones);
-
-  // Stable attachment points independent from the temporary avatar's mesh names.
   const weaponSocket = new THREE.Object3D();
   weaponSocket.name = 'weaponSocket';
   if (bones.rightHand) {
@@ -94,6 +239,7 @@ export async function loadRoachScoutVrmBase(url = DEVELOPMENT_VRM_URL) {
   return {
     root,
     modelRoot,
+    scene,
     vrm,
     bones,
     weaponSocket,
@@ -101,18 +247,14 @@ export async function loadRoachScoutVrmBase(url = DEVELOPMENT_VRM_URL) {
     headSocket,
     accessories,
     baseRotations,
-    rightArmScale,
     update(dt, state = {}) {
-      vrm.update(dt);
+      vrm?.update?.(dt);
       updatePose(this, dt, state);
     },
     setVisible(visible) {
       root.visible = Boolean(visible);
     },
-    setRightArmHidden() {
-      // Kept for compatibility with older code. Real VRM Fang actions now use
-      // the actual arm, so it is never hidden/replaced.
-    },
+    setRightArmHidden() {},
     getHandWorldPosition(side = 'right', target = new THREE.Vector3()) {
       const hand = side === 'left' ? bones.leftHand : bones.rightHand;
       if (!hand) return null;
@@ -120,6 +262,14 @@ export async function loadRoachScoutVrmBase(url = DEVELOPMENT_VRM_URL) {
       return target;
     }
   };
+}
+
+function bone(vrm, name) {
+  return (
+    vrm.humanoid?.getNormalizedBoneNode?.(name) ??
+    vrm.humanoid?.getRawBoneNode?.(name) ??
+    null
+  );
 }
 
 function prepareAvatar(scene) {
@@ -151,14 +301,6 @@ function fitAvatar(scene, modelRoot, targetHeight) {
   // modelRoot remains separate so we can rotate the authored +Z forward model
   // without disturbing the height fitting.
   modelRoot.updateWorldMatrix(true, true);
-}
-
-function bone(vrm, name) {
-  return (
-    vrm.humanoid?.getNormalizedBoneNode?.(name) ??
-    vrm.humanoid?.getRawBoneNode?.(name) ??
-    null
-  );
 }
 
 function attachRoachAccessories(bones) {

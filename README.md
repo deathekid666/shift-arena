@@ -183,3 +183,13 @@ Browser-first third-person shooter prototype.
 - Added lower-leg and foot humanoid bones to the character attachment map for later locomotion and equipment work.
 - This is a visible in-game approximation on the temporary VRM rig, not the final generated custom mesh.
 - The final production asset can replace the temporary VRM while keeping the same humanoid sockets and combat code.
+
+
+## Build 009.5 — final character asset slot
+- Production character loading order is now local Roach Scout VRM → local rigged Roach Scout GLB → pinned temporary VRM fallback.
+- A missing local asset no longer requires code changes; the loader silently advances to the next source.
+- Added standard humanoid bone-name recognition for Mixamo/Meshy/Blender-style GLB rigs.
+- Rigged GLB characters can use the existing real-hand firearm position, Tin Fang socket and upper-body pose system.
+- Final custom assets do not receive the temporary VRM's procedural costume overlays or material retinting.
+- Added an explicit asset contract at assets/characters/README.md.
+- Hugging Face TRELLIS generation was investigated, but the connected account returned HTTP 402 before a Job started because Jobs require a positive credit balance; no compute was charged.
