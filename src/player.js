@@ -116,15 +116,23 @@ export class PlayerController {
       !this.crouching &&
       !this.sliding;
 
-    // Visual crouch remains separate from slide; the slide gets its own pose layer.
+    // Combat crouch must react to the input, not wait for a long visual blend.
+    // The animation state changes immediately; this value only smooths the
+    // pelvis/leg pose over a few frames so repeated crouch-peeking feels crisp.
     const crouchTarget = this.crouching && !this.sliding ? 1 : 0;
+    const combatCrouch = Boolean(combatFacing || weaponAiming);
+    const crouchResponse = crouchTarget > this.crouchVisual
+      ? (combatCrouch ? cfg.combatCrouchBlendIn : cfg.crouchBlendIn)
+      : (combatCrouch ? cfg.combatCrouchBlendOut : cfg.crouchBlendOut);
+
     this.crouchVisual = THREE.MathUtils.damp(
       this.crouchVisual,
       crouchTarget,
-      crouchTarget > this.crouchVisual ? 11.5 : 8.5,
+      crouchResponse,
       dt
     );
-    if (Math.abs(this.crouchVisual - crouchTarget) < 0.002) {
+
+    if (Math.abs(this.crouchVisual - crouchTarget) < 0.006) {
       this.crouchVisual = crouchTarget;
     }
 
@@ -191,9 +199,23 @@ export class PlayerController {
           );
         }
 
-        const baseAccel = sprintRequested
-          ? cfg.sprintAcceleration
-          : cfg.acceleration;
+        let baseAccel;
+
+        if (this.crouching) {
+          baseAccel = combatCrouch
+            ? cfg.combatCrouchAcceleration
+            : cfg.crouchAcceleration;
+        } else if (this.crouchVisual > 0.04) {
+          // As soon as Ctrl is released, recover normal movement speed quickly
+          // while the visual pose finishes its short stand-up blend.
+          baseAccel = combatCrouch
+            ? cfg.combatCrouchExitAcceleration
+            : cfg.crouchExitAcceleration;
+        } else {
+          baseAccel = sprintRequested
+            ? cfg.sprintAcceleration
+            : cfg.acceleration;
+        }
 
         accel = THREE.MathUtils.lerp(
           cfg.turnAcceleration,

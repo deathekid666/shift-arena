@@ -236,6 +236,7 @@ export async function createVrmLocomotionController(character, vrm) {
     actions,
     weights,
     wasSliding: false,
+    wasCrouching: false,
     slideStage: 'none',
     slideExitActive: false,
 
@@ -327,15 +328,30 @@ export async function createVrmLocomotionController(character, vrm) {
 
       this.active = true;
 
-      const crouching =
-        Boolean(state.crouching) ||
-        (state.crouchBlend ?? 0) > 0.025;
+      // Input state owns crouch mode immediately. crouchBlend is only a
+      // short visual smoothing value and must never keep the FSM stuck crouched
+      // after Ctrl is released.
+      const crouching = Boolean(state.crouching);
 
       if (crouching) {
+        if (!this.wasCrouching) {
+          this.wasCrouching = true;
+
+          if (moving) {
+            const crouchDuration = Math.max(
+              0.001,
+              crouchMove.getClip().duration
+            );
+            const normalizedPhase =
+              ((this.phase / (Math.PI * 2)) % 1 + 1) % 1;
+            crouchMove.time = normalizedPhase * crouchDuration;
+          }
+        }
+
         applyWeights(
           moving ? { crouchMove: 1 } : { crouchIdle: 1 },
           dt,
-          14
+          state.combat ? 30 : 22
         );
 
         const backwards = (state.localZ ?? 0) > 0.08;
@@ -364,6 +380,23 @@ export async function createVrmLocomotionController(character, vrm) {
         return;
       }
 
+      if (this.wasCrouching) {
+        // Continue the same foot cycle when standing back up. This prevents
+        // crouch-walk -> jog from popping to an unrelated leg pose.
+        this.wasCrouching = false;
+
+        if (moving) {
+          const normalizedPhase =
+            ((this.phase / (Math.PI * 2)) % 1 + 1) % 1;
+          move.time =
+            normalizedPhase *
+            Math.max(0.001, move.getClip().duration);
+          sprint.time =
+            normalizedPhase *
+            Math.max(0.001, sprint.getClip().duration);
+        }
+      }
+
       const sprintBlend = moving
         ? THREE.MathUtils.clamp(
             state.sprintBlend ??
@@ -381,7 +414,11 @@ export async function createVrmLocomotionController(character, vrm) {
           ? { move: 1 - sprintBlend, sprint: sprintBlend }
           : { move: 1 };
 
-      applyWeights(intents, dt, 14);
+      applyWeights(
+        intents,
+        dt,
+        state.combat ? 24 : 17
+      );
 
       const backwards = (state.localZ ?? 0) > 0.10;
       const moveScale =
