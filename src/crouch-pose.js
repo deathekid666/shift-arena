@@ -92,8 +92,8 @@ export function createCrouchPoseLayer(character) {
     // Lower pelvis substantially, but feet remain planted by IK.
     const baseHipPos = underlyingP.get(b.hips);
     b.hips.position.copy(baseHipPos);
-    b.hips.position.y -= 0.285 * blend;
-    b.hips.position.z += 0.060 * blend;
+    b.hips.position.y -= 0.325 * blend;
+    b.hips.position.z += 0.070 * blend;
 
     // Slight pelvis tuck and torso counter-lean for balance.
     rotateLocal(b.hips, underlyingQ.get(b.hips), -0.10 * blend, 0, 0);
