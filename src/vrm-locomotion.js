@@ -111,7 +111,13 @@ export async function createVrmLocomotionController(character, vrm) {
     UAL1_SOURCE_BONE_TO_HUMAN,
     {
       sourcePelvisName: 'DEF-hips',
-      useAnimatedRoot: true
+
+      // Gameplay owns the character root (position + heading). Retargeting
+      // the source rig's animated root quaternion on top of that makes every
+      // normalized humanoid bone inherit a second moving reference frame,
+      // which shows up as whole-body vibration even while standing.
+      // Keep only the source rest-root basis for coordinate conversion.
+      useAnimatedRoot: false
     }
   );
 
