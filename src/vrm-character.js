@@ -284,8 +284,7 @@ function buildCharacterInterface({
     motionPolish: {
       speed: 0,
       strafe: 0,
-      forward: 1,
-      weightShift: 0
+      forward: 1
     },
     authoredLocomotion: null,
     authoredLocomotionReady: null,
@@ -1737,54 +1736,34 @@ function applyAuthoredLocomotionPolish(
   const strafeBank =
     -motionPolish.strafe *
     motionPolish.speed *
-    (combat ? 0.026 : 0.060) *
+    (combat ? 0.012 : 0.028) *
     (1 - crouch * 0.40);
 
-  const phase =
-    character.authoredLocomotion?.phase ??
-    character.locomotion?.phase ??
-    0;
-
-  motionPolish.weightShift = THREE.MathUtils.damp(
-    motionPolish.weightShift,
-    Math.sin(phase) * motionPolish.speed,
-    10,
-    dt
-  );
-
-  const strideRoll =
-    Math.cos(phase * 2) *
-    0.008 *
-    motionPolish.speed *
-    (combat ? 0.35 : 1);
+  // Keep authored locomotion stable. Do not add periodic pelvis/torso
+  // oscillation on top of the mixer; the source clips already contain their
+  // own gait sway and double-applying it causes visible vibration.
+  const strideRoll = 0;
 
   // These are true additive offsets on top of the authored pose. The mixer
   // rewrites the bones next frame, so the offsets never accumulate.
   applyAdditiveEuler(
     bones.hips,
     -signedLean * 0.34,
-    motionPolish.strafe * 0.018,
-    strafeBank * 0.70 + strideRoll
+    motionPolish.strafe * 0.010,
+    strafeBank * 0.48 + strideRoll
   );
 
-  // Small lateral weight transfer keeps authored run/strafe from looking like
-  // the pelvis is sliding on rails. It is intentionally reduced in combat.
-  if (bones.hips) {
-    bones.hips.position.x +=
-      motionPolish.weightShift *
-      (combat ? 0.0025 : 0.0065);
-  }
   applyAdditiveEuler(
     bones.spine,
     signedLean * 0.30,
-    -motionPolish.strafe * 0.014,
-    -strafeBank * 0.42
+    -motionPolish.strafe * 0.008,
+    -strafeBank * 0.30
   );
   applyAdditiveEuler(
     bones.chest,
     signedLean * 0.22,
-    -motionPolish.strafe * 0.010,
-    -strafeBank * 0.30
+    -motionPolish.strafe * 0.006,
+    -strafeBank * 0.20
   );
 
   if (!combat) {
