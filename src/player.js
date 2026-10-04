@@ -354,10 +354,18 @@ export class PlayerController {
       !this.crouching &&
       !combatFacing;
 
-    const turnError =
+    const rawTurnError =
       leanAllowed && Number.isFinite(movementFacing)
         ? angleDelta(this.group.rotation.y, movementFacing)
         : 0;
+
+    // Ignore tiny heading corrections. They are meaningful to movement, but
+    // rotating the whole visible avatar for sub-degree changes reads as
+    // vibration in a close third-person camera.
+    const turnError =
+      Math.abs(rawTurnError) < 0.035
+        ? 0
+        : rawTurnError;
 
     const speedRatio = THREE.MathUtils.clamp(
       this.horizontalSpeed() / cfg.sprintSpeed,
@@ -380,8 +388,15 @@ export class PlayerController {
       dt
     );
 
+    if (
+      leanTarget === 0 &&
+      Math.abs(this.turnLean) < 0.0015
+    ) {
+      this.turnLean = 0;
+    }
+
     const sprintPitchTarget =
-      leanAllowed
+      leanAllowed && this.sprintBlend > 0.08
         ? -cfg.sprintBodyLean * this.sprintBlend
         : 0;
 
@@ -397,6 +412,20 @@ export class PlayerController {
       cfg.turnLeanResponse,
       dt
     );
+
+    if (
+      this.turnLean === 0 &&
+      Math.abs(this.body.rotation.z) < 0.0015
+    ) {
+      this.body.rotation.z = 0;
+    }
+
+    if (
+      sprintPitchTarget === 0 &&
+      Math.abs(this.body.rotation.x) < 0.0015
+    ) {
+      this.body.rotation.x = 0;
+    }
 
     this.aimYawOffset = combatFacing
       ? THREE.MathUtils.clamp(

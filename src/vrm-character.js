@@ -1819,27 +1819,21 @@ function animateScoutAccessories(character, locomotion, dt) {
 
   const shell = character.accessories?.shellRoot;
   if (shell) {
-    const sprinting =
-      locomotion.stateName === 'RUN' ||
-      locomotion.stateName === 'SPRINT';
-    const jogging =
-      locomotion.stateName === 'WALK' ||
-      locomotion.stateName === 'JOG';
-
-    const shellPulse = sprinting
-      ? Math.cos(character.locomotion.phase * 2) * 0.018
-      : jogging
-        ? Math.cos(character.locomotion.phase * 2) * 0.008
-        : 0;
-
-    const target = -0.055 + shellPulse;
-
+    // The shell also carries the short elytra/wings. Driving this entire
+    // assembly at twice the gait frequency made the hero silhouette look like
+    // it was vibrating even after the actual skeleton had been stabilized.
+    // Keep the authored body animation responsible for gait motion and let the
+    // shell settle to one stable mount angle.
     shell.rotation.x = THREE.MathUtils.damp(
       shell.rotation.x,
-      target,
+      -0.055,
       7,
       dt
     );
+
+    if (Math.abs(shell.rotation.x + 0.055) < 0.0005) {
+      shell.rotation.x = -0.055;
+    }
   }
 }
 
