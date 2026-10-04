@@ -387,9 +387,17 @@ function buildCharacterInterface({
 
       this.authoredLocomotion?.update(dt, state);
 
-      // Keep the normalized hips translation deterministic. Authored clips own
-      // bone rotations only; gameplay states own vertical stance offsets.
-      applyStablePelvis(this);
+      // Build 010.9A's authored UAL2 slide needs its retargeted pelvis-height
+      // track. Keep normal locomotion locked to a stable pelvis, but do not
+      // overwrite the authored Slide_Start/Loop/Exit vertical motion.
+      const authoredSlideActive = Boolean(
+        this.authoredLocomotion?.hasAuthoredSlide &&
+        (state.sliding || this.authoredLocomotion?.slideExitActive)
+      );
+
+      if (!authoredSlideActive) {
+        applyStablePelvis(this);
+      }
 
       updatePose(this, dt, state);
 
@@ -404,11 +412,13 @@ function buildCharacterInterface({
         dt
       );
 
-      // The authored clip supplies motion timing, while this deterministic
-      // pose layer owns ground contact and the deep two-knee silhouette.
-      // This prevents the rotation-only authored slide from floating.
-      this.slidePoseLayer ??= createSlidePoseLayer(this);
-      this.slidePoseLayer.apply(state, dt);
+      // Restore the last confirmed-good slide architecture: when UAL2 is
+      // available it owns the whole slide pose. The procedural two-knee layer
+      // remains only as the fallback if the authored slide library cannot load.
+      if (!this.authoredLocomotion?.hasAuthoredSlide) {
+        this.slidePoseLayer ??= createSlidePoseLayer(this);
+        this.slidePoseLayer.apply(state, dt);
+      }
 
       this.jumpPoseLayer ??= createJumpPoseLayer(this);
       this.jumpPoseLayer.apply(state, dt);

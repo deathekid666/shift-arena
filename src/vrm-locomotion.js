@@ -683,19 +683,72 @@ function retargetHumanoidAnimationClips(
 }
 
 function retargetClip(clip, context) {
-  // Rotation-only retargeting.
-  //
-  // The game controller owns character translation and stance height.
-  // Source pelvis position tracks come from rigs with different proportions
-  // and units; replaying those values directly on the VRM produces visible
-  // root/pelvis jitter in idle, run and slide.
+  // Keep idle/walk/run rotation-only to prevent root jitter, but restore the
+  // proven Build 010.9A pelvis-height track for the authored UAL2 slide.
+  // That lets Slide_Start/Loop/Exit own the full body again without bringing
+  // unstable source translation back into normal locomotion.
   const tracks = retargetQuaternionTracks(clip, context);
+
+  if (SLIDE_CLIP_NAMES.includes(clip.name)) {
+    for (const track of clip.tracks) {
+      const retargeted = retargetPositionTrack(track, context);
+      if (retargeted) tracks.push(retargeted);
+    }
+  }
 
   if (!tracks.length) {
     throw new Error(`No humanoid tracks after retarget: ${clip.name}`);
   }
 
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+}
+
+function retargetPositionTrack(track, context) {
+  const parsed = THREE.PropertyBinding.parseTrackName(track.name);
+
+  if (
+    parsed.propertyName !== 'position' ||
+    parsed.nodeName !== context.sourcePelvisName
+  ) {
+    return null;
+  }
+
+  const target = context.targetMap.get(context.sourcePelvisName);
+  const sourceRestPosition =
+    context.restPose.positions.get(context.sourcePelvisName);
+
+  if (!target || !sourceRestPosition) return null;
+
+  const values = new Float32Array(track.values.length);
+  const framePosition = new THREE.Vector3();
+  const sourceDelta = new THREE.Vector3();
+
+  for (let i = 0; i < track.values.length; i += 3) {
+    sourceDelta
+      .fromArray(track.values, i)
+      .sub(sourceRestPosition)
+      .applyQuaternion(context.restPose.rootQuaternion)
+      .applyQuaternion(context.targetSceneRotationInverse);
+
+    // Gameplay still owns horizontal translation. Restore only the vertical
+    // pelvis motion that made the confirmed-good UAL2 slide sit on the floor.
+    sourceDelta.x = 0;
+    sourceDelta.z = 0;
+
+    framePosition
+      .copy(target.node.position)
+      .add(sourceDelta)
+      .toArray(values, i);
+  }
+
+  const result = new THREE.VectorKeyframeTrack(
+    `${target.trackName}.position`,
+    track.times,
+    values
+  );
+
+  result.setInterpolation(track.getInterpolation());
+  return result;
 }
 
 function retargetQuaternionTracks(clip, context) {
