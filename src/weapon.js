@@ -106,6 +106,7 @@ export class WeaponSystem {
         raiseAnchorQuaternion: new THREE.Quaternion(),
         bodyGripReady: false,
         bodyGripLocal: new THREE.Vector3(),
+        slideCarryActive: false,
         bobTime: 0,
         pumpSoundPlayed: true
       };
@@ -647,12 +648,39 @@ export class WeaponSystem {
       0.020
     );
 
+    const authoredLocomotion =
+      this.player.vrmCharacter?.authoredLocomotion ??
+      null;
+
+    const slideCarryActive = Boolean(
+      this.player.sliding ||
+      authoredLocomotion?.slideExitActive ||
+      (authoredLocomotion?.slideExitTail ?? 0) > 0.015 ||
+      authoredLocomotion?.state === 'SLIDE_START' ||
+      authoredLocomotion?.state === 'SLIDE_LOOP' ||
+      authoredLocomotion?.state === 'SLIDE_EXIT'
+    );
+
+    // When authored slide recovery has completely finished, release hand
+    // ownership and recapture the Fortnite body-space anchor from the now
+    // upright avatar. Reusing the pre-slide anchor is what makes the gun appear
+    // to float after the character stands back up.
+    if (
+      state.slideCarryActive &&
+      !slideCarryActive
+    ) {
+      state.bodyGripReady = false;
+    }
+
+    state.slideCarryActive =
+      slideCarryActive;
+
     // During authored slide, restore the exact ownership model used by the
     // last confirmed-good slide build (010.20J): the authored RIGHT hand owns
     // the weapon and only the LEFT support hand follows via IK. Do not force
     // the slide arms toward the body-space rifle target.
     if (
-      this.player.sliding &&
+      slideCarryActive &&
       cfg.masterHandCarry &&
       this.handMounted
     ) {
@@ -1412,6 +1440,7 @@ export class WeaponSystem {
     nextState.raiseAnchorActive = false;
     nextState.bodyGripReady = false;
     nextState.bodyGripLocal.set(0, 0, 0);
+    nextState.slideCarryActive = false;
 
     this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
@@ -1515,6 +1544,7 @@ export class WeaponSystem {
       entry.state.raiseAnchorActive = false;
       entry.state.bodyGripReady = false;
       entry.state.bodyGripLocal.set(0, 0, 0);
+      entry.state.slideCarryActive = false;
       entry.state.raiseAnchorPosition.copy(
         entry.model.group.position
       );
