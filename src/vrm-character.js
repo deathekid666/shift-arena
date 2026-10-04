@@ -451,10 +451,21 @@ function buildCharacterInterface({
       active: false,
       filtered: new Map()
     },
+    renderWeaponHandState: {
+      initialized: false,
+      filteredQ: new THREE.Quaternion()
+    },
+    lastWeaponGripPose: null,
+    lastWeaponGripDt: 0,
     authoredLocomotion: null,
     authoredLocomotionReady: null,
     debugFreezeAuthored: false,
     update(dt, state = {}) {
+      // applyWeaponIK runs later in the frame. Clear this first so render-stage
+      // hand correction can never accidentally reuse a stale weapon pose.
+      this.lastWeaponGripPose = null;
+      this.lastWeaponGripDt = dt;
+
       this.fangPoseLayer?.restore();
       this.jumpPoseLayer?.restore();
       this.slidePoseLayer?.restore();
@@ -528,18 +539,177 @@ function buildCharacterInterface({
       this.fangPoseLayer.apply(fang, dt);
     },
     applyWeaponIK(gripPose, dt) {
+      this.lastWeaponGripPose = gripPose ?? null;
+      this.lastWeaponGripDt = dt;
       applyTwoHandWeaponIK(this, gripPose, dt);
     },
     finalizePose() {
       // Shooter-style late update:
-      // mixer/procedural layers/IK all write normalized bones first, then the
-      // humanoid is committed to the rendered raw skeleton exactly once.
-      // We intentionally do not call vrm.update() here because this gameplay
-      // avatar does not need spring-bone simulation, and the model is scaled.
+      // mixer/procedural layers/IK write normalized bones first.
       vrm?.humanoid?.update?.();
-      root.updateWorldMatrix(true, true);
+
+      root.updateWorldMatrix(
+        true,
+        true
+      );
+
+      // The visible hand is a RAW bone. Correct it only after normalized->raw
+      // sync using the socket that is actually calibrated under that raw hand.
+      // This fixes the long-standing normalized/raw grip-space mismatch.
+      applyRenderedWeaponHandPose(
+        this,
+        this.lastWeaponGripPose,
+        this.lastWeaponGripDt
+      );
+
+      root.updateWorldMatrix(
+        true,
+        true
+      );
     }
   };
+}
+
+const RAW_WEAPON_HAND_TMP = {
+  handWorldQ: new THREE.Quaternion(),
+  socketWorldQ: new THREE.Quaternion(),
+  socketRelativeQ: new THREE.Quaternion(),
+  socketRelativeInvQ: new THREE.Quaternion(),
+  desiredHandWorldQ: new THREE.Quaternion(),
+  parentWorldQ: new THREE.Quaternion(),
+  parentWorldInvQ: new THREE.Quaternion(),
+  desiredLocalQ: new THREE.Quaternion()
+};
+
+function applyRenderedWeaponHandPose(
+  character,
+  gripPose,
+  dt
+) {
+  const rawHand =
+    character.rawBones?.rightHand;
+  const socket =
+    character.weaponSocket;
+  const state =
+    character.renderWeaponHandState;
+
+  if (
+    !rawHand ||
+    !socket ||
+    !state ||
+    !gripPose?.aiming ||
+    !gripPose.weaponQuaternion
+  ) {
+    if (state) state.initialized = false;
+    return;
+  }
+
+  character.root.updateWorldMatrix(
+    true,
+    true
+  );
+
+  // weaponSocket is calibrated under the RENDER/RAW hand hierarchy. Derive
+  // that exact hand->socket orientation from the live raw skeleton instead of
+  // applying it to the normalized proxy hand (the old coordinate-space bug).
+  rawHand.getWorldQuaternion(
+    RAW_WEAPON_HAND_TMP.handWorldQ
+  );
+  socket.getWorldQuaternion(
+    RAW_WEAPON_HAND_TMP.socketWorldQ
+  );
+
+  RAW_WEAPON_HAND_TMP.socketRelativeQ
+    .copy(
+      RAW_WEAPON_HAND_TMP.handWorldQ
+    )
+    .invert()
+    .multiply(
+      RAW_WEAPON_HAND_TMP.socketWorldQ
+    );
+
+  RAW_WEAPON_HAND_TMP.socketRelativeInvQ
+    .copy(
+      RAW_WEAPON_HAND_TMP.socketRelativeQ
+    )
+    .invert();
+
+  RAW_WEAPON_HAND_TMP.desiredHandWorldQ
+    .copy(
+      gripPose.weaponQuaternion
+    )
+    .multiply(
+      RAW_WEAPON_HAND_TMP.socketRelativeInvQ
+    );
+
+  if (!rawHand.parent) return;
+
+  rawHand.parent.getWorldQuaternion(
+    RAW_WEAPON_HAND_TMP.parentWorldQ
+  );
+
+  RAW_WEAPON_HAND_TMP.parentWorldInvQ
+    .copy(
+      RAW_WEAPON_HAND_TMP.parentWorldQ
+    )
+    .invert();
+
+  RAW_WEAPON_HAND_TMP.desiredLocalQ
+    .copy(
+      RAW_WEAPON_HAND_TMP.parentWorldInvQ
+    )
+    .multiply(
+      RAW_WEAPON_HAND_TMP.desiredHandWorldQ
+    );
+
+  if (!state.initialized) {
+    state.filteredQ.copy(
+      rawHand.quaternion
+    );
+    state.initialized = true;
+  }
+
+  const ads =
+    THREE.MathUtils.clamp(
+      gripPose.adsBlend ?? 0,
+      0,
+      1
+    );
+
+  state.filteredQ.slerp(
+    RAW_WEAPON_HAND_TMP.desiredLocalQ,
+    1 -
+      Math.exp(
+        -THREE.MathUtils.lerp(
+          34,
+          46,
+          ads
+        ) *
+          dt
+      )
+  );
+
+  if (
+    state.filteredQ.angleTo(
+      RAW_WEAPON_HAND_TMP.desiredLocalQ
+    ) < 0.00008
+  ) {
+    state.filteredQ.copy(
+      RAW_WEAPON_HAND_TMP.desiredLocalQ
+    );
+  }
+
+  // This is intentionally a render-stage correction. humanoid.update() has
+  // already copied the normalized pose to the raw skeleton, so nothing can
+  // overwrite this wrist orientation before rendering this frame.
+  rawHand.quaternion.copy(
+    state.filteredQ
+  );
+
+  character.root.updateWorldMatrix(
+    true,
+    true
+  );
 }
 
 function bone(vrm, name) {

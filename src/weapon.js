@@ -65,6 +65,8 @@ export class WeaponSystem {
     this.tmpGripOffset = new THREE.Vector3();
     this.gripPose = {
       aiming: false,
+      rightGripCenter: new THREE.Vector3(),
+      leftGripCenter: new THREE.Vector3(),
       rightGrip: new THREE.Vector3(),
       leftGrip: new THREE.Vector3(),
       muzzle: new THREE.Vector3(),
@@ -1157,10 +1159,26 @@ export class WeaponSystem {
     rightHandIKBlend = 0
   ) {
     const model = this.active.model;
-    model.rightGrip.getWorldPosition(this.gripPose.rightGrip);
-    model.leftGrip.getWorldPosition(this.gripPose.leftGrip);
-    model.muzzle.getWorldPosition(this.gripPose.muzzle);
-    model.group.getWorldQuaternion(this.gripPose.weaponQuaternion);
+    model.rightGrip.getWorldPosition(
+      this.gripPose.rightGripCenter
+    );
+    model.leftGrip.getWorldPosition(
+      this.gripPose.leftGripCenter
+    );
+
+    this.gripPose.rightGrip.copy(
+      this.gripPose.rightGripCenter
+    );
+    this.gripPose.leftGrip.copy(
+      this.gripPose.leftGripCenter
+    );
+
+    model.muzzle.getWorldPosition(
+      this.gripPose.muzzle
+    );
+    model.group.getWorldQuaternion(
+      this.gripPose.weaponQuaternion
+    );
 
     this.tmpGripForwardWorld
       .set(0, 0, -1)
