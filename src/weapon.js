@@ -917,7 +917,7 @@ export class WeaponSystem {
 
         this.updateGripPose(
           shoulderIK,
-          shoulderIK,
+          false,
           THREE.MathUtils.lerp(
             cfg.supportHandIKLambda ?? 90,
             cfg.shoulderSupportIKLambda ?? 150,
@@ -1019,7 +1019,7 @@ export class WeaponSystem {
         );
 
         model.updateWorldMatrix(true, true);
-        this.updateGripPose(true, true);
+        this.updateGripPose(true, false);
         return;
       }
     }
@@ -1101,7 +1101,7 @@ export class WeaponSystem {
       );
 
       model.updateWorldMatrix(true, true);
-      this.updateGripPose(false, Boolean(cfg.handOwnedCarry));
+      this.updateGripPose(false, false);
       return;
     }
 

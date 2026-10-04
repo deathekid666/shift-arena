@@ -1546,7 +1546,12 @@ function updatePose(character, dt, state) {
     );
   }
 
-  animateScoutAccessories(character, locomotion, dt);
+  animateScoutAccessories(
+    character,
+    locomotion,
+    dt,
+    state
+  );
 }
 
 function updateLocomotionLayer(character, dt, state) {
@@ -1882,57 +1887,150 @@ function resolveLocomotionState({
   return 'WALK';
 }
 
-function animateScoutAccessories(character, locomotion, dt) {
-  const antennae = character.accessories?.antennaRoot;
+function animateScoutAccessories(
+  character,
+  locomotion,
+  dt,
+  state = {}
+) {
+  const adsBlend = THREE.MathUtils.clamp(
+    state.weaponAimBlend ??
+      (state.aiming ? 1 : 0),
+    0,
+    1
+  );
+
+  const weaponCloseView =
+    state.weaponEquipped &&
+    adsBlend > 0.08;
+
+  const antennae =
+    character.accessories?.antennaRoot;
+
   if (antennae) {
     const fast =
       locomotion.stateName === 'RUN' ||
       locomotion.stateName === 'SPRINT';
+
     const moving =
       fast ||
       locomotion.stateName === 'WALK' ||
       locomotion.stateName === 'JOG' ||
       locomotion.stateName === 'CROUCH_WALK' ||
-      locomotion.stateName === 'CROUCH_BLEND_MOVE';
+      locomotion.stateName ===
+        'CROUCH_BLEND_MOVE';
 
-    const targetX = fast
+    let targetX = fast
       ? -0.10 +
-        Math.cos(character.locomotion.phase) * 0.035
+        Math.cos(
+          character.locomotion.phase
+        ) *
+          0.035
       : moving
         ? -0.045 +
-          Math.cos(character.locomotion.phase) * 0.018
+          Math.cos(
+            character.locomotion.phase
+          ) *
+            0.018
         : 0;
 
-    antennae.rotation.x = THREE.MathUtils.damp(
-      antennae.rotation.x,
-      targetX,
-      7,
-      dt
-    );
-    antennae.rotation.z = THREE.MathUtils.damp(
-      antennae.rotation.z,
-      -locomotion.localStrafe * 0.055,
-      8,
-      dt
-    );
+    let targetZ =
+      -locomotion.localStrafe *
+      0.055;
+
+    // Close ADS magnifies tiny accessory motion. Lock secondary cosmetic
+    // motion to the stable head/chest pose while zoomed; this removes the
+    // "clothes/hair are shaking" read without touching gameplay animation.
+    if (weaponCloseView) {
+      targetX = 0;
+      targetZ = 0;
+    }
+
+    antennae.rotation.x =
+      THREE.MathUtils.damp(
+        antennae.rotation.x,
+        targetX,
+        weaponCloseView ? 22 : 7,
+        dt
+      );
+
+    antennae.rotation.z =
+      THREE.MathUtils.damp(
+        antennae.rotation.z,
+        targetZ,
+        weaponCloseView ? 22 : 8,
+        dt
+      );
+
+    if (
+      weaponCloseView &&
+      Math.abs(
+        antennae.rotation.x
+      ) < 0.00035
+    ) {
+      antennae.rotation.x = 0;
+    }
+
+    if (
+      weaponCloseView &&
+      Math.abs(
+        antennae.rotation.z
+      ) < 0.00035
+    ) {
+      antennae.rotation.z = 0;
+    }
   }
 
-  const shell = character.accessories?.shellRoot;
-  if (shell) {
-    // The shell also carries the short elytra/wings. Driving this entire
-    // assembly at twice the gait frequency made the hero silhouette look like
-    // it was vibrating even after the actual skeleton had been stabilized.
-    // Keep the authored body animation responsible for gait motion and let the
-    // shell settle to one stable mount angle.
-    shell.rotation.x = THREE.MathUtils.damp(
-      shell.rotation.x,
-      -0.055,
-      7,
-      dt
-    );
+  const shell =
+    character.accessories?.shellRoot;
 
-    if (Math.abs(shell.rotation.x + 0.055) < 0.0005) {
+  if (shell) {
+    shell.rotation.x =
+      THREE.MathUtils.damp(
+        shell.rotation.x,
+        -0.055,
+        weaponCloseView ? 22 : 7,
+        dt
+      );
+
+    shell.rotation.y =
+      THREE.MathUtils.damp(
+        shell.rotation.y,
+        0,
+        weaponCloseView ? 22 : 10,
+        dt
+      );
+
+    shell.rotation.z =
+      THREE.MathUtils.damp(
+        shell.rotation.z,
+        0,
+        weaponCloseView ? 22 : 10,
+        dt
+      );
+
+    if (
+      Math.abs(
+        shell.rotation.x + 0.055
+      ) < 0.00035
+    ) {
       shell.rotation.x = -0.055;
+    }
+
+    if (
+      weaponCloseView &&
+      Math.abs(shell.rotation.y) <
+        0.00035
+    ) {
+      shell.rotation.y = 0;
+    }
+
+    if (
+      weaponCloseView &&
+      Math.abs(shell.rotation.z) <
+        0.00035
+    ) {
+      shell.rotation.z = 0;
     }
   }
 }
@@ -2035,6 +2133,53 @@ function applyWeaponAimPose(
       shoulder,
     0,
     34,
+    dt
+  );
+
+  // Grip sockets define positions only. Keep the hands on a stable local
+  // wrist pose and let arm IK solve the grip positions; do not invent a
+  // weapon-space hand quaternion.
+  stableWeaponBoneEuler(
+    bones.rightHand,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.06,
+      -0.10,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      -0.015,
+      -0.025,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      0.025,
+      0.040,
+      ads
+    ),
+    28,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.leftHand,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.04,
+      -0.07,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      0.010,
+      0.018,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      -0.020,
+      -0.030,
+      ads
+    ),
+    28,
     dt
   );
 
@@ -2193,6 +2338,26 @@ function applyWeaponCarryPose(
     20,
     dt
   );
+
+  stableWeaponBoneEuler(
+    bones.rightHand,
+    baseRotations,
+    -0.055,
+    -0.012,
+    0.022,
+    24,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.leftHand,
+    baseRotations,
+    -0.035,
+    0.008,
+    -0.018,
+    24,
+    dt
+  );
 }
 
 const IK_TMP = {
@@ -2218,6 +2383,64 @@ const IK_TMP = {
   desiredWorldQ: new THREE.Quaternion(),
   desiredLocalQ: new THREE.Quaternion()
 };
+
+const WEAPON_IK_TARGET_FILTER =
+  new WeakMap();
+
+function getWeaponIkTargetFilter(
+  character
+) {
+  let state =
+    WEAPON_IK_TARGET_FILTER.get(
+      character
+    );
+
+  if (!state) {
+    state = {
+      initialized: false,
+      right: new THREE.Vector3(),
+      left: new THREE.Vector3()
+    };
+
+    WEAPON_IK_TARGET_FILTER.set(
+      character,
+      state
+    );
+  }
+
+  return state;
+}
+
+function filterWeaponIkTarget(
+  current,
+  target,
+  dt,
+  {
+    lambda = 58,
+    deadzone = 0.0012
+  } = {}
+) {
+  const distance =
+    current.distanceTo(target);
+
+  if (distance <= deadzone) {
+    return current;
+  }
+
+  current.lerp(
+    target,
+    1 - Math.exp(-lambda * dt)
+  );
+
+  if (
+    current.distanceTo(target) <
+    deadzone * 0.35
+  ) {
+    current.copy(target);
+  }
+
+  return current;
+}
 
 function applyTwoHandWeaponIK(character, gripPose, dt) {
   const { bones } = character;
@@ -2286,7 +2509,9 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       bones.rightUpperArm,
       bones.rightLowerArm,
       bones.rightHand,
-      gripPose.rightGrip,
+      getWeaponIkTargetFilter(
+        character
+      ).right,
       IK_TMP.pole,
       THREE.MathUtils.lerp(
         10,
@@ -2299,24 +2524,7 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     character.root.updateWorldMatrix(true, true);
   }
 
-  if (
-    rightIKBlend > 0.001 &&
-    gripPose.rightHandOrient &&
-    bones.rightHand
-  ) {
-    alignWeaponHandToSocket(
-      character,
-      bones.rightHand,
-      gripPose.weaponQuaternion,
-      THREE.MathUtils.lerp(
-        8,
-        THREE.MathUtils.lerp(32, 44, gripPose.adsBlend ?? 0),
-        rightIKBlend
-      ),
-      dt
-    );
-    character.root.updateWorldMatrix(true, true);
-  }
+
 
   // The support elbow drops slightly and tucks inward as ADS tightens,
   // matching a shouldered rifle silhouette instead of a wide T-pose bend.
@@ -2324,6 +2532,59 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     gripPose.adsBlend ?? 0,
     0,
     1
+  );
+
+  const targetFilter =
+    getWeaponIkTargetFilter(character);
+
+  if (!targetFilter.initialized) {
+    targetFilter.right.copy(
+      gripPose.rightGrip
+    );
+    targetFilter.left.copy(
+      gripPose.leftGrip
+    );
+    targetFilter.initialized = true;
+  }
+
+  filterWeaponIkTarget(
+    targetFilter.right,
+    gripPose.rightGrip,
+    dt,
+    {
+      lambda:
+        THREE.MathUtils.lerp(
+          62,
+          78,
+          supportAds
+        ),
+      deadzone:
+        THREE.MathUtils.lerp(
+          0.0010,
+          0.0018,
+          supportAds
+        )
+    }
+  );
+
+  filterWeaponIkTarget(
+    targetFilter.left,
+    gripPose.leftGrip,
+    dt,
+    {
+      lambda:
+        THREE.MathUtils.lerp(
+          60,
+          76,
+          supportAds
+        ),
+      deadzone:
+        THREE.MathUtils.lerp(
+          0.0010,
+          0.0018,
+          supportAds
+        )
+    }
   );
 
   bones.leftUpperArm.getWorldPosition(IK_TMP.shoulder);
@@ -2347,7 +2608,9 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     bones.leftUpperArm,
     bones.leftLowerArm,
     bones.leftHand,
-    gripPose.leftGrip,
+    getWeaponIkTargetFilter(
+      character
+    ).left,
     IK_TMP.pole,
     Math.max(
       gripPose.leftHandLambda ?? 30,
