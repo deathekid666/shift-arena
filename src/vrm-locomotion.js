@@ -223,8 +223,9 @@ export async function createVrmLocomotionController(character, vrm) {
 
     for (const [key, action] of Object.entries(actionByKey)) {
       if (!action) continue;
-      action.weight =
-        weights[key] * norm * masterWeight;
+      action.setEffectiveWeight(
+        weights[key] * norm * masterWeight
+      );
     }
   }
 
@@ -254,6 +255,7 @@ export async function createVrmLocomotionController(character, vrm) {
     smoothedStrafe: 0,
     smoothedForward: 1,
     slideExitTail: 0,
+    dominantGait: 'move',
     slideStage: 'none',
     slideExitActive: false,
 
@@ -544,35 +546,48 @@ export async function createVrmLocomotionController(character, vrm) {
       };
 
       if (movementBlend > 0.035) {
-        // All moving clips share one normalized foot phase. Because every
-        // non-source action is synchronized each frame, changing the dominant
-        // gait no longer causes a foot-pop when jog/sprint/crouch crossfade.
-        const standingAction =
-          sprintBlend > 0.56 ? sprint : move;
-        const phaseSource =
+        const nextDominantGait =
           crouchBlend >= 0.56
-            ? crouchMove
-            : standingAction;
+            ? 'crouchMove'
+            : sprintBlend > 0.56
+              ? 'sprint'
+              : 'move';
 
-        const sourceDuration = Math.max(
+        // Important: never force AnimationAction.time every frame.
+        // Three.js's mixer should advance clips continuously. We only align
+        // normalized phase once when the dominant gait actually changes.
+        if (nextDominantGait !== this.dominantGait) {
+          const previousAction =
+            actionByKey[this.dominantGait] ?? move;
+          const nextAction =
+            actionByKey[nextDominantGait] ?? move;
+
+          const previousDuration = Math.max(
+            0.001,
+            previousAction.getClip().duration
+          );
+          const nextDuration = Math.max(
+            0.001,
+            nextAction.getClip().duration
+          );
+
+          const normalized =
+            ((previousAction.time / previousDuration) % 1 + 1) % 1;
+
+          nextAction.time = normalized * nextDuration;
+          this.dominantGait = nextDominantGait;
+        }
+
+        const phaseAction =
+          actionByKey[this.dominantGait] ?? move;
+        const phaseDuration = Math.max(
           0.001,
-          phaseSource.getClip().duration
+          phaseAction.getClip().duration
         );
-        const normalized =
-          ((phaseSource.time / sourceDuration) % 1 + 1) % 1;
+        const normalizedPhase =
+          ((phaseAction.time / phaseDuration) % 1 + 1) % 1;
 
-        const syncAction = (action) => {
-          if (action === phaseSource) return;
-          action.time =
-            normalized *
-            Math.max(0.001, action.getClip().duration);
-        };
-
-        syncAction(move);
-        syncAction(sprint);
-        syncAction(crouchMove);
-
-        this.phase = normalized * Math.PI * 2;
+        this.phase = normalizedPhase * Math.PI * 2;
       }
 
       // Targets already move smoothly through crouchBlend, so this high

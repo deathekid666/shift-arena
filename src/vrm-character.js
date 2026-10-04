@@ -281,11 +281,6 @@ function buildCharacterInterface({
       landing: 0,
       moveBlend: 0
     },
-    motionPolish: {
-      speed: 0,
-      strafe: 0,
-      forward: 1
-    },
     authoredLocomotion: null,
     authoredLocomotionReady: null,
     update(dt, state = {}) {
@@ -1308,15 +1303,6 @@ function updatePose(character, dt, state) {
 
   if (fang) applyRealFangPose(bones, baseRotations, fang, dt);
 
-  if (authored) {
-    applyAuthoredLocomotionPolish(
-      character,
-      dt,
-      state,
-      locomotion
-    );
-  }
-
   if (!authored) {
     dampBoneEuler(
       bones.head,
@@ -1663,117 +1649,6 @@ function resolveLocomotionState({
   if (speed < 0.28) return 'IDLE';
   if (sprinting || speed > 6.15) return 'RUN';
   return 'WALK';
-}
-
-function applyAuthoredLocomotionPolish(
-  character,
-  dt,
-  state,
-  locomotion
-) {
-  const { bones, motionPolish } = character;
-  const speed = Math.max(0, state.speed ?? 0);
-  const speedRatio = THREE.MathUtils.clamp(
-    speed / 8.4,
-    0,
-    1
-  );
-
-  motionPolish.speed = THREE.MathUtils.damp(
-    motionPolish.speed,
-    speedRatio,
-    speedRatio > motionPolish.speed ? 12 : 9,
-    dt
-  );
-  motionPolish.strafe = THREE.MathUtils.damp(
-    motionPolish.strafe,
-    locomotion.localStrafe ?? 0,
-    11,
-    dt
-  );
-  motionPolish.forward = THREE.MathUtils.damp(
-    motionPolish.forward,
-    locomotion.localForward ?? 1,
-    11,
-    dt
-  );
-
-  if (
-    state.grounded === false ||
-    state.sliding ||
-    motionPolish.speed < 0.025
-  ) {
-    return;
-  }
-
-  const combat =
-    Boolean(state.combat) ||
-    Boolean(state.aiming);
-  const crouch = THREE.MathUtils.clamp(
-    state.crouchBlend ??
-      (state.crouching ? 1 : 0),
-    0,
-    1
-  );
-  const sprint =
-    THREE.MathUtils.clamp(
-      state.sprintBlend ??
-        (state.sprinting ? 1 : 0),
-      0,
-      1
-    );
-
-  const forwardLean =
-    motionPolish.speed *
-    THREE.MathUtils.lerp(0.030, 0.090, sprint) *
-    (1 - crouch * 0.45);
-
-  const signedLean =
-    motionPolish.forward < -0.20
-      ? -forwardLean * 0.38
-      : forwardLean;
-
-  const strafeBank =
-    -motionPolish.strafe *
-    motionPolish.speed *
-    (combat ? 0.012 : 0.028) *
-    (1 - crouch * 0.40);
-
-  // Keep authored locomotion stable. Do not add periodic pelvis/torso
-  // oscillation on top of the mixer; the source clips already contain their
-  // own gait sway and double-applying it causes visible vibration.
-  const strideRoll = 0;
-
-  // These are true additive offsets on top of the authored pose. The mixer
-  // rewrites the bones next frame, so the offsets never accumulate.
-  applyAdditiveEuler(
-    bones.hips,
-    -signedLean * 0.34,
-    motionPolish.strafe * 0.010,
-    strafeBank * 0.48 + strideRoll
-  );
-
-  applyAdditiveEuler(
-    bones.spine,
-    signedLean * 0.30,
-    -motionPolish.strafe * 0.008,
-    -strafeBank * 0.30
-  );
-  applyAdditiveEuler(
-    bones.chest,
-    signedLean * 0.22,
-    -motionPolish.strafe * 0.006,
-    -strafeBank * 0.20
-  );
-
-  if (!combat) {
-    applyAdditiveEuler(
-      bones.head,
-      0,
-      motionPolish.strafe * 0.008,
-      strafeBank * -0.18
-    );
-  }
 }
 
 function animateScoutAccessories(character, locomotion, dt) {
@@ -2320,17 +2195,6 @@ function easeOut(t) {
 function easeInOut(t) {
   t = THREE.MathUtils.clamp(t, 0, 1);
   return t * t * (3 - 2 * t);
-}
-
-const ADDITIVE_EULER = new THREE.Euler();
-const ADDITIVE_QUATERNION = new THREE.Quaternion();
-
-function applyAdditiveEuler(node, x, y, z) {
-  if (!node) return;
-
-  ADDITIVE_EULER.set(x, y, z, 'XYZ');
-  ADDITIVE_QUATERNION.setFromEuler(ADDITIVE_EULER);
-  node.quaternion.multiply(ADDITIVE_QUATERNION);
 }
 
 function setBoneEuler(node, baseRotations, x, y, z, blend = 1) {
