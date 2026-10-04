@@ -104,6 +104,8 @@ export class WeaponSystem {
         raiseAnchorActive: false,
         raiseAnchorPosition: new THREE.Vector3(),
         raiseAnchorQuaternion: new THREE.Quaternion(),
+        bodyGripReady: false,
+        bodyGripLocal: new THREE.Vector3(),
         bobTime: 0,
         pumpSoundPlayed: true
       };
@@ -679,6 +681,30 @@ export class WeaponSystem {
             1
           );
 
+        // Capture a stable body-space anchor once. The old build sampled the
+        // animated chest/shoulder every frame; any clip or IK micro-motion was
+        // therefore injected straight back into the gun and sleeves.
+        if (!state.bodyGripReady) {
+          this.tmpGripLocal.copy(chest);
+          this.player.group.worldToLocal(
+            this.tmpGripLocal
+          );
+
+          this.tmpHandLocal.copy(shoulder);
+          this.player.group.worldToLocal(
+            this.tmpHandLocal
+          );
+
+          state.bodyGripLocal
+            .copy(this.tmpGripLocal)
+            .lerp(
+              this.tmpHandLocal,
+              0.48
+            );
+
+          state.bodyGripReady = true;
+        }
+
         // Ready pose follows character facing. Firing/ADS progressively align
         // the whole weapon with the camera aim instead of rotating only an arm.
         this.player.group.getWorldQuaternion(
@@ -731,93 +757,59 @@ export class WeaponSystem {
           aimCorrection
         );
 
-        // Build a grip anchor BETWEEN upper chest and right shoulder. This is
-        // the silhouette missing from the current build: the pistol grip stays
-        // close to the chest instead of hanging at arm's length.
-        const shoulderSeat =
+        // Fortnite-style stable root-space grip. The weapon sits across the
+        // chest at rest, rises slightly for hip-fire, then moves inward/up for
+        // ADS. Position does not inherit per-frame chest animation noise.
+        const readyGripX = 0.010;
+        const readyGripY = -0.090;
+        const readyGripZ = -0.105;
+
+        const fireGripX =
           THREE.MathUtils.lerp(
-            0.46,
-            THREE.MathUtils.lerp(
-              0.56,
-              0.62,
-              adsBlend
-            ),
+            0.006,
+            -0.006,
+            adsBlend
+          );
+        const fireGripY =
+          THREE.MathUtils.lerp(
+            -0.045,
+            -0.010,
+            adsBlend
+          );
+        const fireGripZ =
+          THREE.MathUtils.lerp(
+            -0.155,
+            -0.185,
+            adsBlend
+          );
+
+        const crouchDrop =
+          (this.player.crouchVisual ?? 0) *
+          0.235;
+
+        this.tmpGripLocal
+          .copy(state.bodyGripLocal);
+
+        this.tmpGripLocal.x +=
+          THREE.MathUtils.lerp(
+            readyGripX,
+            fireGripX,
             readyToAim
           );
 
-        this.tmpGripWorld
-          .copy(chest)
-          .lerp(
-            shoulder,
-            shoulderSeat
-          );
-
-        this.tmpAimForward
-          .set(0, 0, -1)
-          .applyQuaternion(
-            this.tmpDesiredWorldQ
-          )
-          .normalize();
-
-        this.tmpAimRight
-          .set(1, 0, 0)
-          .applyQuaternion(
-            this.tmpDesiredWorldQ
-          )
-          .normalize();
-
-        this.tmpAimUp
-          .set(0, 1, 0)
-          .applyQuaternion(
-            this.tmpDesiredWorldQ
-          )
-          .normalize();
-
-        const gripForward =
+        this.tmpGripLocal.y +=
           THREE.MathUtils.lerp(
-            0.135,
-            THREE.MathUtils.lerp(
-              0.175,
-              0.195,
-              adsBlend
-            ),
+            readyGripY,
+            fireGripY,
             readyToAim
-          );
+          ) -
+          crouchDrop;
 
-        const gripRight =
+        this.tmpGripLocal.z +=
           THREE.MathUtils.lerp(
-            0.020,
-            THREE.MathUtils.lerp(
-              0.012,
-              -0.004,
-              adsBlend
-            ),
+            readyGripZ,
+            fireGripZ,
             readyToAim
-          );
-
-        const gripUp =
-          THREE.MathUtils.lerp(
-            -0.115,
-            THREE.MathUtils.lerp(
-              -0.075,
-              -0.045,
-              adsBlend
-            ),
-            readyToAim
-          );
-
-        this.tmpGripWorld
-          .addScaledVector(
-            this.tmpAimForward,
-            gripForward
-          )
-          .addScaledVector(
-            this.tmpAimRight,
-            gripRight
-          )
-          .addScaledVector(
-            this.tmpAimUp,
-            gripUp
           );
 
         // Convert the independent grip target into the weapon group's local
@@ -833,13 +825,6 @@ export class WeaponSystem {
           .multiply(
             this.tmpDesiredWorldQ
           );
-
-        this.tmpGripLocal.copy(
-          this.tmpGripWorld
-        );
-        this.player.group.worldToLocal(
-          this.tmpGripLocal
-        );
 
         this.tmpGripOffset
           .copy(
@@ -1333,6 +1318,8 @@ export class WeaponSystem {
     nextState.adsBlend = 0;
     nextState.wasShoulderRequested = false;
     nextState.raiseAnchorActive = false;
+    nextState.bodyGripReady = false;
+    nextState.bodyGripLocal.set(0, 0, 0);
 
     this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
@@ -1434,6 +1421,8 @@ export class WeaponSystem {
       entry.state.adsBlend = 0;
       entry.state.wasShoulderRequested = false;
       entry.state.raiseAnchorActive = false;
+      entry.state.bodyGripReady = false;
+      entry.state.bodyGripLocal.set(0, 0, 0);
       entry.state.raiseAnchorPosition.copy(
         entry.model.group.position
       );

@@ -2537,17 +2537,20 @@ function filterWeaponIkTarget(
   target,
   dt,
   {
-    lambda = 58,
-    deadzone = 0.0012
+    lambda = 62,
+    epsilon = 0.00004
   } = {}
 ) {
   const distance =
     current.distanceTo(target);
 
-  if (distance <= deadzone) {
+  if (distance <= epsilon) {
+    current.copy(target);
     return current;
   }
 
+  // One continuous exponential filter. No deadzone means the hand never
+  // sticks, waits, then catches up in a visible micro-step.
   current.lerp(
     target,
     1 - Math.exp(-lambda * dt)
@@ -2555,7 +2558,7 @@ function filterWeaponIkTarget(
 
   if (
     current.distanceTo(target) <
-    deadzone * 0.35
+    epsilon
   ) {
     current.copy(target);
   }
@@ -2631,16 +2634,11 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     {
       lambda:
         THREE.MathUtils.lerp(
-          72,
-          88,
+          68,
+          78,
           ads
         ),
-      deadzone:
-        THREE.MathUtils.lerp(
-          0.0012,
-          0.0018,
-          ads
-        )
+      epsilon: 0.00004
     }
   );
 
@@ -2651,16 +2649,11 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     {
       lambda:
         THREE.MathUtils.lerp(
-          68,
-          84,
+          64,
+          76,
           ads
         ),
-      deadzone:
-        THREE.MathUtils.lerp(
-          0.0012,
-          0.0018,
-          ads
-        )
+      epsilon: 0.00004
     }
   );
 
@@ -2926,9 +2919,11 @@ function rotateBoneChildToward(
     IK_TMP.desiredLocalQ.copy(IK_TMP.desiredWorldQ);
   }
 
-  bone.quaternion.slerp(
-    IK_TMP.desiredLocalQ,
-    1 - Math.exp(-lambda * dt)
+  // Weapon target filtering already provides the visual transition. Applying a
+  // second frame-time-dependent spring here makes the sleeves alternate
+  // between the base pose and IK correction. Use the exact final IK solution.
+  bone.quaternion.copy(
+    IK_TMP.desiredLocalQ
   );
 
   root.updateWorldMatrix(true, true);
