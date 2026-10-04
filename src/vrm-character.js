@@ -2492,6 +2492,7 @@ const IK_TMP = {
   elbowTarget: new THREE.Vector3(),
   currentDir: new THREE.Vector3(),
   desiredDir: new THREE.Vector3(),
+  reachableTarget: new THREE.Vector3(),
   rootQ: new THREE.Quaternion(),
   right: new THREE.Vector3(),
   forward: new THREE.Vector3(),
@@ -2507,6 +2508,53 @@ const IK_TMP = {
 
 const WEAPON_IK_TARGET_FILTER =
   new WeakMap();
+
+const WEAPON_IK_LENGTH_CACHE =
+  new WeakMap();
+
+function getStableArmLengths(
+  upper,
+  lower,
+  hand
+) {
+  let lengths =
+    WEAPON_IK_LENGTH_CACHE.get(upper);
+
+  if (!lengths) {
+    upper.updateWorldMatrix(true, false);
+    lower.updateWorldMatrix(true, false);
+    hand.updateWorldMatrix(true, false);
+
+    const shoulder =
+      new THREE.Vector3();
+    const elbow =
+      new THREE.Vector3();
+    const wrist =
+      new THREE.Vector3();
+
+    upper.getWorldPosition(shoulder);
+    lower.getWorldPosition(elbow);
+    hand.getWorldPosition(wrist);
+
+    lengths = {
+      upper: Math.max(
+        0.001,
+        shoulder.distanceTo(elbow)
+      ),
+      lower: Math.max(
+        0.001,
+        elbow.distanceTo(wrist)
+      )
+    };
+
+    WEAPON_IK_LENGTH_CACHE.set(
+      upper,
+      lengths
+    );
+  }
+
+  return lengths;
+}
 
 function getWeaponIkTargetFilter(
   character
@@ -2770,78 +2818,146 @@ function solveTwoBoneIK(
 ) {
   root.updateWorldMatrix(true, true);
 
-  upper.getWorldPosition(IK_TMP.shoulder);
-  lower.getWorldPosition(IK_TMP.elbow);
-  hand.getWorldPosition(IK_TMP.hand);
+  upper.getWorldPosition(
+    IK_TMP.shoulder
+  );
+  lower.getWorldPosition(
+    IK_TMP.elbow
+  );
+  hand.getWorldPosition(
+    IK_TMP.hand
+  );
 
-  const upperLen = Math.max(
-    0.001,
-    IK_TMP.shoulder.distanceTo(IK_TMP.elbow)
-  );
-  const lowerLen = Math.max(
-    0.001,
-    IK_TMP.elbow.distanceTo(IK_TMP.hand)
-  );
+  const lengths =
+    getStableArmLengths(
+      upper,
+      lower,
+      hand
+    );
+
+  const upperLen = lengths.upper;
+  const lowerLen = lengths.lower;
 
   IK_TMP.toTarget
     .copy(targetWorld)
     .sub(IK_TMP.shoulder);
 
-  let targetDist = IK_TMP.toTarget.length();
-  if (targetDist < 0.001) return;
+  const rawTargetDist =
+    IK_TMP.toTarget.length();
 
-  const minReach = Math.abs(upperLen - lowerLen) + 0.003;
-  const maxReach = upperLen + lowerLen - 0.003;
-  targetDist = THREE.MathUtils.clamp(
-    targetDist,
-    minReach,
-    maxReach
-  );
+  if (rawTargetDist < 0.001) {
+    return;
+  }
 
   IK_TMP.dir
     .copy(IK_TMP.toTarget)
     .normalize();
 
+  // Never let the chain become perfectly straight. A straight two-bone chain
+  // has an undefined bend plane, so tiny floating-point changes can make the
+  // elbow alternate sides and visibly shake the sleeve/hand.
+  const totalLen =
+    upperLen + lowerLen;
+
+  const bendReserve =
+    Math.max(
+      0.028,
+      totalLen * 0.075
+    );
+
+  const minReach =
+    Math.abs(
+      upperLen - lowerLen
+    ) + 0.006;
+
+  const maxReach =
+    Math.max(
+      minReach + 0.001,
+      totalLen - bendReserve
+    );
+
+  const targetDist =
+    THREE.MathUtils.clamp(
+      rawTargetDist,
+      minReach,
+      maxReach
+    );
+
+  // IMPORTANT: both bones must solve toward this same reachable target.
+  // The old code used clamped distance for the elbow but the original,
+  // possibly unreachable, target for the forearm.
+  IK_TMP.reachableTarget
+    .copy(IK_TMP.shoulder)
+    .addScaledVector(
+      IK_TMP.dir,
+      targetDist
+    );
+
   IK_TMP.poleDir
     .copy(poleWorld)
     .sub(IK_TMP.shoulder);
 
-  // Remove component along the shoulder->hand direction to get the bend plane.
   IK_TMP.poleDir.addScaledVector(
     IK_TMP.dir,
-    -IK_TMP.poleDir.dot(IK_TMP.dir)
+    -IK_TMP.poleDir.dot(
+      IK_TMP.dir
+    )
   );
 
-  if (IK_TMP.poleDir.lengthSq() < 0.000001) {
+  if (
+    IK_TMP.poleDir.lengthSq() <
+    0.000004
+  ) {
     IK_TMP.poleDir
       .copy(IK_TMP.right)
       .addScaledVector(
         IK_TMP.dir,
-        -IK_TMP.right.dot(IK_TMP.dir)
+        -IK_TMP.right.dot(
+          IK_TMP.dir
+        )
       );
   }
+
   IK_TMP.poleDir.normalize();
 
-  const cosShoulder = THREE.MathUtils.clamp(
-    (
-      upperLen * upperLen +
-      targetDist * targetDist -
-      lowerLen * lowerLen
-    ) /
-      (2 * upperLen * targetDist),
-    -1,
-    1
-  );
+  const cosShoulder =
+    THREE.MathUtils.clamp(
+      (
+        upperLen * upperLen +
+        targetDist * targetDist -
+        lowerLen * lowerLen
+      ) /
+        (
+          2 *
+          upperLen *
+          targetDist
+        ),
+      -1,
+      1
+    );
 
-  const along = cosShoulder * upperLen;
-  const bend = Math.sqrt(
-    Math.max(0, upperLen * upperLen - along * along)
-  );
+  const along =
+    cosShoulder * upperLen;
+
+  const bend =
+    Math.sqrt(
+      Math.max(
+        0,
+        upperLen * upperLen -
+          along * along
+      )
+    );
 
   IK_TMP.elbowTarget
     .copy(IK_TMP.shoulder)
-    .addScaledVector(IK_TMP.dir, along)
-    .addScaledVector(IK_TMP.poleDir, bend);
+    .addScaledVector(
+      IK_TMP.dir,
+      along
+    )
+    .addScaledVector(
+      IK_TMP.poleDir,
+      bend
+    );
 
   rotateBoneChildToward(
     root,
@@ -2852,19 +2968,24 @@ function solveTwoBoneIK(
     dt
   );
 
-  root.updateWorldMatrix(true, true);
+  root.updateWorldMatrix(
+    true,
+    true
+  );
 
-  // Recompute after the upper-arm correction.
   rotateBoneChildToward(
     root,
     lower,
     hand,
-    targetWorld,
+    IK_TMP.reachableTarget,
     lambda,
     dt
   );
 
-  root.updateWorldMatrix(true, true);
+  root.updateWorldMatrix(
+    true,
+    true
+  );
 }
 
 function rotateBoneChildToward(
