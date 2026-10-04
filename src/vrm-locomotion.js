@@ -262,6 +262,7 @@ export async function createVrmLocomotionController(character, vrm) {
     smoothedForward: 1,
     slideExitTail: 0,
     dominantGait: 'move',
+    wasMoving: false,
     slideStage: 'none',
     slideExitActive: false,
 
@@ -478,29 +479,50 @@ export async function createVrmLocomotionController(character, vrm) {
       const standingBlend = 1 - crouchBlend;
       const backwards = this.smoothedForward < -0.12;
 
+      // Let locomotion cadence actually settle as movement fades out.
+      // Previously the hidden walk/crouch actions never went below ~0.3x,
+      // so they kept cycling under idle and could re-enter on a random foot.
+      const gaitActivity = THREE.MathUtils.smoothstep(
+        this.movementAmount,
+        0.015,
+        0.42
+      );
+
       const moveTargetScale =
-        THREE.MathUtils.clamp(speed / 3.55, 0.34, 1.56);
+        THREE.MathUtils.lerp(
+          0,
+          THREE.MathUtils.clamp(speed / 3.55, 0.34, 1.56),
+          gaitActivity
+        );
       const sprintTargetScale =
-        THREE.MathUtils.clamp(speed / 6.05, 0.68, 1.48);
+        THREE.MathUtils.lerp(
+          0,
+          THREE.MathUtils.clamp(speed / 6.05, 0.68, 1.48),
+          gaitActivity
+        );
       const crouchTargetScale =
-        THREE.MathUtils.clamp(speed / 2.8, 0.32, 1.24);
+        THREE.MathUtils.lerp(
+          0,
+          THREE.MathUtils.clamp(speed / 2.8, 0.32, 1.24),
+          gaitActivity
+        );
 
       this.moveTimeScale = THREE.MathUtils.damp(
         this.moveTimeScale,
         moveTargetScale,
-        12,
+        moveTargetScale > this.moveTimeScale ? 13 : 17,
         dt
       );
       this.sprintTimeScale = THREE.MathUtils.damp(
         this.sprintTimeScale,
         sprintTargetScale,
-        12,
+        sprintTargetScale > this.sprintTimeScale ? 13 : 17,
         dt
       );
       this.crouchTimeScale = THREE.MathUtils.damp(
         this.crouchTimeScale,
         crouchTargetScale,
-        12,
+        crouchTargetScale > this.crouchTimeScale ? 13 : 17,
         dt
       );
 
@@ -552,57 +574,88 @@ export async function createVrmLocomotionController(character, vrm) {
       };
 
       if (movementBlend > 0.035) {
+        // Choose the incoming gait early, before it has enough weight to make
+        // a mismatched foot phase visible. This keeps walk->sprint and
+        // walk->crouch transitions from briefly blending opposite legs.
         const nextDominantGait =
-          crouchBlend >= 0.56
+          crouchBlend >= 0.12
             ? 'crouchMove'
-            : sprintBlend > 0.56
+            : sprintBlend > 0.12
               ? 'sprint'
               : 'move';
 
-        // Important: never force AnimationAction.time every frame.
-        // Three.js's mixer should advance clips continuously. We only align
-        // normalized phase once when the dominant gait actually changes.
-        if (nextDominantGait !== this.dominantGait) {
-          const previousAction =
-            actionByKey[this.dominantGait] ?? move;
-          const nextAction =
-            actionByKey[nextDominantGait] ?? move;
+        let referenceAction =
+          actionByKey[this.dominantGait] ?? move;
+        let referencePhase =
+          normalizedActionPhase(referenceAction);
 
-          const previousDuration = Math.max(
-            0.001,
-            previousAction.getClip().duration
-          );
-          const nextDuration = Math.max(
-            0.001,
-            nextAction.getClip().duration
-          );
+        if (!this.wasMoving) {
+          // A fresh movement start should never depend on how long invisible
+          // gait clips happened to run while the player was idle.
+          referencePhase = 0;
 
-          const normalized =
-            ((previousAction.time / previousDuration) % 1 + 1) % 1;
+          for (const key of ['move', 'sprint', 'crouchMove']) {
+            setActionNormalizedPhase(actionByKey[key], referencePhase);
+          }
 
-          nextAction.time = normalized * nextDuration;
           this.dominantGait = nextDominantGait;
+          referenceAction =
+            actionByKey[this.dominantGait] ?? move;
+        } else {
+          // Keep only genuinely inactive gaits phase-ready. We never reseek an
+          // action once it has visible influence, avoiding the old flicker
+          // caused by forcing AnimationAction.time every frame.
+          for (const key of ['move', 'sprint', 'crouchMove']) {
+            if (key === this.dominantGait) continue;
+
+            const currentWeight = weights[key] ?? 0;
+            const requestedWeight = intents[key] ?? 0;
+
+            if (
+              currentWeight < 0.025 &&
+              requestedWeight < 0.08
+            ) {
+              setActionNormalizedPhase(
+                actionByKey[key],
+                referencePhase
+              );
+            }
+          }
+
+          if (nextDominantGait !== this.dominantGait) {
+            const nextAction =
+              actionByKey[nextDominantGait] ?? move;
+
+            // Align exactly once at transition entry, while the incoming clip
+            // is still nearly invisible, then let the mixer advance normally.
+            if ((weights[nextDominantGait] ?? 0) < 0.10) {
+              setActionNormalizedPhase(
+                nextAction,
+                referencePhase
+              );
+            }
+
+            this.dominantGait = nextDominantGait;
+            referenceAction = nextAction;
+          }
         }
 
-        const phaseAction =
-          actionByKey[this.dominantGait] ?? move;
-        const phaseDuration = Math.max(
-          0.001,
-          phaseAction.getClip().duration
-        );
-        const normalizedPhase =
-          ((phaseAction.time / phaseDuration) % 1 + 1) % 1;
-
-        this.phase = normalizedPhase * Math.PI * 2;
+        this.phase =
+          normalizedActionPhase(referenceAction) *
+          Math.PI *
+          2;
+        this.wasMoving = true;
+      } else if (movementBlend < 0.015) {
+        this.wasMoving = false;
       }
 
-      // Targets already move smoothly through crouchBlend, so this high
-      // response only makes the mixer follow that curve rather than adding a
-      // second sluggish ease on top.
+      // The player-side crouch/sprint values are already smoothed, so keep the
+      // mixer responsive but give non-combat locomotion a slightly longer,
+      // cleaner crossfade instead of snapping between full-body clips.
       applyWeights(
         intents,
         dt,
-        state.combat ? 18 : 14
+        state.combat ? 16 : 12
       );
 
       if (crouchBlend > 0.72) {
@@ -631,6 +684,25 @@ export async function createVrmLocomotionController(character, vrm) {
   };
 
   return controller;
+}
+
+function normalizedActionPhase(action) {
+  if (!action) return 0;
+
+  const duration = Math.max(
+    0.001,
+    action.getClip().duration
+  );
+
+  return ((action.time / duration) % 1 + 1) % 1;
+}
+
+function setActionNormalizedPhase(action, normalizedPhase) {
+  if (!action) return;
+
+  action.time =
+    THREE.MathUtils.clamp(normalizedPhase, 0, 1) *
+    Math.max(0.001, action.getClip().duration);
 }
 
 function loadBaseAnimationLibrary() {
