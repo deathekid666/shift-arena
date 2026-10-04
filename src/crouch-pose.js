@@ -15,6 +15,11 @@ export function createCrouchPoseLayer(character) {
   const underlyingQ = new Map();
   const underlyingP = new Map();
 
+  // Measure the neutral ankle height once in the character root's local space.
+  // Crouch animations are rotation-only, so their animated feet can otherwise
+  // drift upward together and make the whole character appear to float.
+  const neutralFootY = captureNeutralFootY(character, nodes);
+
   const tmp = {
     leftFoot: new THREE.Vector3(),
     rightFoot: new THREE.Vector3(),
@@ -61,6 +66,27 @@ export function createCrouchPoseLayer(character) {
     b.rightFoot.getWorldPosition(tmp.rightFoot);
     b.leftFoot.getWorldQuaternion(tmp.leftFootQ);
     b.rightFoot.getWorldQuaternion(tmp.rightFootQ);
+
+    // Remove only the shared vertical offset that lifts BOTH ankles above their
+    // neutral ground height. This grounds a stationary crouch while preserving
+    // the relative lift between the two feet during crouch-walk steps.
+    const leftGroundY = root.localToWorld(
+      new THREE.Vector3(0, neutralFootY.left, 0)
+    ).y;
+    const rightGroundY = root.localToWorld(
+      new THREE.Vector3(0, neutralFootY.right, 0)
+    ).y;
+
+    const sharedFloat = Math.max(
+      0,
+      Math.min(
+        tmp.leftFoot.y - leftGroundY,
+        tmp.rightFoot.y - rightGroundY
+      )
+    );
+
+    tmp.leftFoot.y -= sharedFloat;
+    tmp.rightFoot.y -= sharedFloat;
 
     root.getWorldQuaternion(tmp.rootQ);
     tmp.forward.set(0, 0, -1).applyQuaternion(tmp.rootQ).normalize();
@@ -253,6 +279,39 @@ export function createCrouchPoseLayer(character) {
   }
 
   return { apply, restore };
+}
+
+function captureNeutralFootY(character, nodes) {
+  const { root, bones: b, baseRotations, basePositions } = character;
+  const savedQ = new Map();
+  const savedP = new Map();
+
+  for (const node of nodes) {
+    savedQ.set(node, node.quaternion.clone());
+    savedP.set(node, node.position.clone());
+
+    const baseQ = baseRotations?.get(node);
+    const baseP = basePositions?.get(node);
+    if (baseQ) node.quaternion.copy(baseQ);
+    if (baseP) node.position.copy(baseP);
+  }
+
+  root.updateWorldMatrix(true, true);
+
+  const leftWorld = b.leftFoot.getWorldPosition(new THREE.Vector3());
+  const rightWorld = b.rightFoot.getWorldPosition(new THREE.Vector3());
+
+  const left = root.worldToLocal(leftWorld.clone()).y;
+  const right = root.worldToLocal(rightWorld.clone()).y;
+
+  for (const node of nodes) {
+    node.quaternion.copy(savedQ.get(node));
+    node.position.copy(savedP.get(node));
+  }
+
+  root.updateWorldMatrix(true, true);
+
+  return { left, right };
 }
 
 function rotateLocal(node, baseQ, x, y, z) {
