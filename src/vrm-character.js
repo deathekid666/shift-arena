@@ -2259,15 +2259,15 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     .copy(IK_TMP.shoulder)
     .addScaledVector(
       IK_TMP.right,
-      THREE.MathUtils.lerp(-0.24, -0.19, supportAds)
+      THREE.MathUtils.lerp(-0.235, -0.165, supportAds)
     )
     .addScaledVector(
       IK_TMP.down,
-      THREE.MathUtils.lerp(0.18, 0.22, supportAds)
+      THREE.MathUtils.lerp(0.18, 0.235, supportAds)
     )
     .addScaledVector(
       IK_TMP.forward,
-      THREE.MathUtils.lerp(0.070, 0.090, supportAds)
+      THREE.MathUtils.lerp(0.070, 0.100, supportAds)
     );
 
   solveTwoBoneIK(
