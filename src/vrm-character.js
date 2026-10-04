@@ -389,7 +389,7 @@ function buildCharacterInterface({
 
       // Keep the normalized hips translation deterministic. Authored clips own
       // bone rotations only; gameplay states own vertical stance offsets.
-      applyStablePelvis(this, dt, state);
+      applyStablePelvis(this);
 
       updatePose(this, dt, state);
 
@@ -404,17 +404,14 @@ function buildCharacterInterface({
         dt
       );
 
-      // A real UAL2 slide state owns the whole body. The old procedural
-      // slide is retained only as a network/CDN fallback.
-      if (!this.authoredLocomotion?.hasAuthoredSlide) {
-        this.slidePoseLayer ??= createSlidePoseLayer(this);
-        this.slidePoseLayer.apply(state, dt);
-      }
+      // The authored clip supplies motion timing, while this deterministic
+      // pose layer owns ground contact and the deep two-knee silhouette.
+      // This prevents the rotation-only authored slide from floating.
+      this.slidePoseLayer ??= createSlidePoseLayer(this);
+      this.slidePoseLayer.apply(state, dt);
 
       this.jumpPoseLayer ??= createJumpPoseLayer(this);
       this.jumpPoseLayer.apply(state, dt);
-
-      vrm?.update?.(dt);
     },
     setVisible(visible) {
       root.visible = Boolean(visible);
@@ -423,8 +420,8 @@ function buildCharacterInterface({
     getHandWorldPosition(side = 'right', target = new THREE.Vector3()) {
       const hand =
         side === 'left'
-          ? rawBones.leftHand
-          : rawBones.rightHand;
+          ? bones.leftHand
+          : bones.rightHand;
       if (!hand) return null;
       hand.getWorldPosition(target);
       return target;
@@ -432,11 +429,18 @@ function buildCharacterInterface({
     applyFangPose(fang, dt) {
       this.fangPoseLayer ??= createFangPoseLayer(this);
       this.fangPoseLayer.apply(fang, dt);
-      vrm?.update?.(0);
     },
     applyWeaponIK(gripPose, dt) {
       applyTwoHandWeaponIK(this, gripPose, dt);
-      vrm?.update?.(0);
+    },
+    finalizePose() {
+      // Shooter-style late update:
+      // mixer/procedural layers/IK all write normalized bones first, then the
+      // humanoid is committed to the rendered raw skeleton exactly once.
+      // We intentionally do not call vrm.update() here because this gameplay
+      // avatar does not need spring-bone simulation, and the model is scaled.
+      vrm?.humanoid?.update?.();
+      root.updateWorldMatrix(true, true);
     }
   };
 }
@@ -1356,7 +1360,7 @@ function applyIdlePose(bones, baseRotations, blend = 1) {
   setBoneEuler(bones.rightLowerArm, baseRotations, 0.10, 0.0, 0.12, blend);
 }
 
-function applyStablePelvis(character, dt, state) {
+function applyStablePelvis(character) {
   const hips = character.bones?.hips;
   const base = hips
     ? character.basePositions?.get(hips)
@@ -1364,28 +1368,9 @@ function applyStablePelvis(character, dt, state) {
 
   if (!hips || !base) return;
 
-  const targetSlide =
-    state?.sliding && state?.grounded !== false
-      ? 1
-      : 0;
-
-  character.stablePelvis.slideBlend = THREE.MathUtils.damp(
-    character.stablePelvis.slideBlend,
-    targetSlide,
-    targetSlide > character.stablePelvis.slideBlend
-      ? 20
-      : 14,
-    dt
-  );
-
-  const slide = character.stablePelvis.slideBlend;
-
-  // Never inherit Y translation from an external animation source. This is
-  // the single stable stance position used by idle/run; crouch/jump layers
-  // deliberately modify it later in this frame.
-  hips.position.x = base.x;
-  hips.position.y = base.y - 0.34 * slide;
-  hips.position.z = base.z + 0.055 * slide;
+  // Authored locomotion is rotation-only. Keep idle/run pelvis translation
+  // fixed; crouch/jump/slide layers apply their deliberate offsets later.
+  hips.position.copy(base);
 }
 
 function updatePose(character, dt, state) {
