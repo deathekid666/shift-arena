@@ -379,13 +379,20 @@ function buildCharacterInterface({
     },
     authoredLocomotion: null,
     authoredLocomotionReady: null,
+    debugFreezeAuthored: false,
     update(dt, state = {}) {
       this.fangPoseLayer?.restore();
       this.jumpPoseLayer?.restore();
       this.slidePoseLayer?.restore();
       this.crouchPoseLayer?.restore();
 
-      this.authoredLocomotion?.update(dt, state);
+      if (!this.debugFreezeAuthored) {
+        this.authoredLocomotion?.update(dt, state);
+      }
+
+      // Diagnostic freeze intentionally stops only the authored mixer. The
+      // gameplay root, procedural layers and final normalized->raw sync remain
+      // active so Jitter Lab can isolate the source without changing physics.
 
       // Build 010.9A's authored UAL2 slide needs its retargeted pelvis-height
       // track. Keep normal locomotion locked to a stable pelvis, but do not

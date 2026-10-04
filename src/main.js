@@ -72,9 +72,14 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.21C · VISUAL MICRO-JITTER FIX</div>
+    <div id="damage-test-hint">BUILD 010.21D · JITTER LAB</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
+    <div id="jitter-lab" hidden>
+      <div class="jitter-title">JITTER LAB · F6</div>
+      <div id="jitter-readout">Waiting for character…</div>
+      <div id="jitter-switches">F7 ANIM · F8 IK · F9 CAM · F10 PIVOT</div>
+    </div>
 
     <div id="pickup-prompt">
       <span id="pickup-key">E</span>
@@ -121,7 +126,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.21C · VISUAL MICRO-JITTER FIX</div>
+        <div class="build-tag">BUILD 010.21D · JITTER LAB</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
@@ -253,6 +258,9 @@ const fangMarker = document.querySelector('#fang-marker');
 const fangMarkerArrow = document.querySelector('#fang-marker-arrow');
 const fangMarkerDistance = document.querySelector('#fang-marker-distance');
 const characterLoadStatus = document.querySelector('#character-load-status');
+const jitterLab = document.querySelector('#jitter-lab');
+const jitterReadout = document.querySelector('#jitter-readout');
+const jitterSwitches = document.querySelector('#jitter-switches');
 
 let weapon = null;
 let armor = null;
@@ -262,6 +270,164 @@ let opponentsChosen = false;
 let opponentsEnabled = false;
 let selectedBotCount = 2;
 let selectedBotDifficulty = 'normal';
+
+const jitterDebug = {
+  visible: false,
+  freezeAuthored: false,
+  disableIK: false,
+  freezeCamera: false,
+  lockPivot: false,
+  previous: null,
+  smooth: {
+    rootPos: 0, rootY: 0, rootRot: 0,
+    pivotPos: 0, pivotRot: 0,
+    normHipsPos: 0, normHipsRot: 0,
+    rawHipsPos: 0, rawHipsRot: 0,
+    cameraPos: 0, cameraRot: 0
+  }
+};
+
+const DEBUG_POS = new THREE.Vector3();
+const DEBUG_QUAT = new THREE.Quaternion();
+
+function captureDebugTransform(object) {
+  if (!object) return null;
+  object.updateWorldMatrix?.(true, false);
+  return {
+    p: object.getWorldPosition(new THREE.Vector3()),
+    q: object.getWorldQuaternion(new THREE.Quaternion())
+  };
+}
+
+function quaternionDeltaDegrees(a, b) {
+  if (!a || !b) return 0;
+  const dot = THREE.MathUtils.clamp(Math.abs(a.dot(b)), 0, 1);
+  return THREE.MathUtils.radToDeg(2 * Math.acos(dot));
+}
+
+function smoothDebugMetric(key, value) {
+  jitterDebug.smooth[key] = THREE.MathUtils.lerp(
+    jitterDebug.smooth[key] ?? 0,
+    Number.isFinite(value) ? value : 0,
+    0.18
+  );
+}
+
+function updateJitterLab() {
+  if (!jitterDebug.visible || !jitterReadout) return;
+
+  const vrmCharacter = player.vrmCharacter;
+  if (!vrmCharacter) {
+    jitterReadout.textContent = 'VRM character not ready';
+    return;
+  }
+
+  player.group.updateWorldMatrix(true, true);
+  camera.updateWorldMatrix(true, false);
+  vrmCharacter.root.updateWorldMatrix(true, true);
+
+  const current = {
+    root: captureDebugTransform(player.group),
+    pivot: captureDebugTransform(player.body),
+    normHips: captureDebugTransform(vrmCharacter.bones?.hips),
+    rawHips: captureDebugTransform(vrmCharacter.rawBones?.hips),
+    camera: captureDebugTransform(camera)
+  };
+
+  const previous = jitterDebug.previous;
+  jitterDebug.previous = current;
+  if (!previous) return;
+
+  for (const key of ['root', 'pivot', 'normHips', 'rawHips', 'camera']) {
+    const nowT = current[key];
+    const oldT = previous[key];
+    if (!nowT || !oldT) continue;
+
+    const posMm = nowT.p.distanceTo(oldT.p) * 1000;
+    const rotDeg = quaternionDeltaDegrees(nowT.q, oldT.q);
+
+    if (key === 'root') {
+      smoothDebugMetric('rootPos', posMm);
+      smoothDebugMetric(
+        'rootY',
+        Math.abs(nowT.p.y - oldT.p.y) * 1000
+      );
+      smoothDebugMetric('rootRot', rotDeg);
+    } else if (key === 'pivot') {
+      smoothDebugMetric('pivotPos', posMm);
+      smoothDebugMetric('pivotRot', rotDeg);
+    } else if (key === 'normHips') {
+      smoothDebugMetric('normHipsPos', posMm);
+      smoothDebugMetric('normHipsRot', rotDeg);
+    } else if (key === 'rawHips') {
+      smoothDebugMetric('rawHipsPos', posMm);
+      smoothDebugMetric('rawHipsRot', rotDeg);
+    } else if (key === 'camera') {
+      smoothDebugMetric('cameraPos', posMm);
+      smoothDebugMetric('cameraRot', rotDeg);
+    }
+  }
+
+  const s = jitterDebug.smooth;
+  const speed = player.horizontalSpeed();
+  const still = speed < 0.18 && player.grounded && !player.sliding;
+  const flags = [
+    jitterDebug.freezeAuthored ? 'ANIM OFF' : 'ANIM ON',
+    jitterDebug.disableIK ? 'IK OFF' : 'IK ON',
+    jitterDebug.freezeCamera ? 'CAM FROZEN' : 'CAM LIVE',
+    jitterDebug.lockPivot ? 'PIVOT LOCK' : 'PIVOT LIVE'
+  ].join(' · ');
+
+  jitterReadout.innerHTML =
+    `STATE <b>${still ? 'STILL' : 'MOVING'}</b> · SPEED ${speed.toFixed(2)}<br>` +
+    `ROOT Δ ${s.rootPos.toFixed(2)}mm · Y ${s.rootY.toFixed(2)}mm · R ${s.rootRot.toFixed(3)}°<br>` +
+    `PIVOT Δ ${s.pivotPos.toFixed(2)}mm · R ${s.pivotRot.toFixed(3)}°<br>` +
+    `N-HIPS Δ ${s.normHipsPos.toFixed(2)}mm · R ${s.normHipsRot.toFixed(3)}°<br>` +
+    `R-HIPS Δ ${s.rawHipsPos.toFixed(2)}mm · R ${s.rawHipsRot.toFixed(3)}°<br>` +
+    `CAM Δ ${s.cameraPos.toFixed(2)}mm · R ${s.cameraRot.toFixed(3)}°`;
+
+  jitterSwitches.textContent =
+    `F7 ${jitterDebug.freezeAuthored ? 'ANIM OFF' : 'ANIM ON'} · ` +
+    `F8 ${jitterDebug.disableIK ? 'IK OFF' : 'IK ON'} · ` +
+    `F9 ${jitterDebug.freezeCamera ? 'CAM FROZEN' : 'CAM LIVE'} · ` +
+    `F10 ${jitterDebug.lockPivot ? 'PIVOT LOCK' : 'PIVOT LIVE'}`;
+}
+
+addEventListener('keydown', (event) => {
+  if (!['F6', 'F7', 'F8', 'F9', 'F10'].includes(event.code)) return;
+  event.preventDefault();
+
+  if (event.code === 'F6') {
+    jitterDebug.visible = !jitterDebug.visible;
+    jitterLab.hidden = !jitterDebug.visible;
+    jitterDebug.previous = null;
+  }
+
+  if (event.code === 'F7') {
+    jitterDebug.freezeAuthored = !jitterDebug.freezeAuthored;
+    jitterDebug.previous = null;
+  }
+
+  if (event.code === 'F8') {
+    jitterDebug.disableIK = !jitterDebug.disableIK;
+    jitterDebug.previous = null;
+  }
+
+  if (event.code === 'F9') {
+    jitterDebug.freezeCamera = !jitterDebug.freezeCamera;
+    jitterDebug.previous = null;
+  }
+
+  if (event.code === 'F10') {
+    jitterDebug.lockPivot = !jitterDebug.lockPivot;
+    jitterDebug.previous = null;
+  }
+
+  if (player.vrmCharacter) {
+    player.vrmCharacter.debugFreezeAuthored =
+      jitterDebug.freezeAuthored;
+  }
+});
 
 const health = new PlayerHealth({
   player, world, cameraRig: thirdCam,
@@ -905,6 +1071,11 @@ function loop(now) {
       !armor.using &&
       (weaponCombatPose || fang.blocksWeapons);
 
+    if (player.vrmCharacter) {
+      player.vrmCharacter.debugFreezeAuthored =
+        jitterDebug.freezeAuthored;
+    }
+
     player.update(
       dt,
       thirdCam.yaw,
@@ -912,9 +1083,24 @@ function loop(now) {
       thirdCam.pitch,
       weaponCombatPose
     );
+
+    if (jitterDebug.lockPivot) {
+      player.turnLean = 0;
+      player.body.rotation.x = 0;
+      player.body.rotation.z = 0;
+    }
+
     weapon.updateSelection();
 
     const fangAiming = fang.aiming;
+    const frozenCameraPose = jitterDebug.freezeCamera
+      ? {
+          position: camera.position.clone(),
+          quaternion: camera.quaternion.clone(),
+          fov: camera.fov
+        }
+      : null;
+
     thirdCam.update(dt, {
       aiming: fangAiming || weapon.aiming,
       adsFov: fangAiming ? fang.cfg.aimFov : weapon.adsFov,
@@ -929,6 +1115,14 @@ function loop(now) {
       sliding: player.sliding
     });
 
+    if (frozenCameraPose) {
+      camera.position.copy(frozenCameraPose.position);
+      camera.quaternion.copy(frozenCameraPose.quaternion);
+      camera.fov = frozenCameraPose.fov;
+      camera.updateProjectionMatrix();
+      camera.updateWorldMatrix(true, false);
+    }
+
     fang.update(dt, !armor.using);
 
     const fangBlocking = fang.blocksWeapons;
@@ -939,12 +1133,18 @@ function loop(now) {
     // Final support-hand placement happens after the weapon pose is resolved.
     // Master-hand weapons keep the right hand authoritative; only the support
     // hand is IK-solved to the weapon.
-    if (!armor.using && !fangBlocking && weapon.holdPoseActive) {
+    if (
+      !jitterDebug.disableIK &&
+      !armor.using &&
+      !fangBlocking &&
+      weapon.holdPoseActive
+    ) {
       player.applyWeaponIK(weapon.getGripPose(), dt);
     }
 
     // One final render-skeleton commit after ALL animation/IK writers.
     player.finalizeCharacterPose();
+    updateJitterLab();
 
     if (!armor.using && !fangBlocking) pickups.update(dt);
     else updatePickupPrompt({ show: false });
