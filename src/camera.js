@@ -12,9 +12,12 @@ export class ThirdPersonCamera {
     this.pitch = 0.18;
     this.recoilPitch = 0;
     this.recoilYaw = 0;
-    this.recoilPitchVelocity = 0;
-    this.recoilYawVelocity = 0;
+    this.recoilTargetPitch = 0;
+    this.recoilTargetYaw = 0;
+    this.recoilAttack = 34;
     this.recoilRecovery = 12;
+    this.recoilMaxPitch = 0.20;
+    this.recoilMaxYaw = 0.12;
     this.lookX = 0;
     this.lookY = 0;
 
@@ -57,21 +60,52 @@ export class ThirdPersonCamera {
       20,
       dt
     );
-    // Spring-based camera recoil: fast impulse, soft return, no instant snap.
-    const recoilStiffness = 72 + this.recoilRecovery * 3.2;
-    const recoilDamping = 15 + this.recoilRecovery * 0.32;
+    // Two-stage recoil envelope:
+    // 1) the visible camera catches the shot target quickly;
+    // 2) the target itself returns to zero more slowly.
+    // This gives a crisp shooter kick without the under-damped bounce that can
+    // make automatic weapons feel floaty or oscillatory.
+    this.recoilPitch = THREE.MathUtils.damp(
+      this.recoilPitch,
+      this.recoilTargetPitch,
+      this.recoilAttack,
+      dt
+    );
+    this.recoilYaw = THREE.MathUtils.damp(
+      this.recoilYaw,
+      this.recoilTargetYaw,
+      this.recoilAttack * 0.92,
+      dt
+    );
 
-    this.recoilPitchVelocity +=
-      -this.recoilPitch * recoilStiffness * dt;
-    this.recoilYawVelocity +=
-      -this.recoilYaw * recoilStiffness * dt;
+    this.recoilTargetPitch = THREE.MathUtils.damp(
+      this.recoilTargetPitch,
+      0,
+      this.recoilRecovery,
+      dt
+    );
+    this.recoilTargetYaw = THREE.MathUtils.damp(
+      this.recoilTargetYaw,
+      0,
+      this.recoilRecovery * 1.12,
+      dt
+    );
 
-    const recoilDecay = Math.exp(-recoilDamping * dt);
-    this.recoilPitchVelocity *= recoilDecay;
-    this.recoilYawVelocity *= recoilDecay;
+    if (
+      Math.abs(this.recoilTargetPitch) < 0.00003 &&
+      Math.abs(this.recoilPitch) < 0.00003
+    ) {
+      this.recoilTargetPitch = 0;
+      this.recoilPitch = 0;
+    }
 
-    this.recoilPitch += this.recoilPitchVelocity * dt;
-    this.recoilYaw += this.recoilYawVelocity * dt;
+    if (
+      Math.abs(this.recoilTargetYaw) < 0.00003 &&
+      Math.abs(this.recoilYaw) < 0.00003
+    ) {
+      this.recoilTargetYaw = 0;
+      this.recoilYaw = 0;
+    }
 
     const movementBlend = aiming || scoped
       ? 0
@@ -271,23 +305,30 @@ export class ThirdPersonCamera {
     return best;
   }
 
-  kick(pitchAmount, yawAmount = 0, recovery = 12) {
+  kick(
+    pitchAmount,
+    yawAmount = 0,
+    {
+      recovery = 12,
+      attack = 34,
+      maxPitch = 0.20,
+      maxYaw = 0.12
+    } = {}
+  ) {
     this.recoilRecovery = recovery;
+    this.recoilAttack = attack;
+    this.recoilMaxPitch = maxPitch;
+    this.recoilMaxYaw = maxYaw;
 
-    // Convert shot recoil into angular velocity impulses. This produces a
-    // shooter-like kick-and-return rather than directly teleporting the view.
-    this.recoilPitchVelocity += pitchAmount * 78;
-    this.recoilYawVelocity += yawAmount * 72;
-
-    this.recoilPitch = THREE.MathUtils.clamp(
-      this.recoilPitch,
-      -0.18,
-      0.24
+    this.recoilTargetPitch = THREE.MathUtils.clamp(
+      this.recoilTargetPitch + pitchAmount,
+      -maxPitch * 0.30,
+      maxPitch
     );
-    this.recoilYaw = THREE.MathUtils.clamp(
-      this.recoilYaw,
-      -0.14,
-      0.14
+    this.recoilTargetYaw = THREE.MathUtils.clamp(
+      this.recoilTargetYaw + yawAmount,
+      -maxYaw,
+      maxYaw
     );
   }
 }

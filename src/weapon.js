@@ -84,6 +84,9 @@ export class WeaponSystem {
         dynamicBloom: 0,
         visualKick: 0,
         visualKickVelocity: 0,
+        recoilPitch: 0,
+        recoilYaw: 0,
+        recoilRoll: 0,
         sustainedFire: 0,
         shotIndex: 0,
         sinceShot: 999,
@@ -282,10 +285,37 @@ export class WeaponSystem {
         s.visualKickVelocity = 0;
       }
 
+      const poseRecovery =
+        entry.cfg.weaponRecoilRecovery ??
+        Math.max(8, entry.cfg.recoilRecovery * 1.35);
+
+      s.recoilPitch = THREE.MathUtils.damp(
+        s.recoilPitch,
+        0,
+        poseRecovery,
+        dt
+      );
+      s.recoilYaw = THREE.MathUtils.damp(
+        s.recoilYaw,
+        0,
+        poseRecovery * 1.12,
+        dt
+      );
+      s.recoilRoll = THREE.MathUtils.damp(
+        s.recoilRoll,
+        0,
+        poseRecovery * 1.20,
+        dt
+      );
+
+      if (Math.abs(s.recoilPitch) < 0.00008) s.recoilPitch = 0;
+      if (Math.abs(s.recoilYaw) < 0.00008) s.recoilYaw = 0;
+      if (Math.abs(s.recoilRoll) < 0.00008) s.recoilRoll = 0;
+
       s.sustainedFire = THREE.MathUtils.damp(
         s.sustainedFire,
         0,
-        3.8,
+        entry.cfg.sustainedFireRecovery ?? 3.8,
         dt
       );
 
@@ -448,9 +478,11 @@ export class WeaponSystem {
 
         this.tmpDesiredLocalQ.setFromEuler(
           new THREE.Euler(
-            (cfg.carryPitch ?? -0.11) + recoilPose,
-            cfg.carryYaw ?? 0,
-            cfg.carryRoll ?? -0.055,
+            (cfg.carryPitch ?? -0.11) +
+              recoilPose +
+              state.recoilPitch,
+            (cfg.carryYaw ?? 0) + state.recoilYaw,
+            (cfg.carryRoll ?? -0.055) + state.recoilRoll,
             'YXZ'
           )
         );
@@ -529,9 +561,13 @@ export class WeaponSystem {
         // Small visual recoil around the camera-aligned aim axis.
         const recoilQ = new THREE.Quaternion().setFromEuler(
           new THREE.Euler(
-            -0.035 - state.visualKick * 0.72,
-            0,
-            -0.035 - swayX * 0.45,
+            -0.035 -
+              state.visualKick * 0.72 -
+              state.recoilPitch,
+            state.recoilYaw,
+            -0.035 -
+              swayX * 0.45 +
+              state.recoilRoll,
             'YXZ'
           )
         );
@@ -1059,6 +1095,11 @@ export class WeaponSystem {
       entry.state.isReloading = false;
       entry.state.dynamicBloom = 0;
       entry.state.visualKick = 0;
+      entry.state.visualKickVelocity = 0;
+      entry.state.recoilPitch = 0;
+      entry.state.recoilYaw = 0;
+      entry.state.recoilRoll = 0;
+      entry.state.sustainedFire = 0;
       entry.state.shotIndex = 0;
       entry.state.sinceShot = 999;
       entry.state.pumpSoundPlayed = true;
@@ -1085,23 +1126,74 @@ export class WeaponSystem {
     state.visualKick = Math.max(state.visualKick, cfg.visualKick);
 
     const pattern = cfg.recoilPattern[state.shotIndex % cfg.recoilPattern.length];
+    const shotNumber = state.shotIndex;
     state.shotIndex += 1;
 
-    // ADS should feel steadier visually, not recoil-free.
-    const cameraRecoilMul = this.aiming ? 0.62 : 1;
+    const sustainedScale =
+      1 +
+      state.sustainedFire *
+      (cfg.sustainedRecoilScale ?? 0);
+
+    // ADS reduces camera displacement, but every weapon keeps its own recoil
+    // identity and sustained-fire climb.
+    const cameraRecoilMul = this.aiming
+      ? (cfg.adsRecoilMultiplier ?? 0.62)
+      : 1;
+
     this.cameraRig.kick(
-      pattern[0] * cameraRecoilMul,
-      pattern[1] * cameraRecoilMul,
-      cfg.recoilRecovery
+      pattern[0] * cameraRecoilMul * sustainedScale,
+      pattern[1] * cameraRecoilMul * sustainedScale,
+      {
+        recovery: cfg.recoilRecovery,
+        attack: cfg.recoilAttack ?? 34,
+        maxPitch: cfg.recoilMaxPitch ?? 0.20,
+        maxYaw: cfg.recoilMaxYaw ?? 0.12
+      }
     );
 
     state.visualKickVelocity +=
       cfg.visualKick *
-      (this.aiming ? 13.5 : 17.5) /
+      (this.aiming
+        ? (cfg.adsWeaponKickImpulse ?? 12.5)
+        : (cfg.weaponKickImpulse ?? 17.0)) /
       Math.max(0.72, cfg.mass);
+
+    const posePitch =
+      (cfg.weaponRecoilPitch ?? cfg.visualKick * 0.28) *
+      (this.aiming ? 0.72 : 1) *
+      sustainedScale;
+    const poseYawBase =
+      cfg.weaponRecoilYaw ?? 0.012;
+    const poseYaw =
+      poseYawBase *
+      ((shotNumber % 2 === 0) ? 1 : -1) *
+      (this.aiming ? 0.58 : 1);
+    const poseRoll =
+      (cfg.weaponRecoilRoll ?? 0.010) *
+      ((shotNumber % 2 === 0) ? -1 : 1) *
+      (this.aiming ? 0.55 : 1);
+
+    state.recoilPitch = THREE.MathUtils.clamp(
+      state.recoilPitch + posePitch,
+      -0.04,
+      cfg.weaponRecoilMaxPitch ?? 0.16
+    );
+    state.recoilYaw = THREE.MathUtils.clamp(
+      state.recoilYaw + poseYaw,
+      -(cfg.weaponRecoilMaxYaw ?? 0.055),
+      cfg.weaponRecoilMaxYaw ?? 0.055
+    );
+    state.recoilRoll = THREE.MathUtils.clamp(
+      state.recoilRoll + poseRoll,
+      -(cfg.weaponRecoilMaxRoll ?? 0.05),
+      cfg.weaponRecoilMaxRoll ?? 0.05
+    );
+
     state.sustainedFire = Math.min(
       1,
-      state.sustainedFire + (cfg.automatic ? 0.24 : 0.48)
+      state.sustainedFire +
+        (cfg.sustainedFirePerShot ??
+          (cfg.automatic ? 0.24 : 0.48))
     );
 
     this.triggerMuzzleFx(this.active);
