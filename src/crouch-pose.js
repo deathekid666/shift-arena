@@ -76,14 +76,22 @@ export function createCrouchPoseLayer(character) {
 
     const speed = Math.max(0, state.speed ?? 0);
     const moving = speed > 0.32;
+    const speed01 = THREE.MathUtils.clamp(speed / 2.8, 0, 1);
     const phase = character.authoredLocomotion?.phase ??
       character.locomotion?.phase ??
       0;
-    const localStrafe = THREE.MathUtils.clamp(state.localX ?? 0, -1, 1);
+    const directionDenom = Math.max(speed, 0.001);
+    const localStrafe = speed > 0.05
+      ? THREE.MathUtils.clamp(
+          (state.localX ?? 0) / directionDenom,
+          -1,
+          1
+        )
+      : 0;
 
     // Keep a slightly wider athletic base. For authored crouch this is subtle:
     // the animation already owns the actual step path.
-    const stance = authoredCrouch ? 0.018 : 0.035;
+    const stance = authoredCrouch ? 0.013 : 0.035;
     tmp.leftFoot.addScaledVector(tmp.right, -stance);
     tmp.rightFoot.addScaledVector(tmp.right, stance);
 
@@ -93,7 +101,6 @@ export function createCrouchPoseLayer(character) {
     // Only synthesize a gait if the authored controller failed. Do NOT add
     // procedural stepping on top of a real animation.
     if (!authoredCrouch && moving) {
-      const speed01 = THREE.MathUtils.clamp(speed / 2.8, 0, 1);
       const stride = THREE.MathUtils.lerp(0.10, 0.16, speed01);
       const lift = THREE.MathUtils.lerp(0.030, 0.055, speed01);
       const s = Math.sin(phase);
@@ -125,11 +132,23 @@ export function createCrouchPoseLayer(character) {
     // the pelvis still far too high. Lower the animated pelvis, then solve both
     // legs back to the animated feet. This forces visible knee flex without
     // replacing the animation's natural cadence.
-    const extraDrop = authoredCrouch ? 0.205 : 0.305;
-    const forwardShift = authoredCrouch ? 0.035 : 0.065;
+    const extraDrop = authoredCrouch
+      ? THREE.MathUtils.lerp(0.195, 0.215, speed01)
+      : 0.305;
+    const forwardShift = authoredCrouch
+      ? THREE.MathUtils.lerp(0.030, 0.046, speed01)
+      : 0.065;
 
     b.hips.position.y -= extraDrop;
     b.hips.position.z += forwardShift;
+
+    if (authoredCrouch && moving) {
+      // Preserve the authored feet but let the pelvis transfer weight over
+      // them. This removes the rigid "legs move under a frozen torso" look.
+      b.hips.position.x +=
+        Math.sin(phase) * 0.008 * speed01 +
+        localStrafe * 0.004;
+    }
 
     // Subtle weight transfer only; the authored clip already contains its own.
     if (moving && !authoredCrouch) {

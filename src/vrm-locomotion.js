@@ -251,6 +251,9 @@ export async function createVrmLocomotionController(character, vrm) {
     sprintTimeScale: 1,
     crouchTimeScale: 1,
     gaitDirection: 1,
+    smoothedStrafe: 0,
+    smoothedForward: 1,
+    slideExitTail: 0,
     slideStage: 'none',
     slideExitActive: false,
 
@@ -269,8 +272,10 @@ export async function createVrmLocomotionController(character, vrm) {
       );
       const speed = this.smoothedSpeed;
 
+      // Do not bring a full gait in while the character is barely moving.
+      // This significantly reduces visible foot skating during starts/stops.
       const movementTarget = grounded
-        ? THREE.MathUtils.smoothstep(speed, 0.08, 0.82)
+        ? THREE.MathUtils.smoothstep(speed, 0.14, 1.10)
         : 0;
 
       this.movementAmount = THREE.MathUtils.damp(
@@ -281,6 +286,35 @@ export async function createVrmLocomotionController(character, vrm) {
       );
 
       const moving = this.movementAmount > 0.12;
+
+      const directionDenom = Math.max(rawSpeed, 0.001);
+      const strafeTarget = rawSpeed > 0.05
+        ? THREE.MathUtils.clamp(
+            (state.localX ?? 0) / directionDenom,
+            -1,
+            1
+          )
+        : 0;
+      const forwardTarget = rawSpeed > 0.05
+        ? THREE.MathUtils.clamp(
+            -(state.localZ ?? 0) / directionDenom,
+            -1,
+            1
+          )
+        : this.smoothedForward;
+
+      this.smoothedStrafe = THREE.MathUtils.damp(
+        this.smoothedStrafe,
+        strafeTarget,
+        12,
+        dt
+      );
+      this.smoothedForward = THREE.MathUtils.damp(
+        this.smoothedForward,
+        forwardTarget,
+        12,
+        dt
+      );
 
       if (!grounded) {
         masterWeight = THREE.MathUtils.damp(
@@ -357,19 +391,40 @@ export async function createVrmLocomotionController(character, vrm) {
         }
       }
 
+      this.slideExitTail = 0;
+
       if (this.slideExitActive && hasAuthoredSlide) {
+        const duration = Math.max(
+          0.001,
+          slideExit.getClip().duration
+        );
+        const progress = THREE.MathUtils.clamp(
+          slideExit.time / duration,
+          0,
+          1
+        );
+
         if (
           slideExit.time >=
-          Math.max(0.01, slideExit.getClip().duration - 0.035)
+          Math.max(0.01, duration - 0.025)
         ) {
           this.slideExitActive = false;
           slideExit.stop();
-        } else {
+        } else if (progress < 0.62) {
           this.active = true;
           this.state = 'SLIDE_EXIT';
-          applyWeights({ slideExit: 1 }, dt, 20);
+          applyWeights({ slideExit: 1 }, dt, 16);
           this.mixer.update(dt);
           return;
+        } else {
+          // Last ~38% of the authored recovery crossfades back into the
+          // current locomotion instead of snapping on the final frame.
+          const tailT = THREE.MathUtils.smoothstep(
+            progress,
+            0.62,
+            0.98
+          );
+          this.slideExitTail = 1 - tailT;
         }
       }
 
@@ -413,14 +468,14 @@ export async function createVrmLocomotionController(character, vrm) {
       const sprintBlend = this.smoothedSprintBlend;
 
       const standingBlend = 1 - crouchBlend;
-      const backwards = (state.localZ ?? 0) > 0.10;
+      const backwards = this.smoothedForward < -0.12;
 
       const moveTargetScale =
-        THREE.MathUtils.clamp(speed / 3.55, 0.82, 1.58);
+        THREE.MathUtils.clamp(speed / 3.55, 0.34, 1.56);
       const sprintTargetScale =
-        THREE.MathUtils.clamp(speed / 6.05, 0.86, 1.50);
+        THREE.MathUtils.clamp(speed / 6.05, 0.68, 1.48);
       const crouchTargetScale =
-        THREE.MathUtils.clamp(speed / 2.8, 0.76, 1.26);
+        THREE.MathUtils.clamp(speed / 2.8, 0.32, 1.24);
 
       this.moveTimeScale = THREE.MathUtils.damp(
         this.moveTimeScale,
@@ -467,21 +522,25 @@ export async function createVrmLocomotionController(character, vrm) {
 
       const movementBlend = this.movementAmount;
 
+      const locomotionShare = 1 - this.slideExitTail;
       const intents = {
         idle:
-          standingBlend * (1 - movementBlend),
+          standingBlend * (1 - movementBlend) * locomotionShare,
         move:
           standingBlend *
           movementBlend *
-          (1 - sprintBlend),
+          (1 - sprintBlend) *
+          locomotionShare,
         sprint:
           standingBlend *
           movementBlend *
-          sprintBlend,
+          sprintBlend *
+          locomotionShare,
         crouchIdle:
-          crouchBlend * (1 - movementBlend),
+          crouchBlend * (1 - movementBlend) * locomotionShare,
         crouchMove:
-          crouchBlend * movementBlend
+          crouchBlend * movementBlend * locomotionShare,
+        slideExit: this.slideExitTail
       };
 
       if (movementBlend > 0.035) {
@@ -522,7 +581,7 @@ export async function createVrmLocomotionController(character, vrm) {
       applyWeights(
         intents,
         dt,
-        state.combat ? 20 : 16
+        state.combat ? 18 : 14
       );
 
       if (crouchBlend > 0.72) {

@@ -33,8 +33,18 @@ export function createJumpPoseLayer(character) {
     if (!airborne && wasAirborne) recovery = 0;
     const specialGroundPose = state.sliding || state.crouching || (state.crouchBlend ?? 0) > 0.01;
     const land = !airborne && !specialGroundPose
-      ? Math.sin(Math.PI * clamp((state.landingTime ?? 1) / 0.18, 0, 1)) * (state.landingImpact ?? 0) : 0;
-    if (!airborne) recovery = Math.min(1, recovery + dt / (specialGroundPose ? 0.08 : 0.16));
+      ? Math.sin(
+          Math.PI *
+          clamp((state.landingTime ?? 1) / 0.22, 0, 1)
+        ) *
+        Math.pow(state.landingImpact ?? 0, 0.82)
+      : 0;
+    if (!airborne) {
+      recovery = Math.min(
+        1,
+        recovery + dt / (specialGroundPose ? 0.08 : 0.19)
+      );
+    }
 
     const lift = smooth((state.airTime ?? 0) / 0.18);
     // Hold the split through the apex, then reach down progressively on descent.
@@ -65,7 +75,10 @@ export function createJumpPoseLayer(character) {
         pose.slerp(target, 1 - Math.exp(-22 * dt));
         node.quaternion.copy(pose);
       } else {
-        const bend = index < 2 ? -0.24 : index < 4 ? 0.42 : -0.06;
+        const bend =
+          index < 2 ? -0.30 :
+          index < 4 ? 0.50 :
+          -0.085;
         const target = node.quaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), bend * land));
         // Blend the final airborne pose into the moving gait, including early landings.
         node.quaternion.copy(airPose.get(node) ?? target).slerp(target, smooth(recovery));
@@ -73,7 +86,8 @@ export function createJumpPoseLayer(character) {
     });
     if (b.hips && land > 0) {
       hipPosition = b.hips.position.clone();
-      b.hips.position.y -= 0.055 * land;
+      b.hips.position.y -= 0.075 * land;
+      b.hips.position.z += 0.012 * land;
     }
     wasAirborne = airborne;
   }

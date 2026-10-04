@@ -284,7 +284,8 @@ function buildCharacterInterface({
     motionPolish: {
       speed: 0,
       strafe: 0,
-      forward: 1
+      forward: 1,
+      weightShift: 0
     },
     authoredLocomotion: null,
     authoredLocomotionReady: null,
@@ -1739,8 +1740,20 @@ function applyAuthoredLocomotionPolish(
     (combat ? 0.026 : 0.060) *
     (1 - crouch * 0.40);
 
+  const phase =
+    character.authoredLocomotion?.phase ??
+    character.locomotion?.phase ??
+    0;
+
+  motionPolish.weightShift = THREE.MathUtils.damp(
+    motionPolish.weightShift,
+    Math.sin(phase) * motionPolish.speed,
+    10,
+    dt
+  );
+
   const strideRoll =
-    Math.cos((locomotion.cycle ?? 0) * Math.PI) *
+    Math.cos(phase * 2) *
     0.008 *
     motionPolish.speed *
     (combat ? 0.35 : 1);
@@ -1753,6 +1766,14 @@ function applyAuthoredLocomotionPolish(
     motionPolish.strafe * 0.018,
     strafeBank * 0.70 + strideRoll
   );
+
+  // Small lateral weight transfer keeps authored run/strafe from looking like
+  // the pelvis is sliding on rails. It is intentionally reduced in combat.
+  if (bones.hips) {
+    bones.hips.position.x +=
+      motionPolish.weightShift *
+      (combat ? 0.0025 : 0.0065);
+  }
   applyAdditiveEuler(
     bones.spine,
     signedLean * 0.30,
