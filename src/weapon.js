@@ -91,6 +91,7 @@ export class WeaponSystem {
         shotIndex: 0,
         sinceShot: 999,
         burstShots: 0,
+        shoulderBlend: 0,
         bobTime: 0,
         pumpSoundPlayed: true
       };
@@ -142,12 +143,30 @@ export class WeaponSystem {
     return !this.blocked && this.input.pointerLocked && this.input.mouseDown(2);
   }
 
-  get combatPoseActive() {
-    if (this.blocked || !this.input.pointerLocked) return false;
-    if (this.cfg.masterHandCarry) return true;
+  get shoulderRequested() {
+    if (
+      this.blocked ||
+      this.visualHidden ||
+      !this.input.pointerLocked
+    ) {
+      return false;
+    }
+
     const firingNow = this.input.mouseDown(0);
-    const recentShot = this.state.sinceShot < 0.30;
+    const recentShot =
+      this.state.sinceShot <
+      (this.cfg.shoulderHoldTime ?? 0.28);
+
     return this.aiming || firingNow || recentShot;
+  }
+
+  get combatPoseActive() {
+    // Keep the upper body in the firing pose during the short lower-out blend,
+    // but never use this value as the target for shoulderBlend itself.
+    return (
+      this.shoulderRequested ||
+      (this.state.shoulderBlend ?? 0) > 0.06
+    );
   }
 
   get holdPoseActive() {
@@ -453,12 +472,58 @@ export class WeaponSystem {
     const moving = Math.min(1, speed / 5.2);
 
     state.bobTime += dt * (3.5 + speed * 1.4);
-    const shoulderPose = this.combatPoseActive;
-    const bobScale = cfg.bob * moving * (shoulderPose ? 0.10 : 0.55);
-    const bobX = Math.cos(state.bobTime) * bobScale;
-    const bobY = Math.abs(Math.sin(state.bobTime * 2)) * bobScale * 0.45;
 
-    const swayScale = cfg.sway * (shoulderPose ? 0.18 : 0.62);
+    const shoulderRequested = this.shoulderRequested;
+    const shoulderTarget = shoulderRequested ? 1 : 0;
+    const shoulderResponse = shoulderRequested
+      ? (cfg.shoulderRaiseSpeed ?? 26)
+      : (cfg.shoulderLowerSpeed ?? 12);
+
+    state.shoulderBlend = THREE.MathUtils.damp(
+      state.shoulderBlend ?? 0,
+      shoulderTarget,
+      shoulderResponse,
+      dt
+    );
+
+    if (
+      Math.abs(state.shoulderBlend - shoulderTarget) <
+      0.004
+    ) {
+      state.shoulderBlend = shoulderTarget;
+    }
+
+    const shoulderBlend =
+      THREE.MathUtils.smoothstep(
+        state.shoulderBlend,
+        0,
+        1
+      );
+
+    const bobScale =
+      cfg.bob *
+      moving *
+      THREE.MathUtils.lerp(
+        0.55,
+        0.10,
+        shoulderBlend
+      );
+
+    const bobX =
+      Math.cos(state.bobTime) *
+      bobScale;
+    const bobY =
+      Math.abs(Math.sin(state.bobTime * 2)) *
+      bobScale *
+      0.45;
+
+    const swayScale =
+      cfg.sway *
+      THREE.MathUtils.lerp(
+        0.62,
+        0.18,
+        shoulderBlend
+      );
     const swayX = THREE.MathUtils.clamp(
       -this.cameraRig.lookX * swayScale,
       -0.032,
@@ -473,7 +538,11 @@ export class WeaponSystem {
     // Standard shooter hierarchy for long weapons:
     // Right hand is the FK/master hand. The weapon is rigid to that hand,
     // while only the left/support hand is solved to the foregrip.
-    if (cfg.masterHandCarry && this.handMounted) {
+    if (
+      cfg.masterHandCarry &&
+      this.handMounted &&
+      shoulderBlend <= 0.015
+    ) {
       const handWorld =
         this.player.getHandWorldPosition?.(
           'right',
@@ -526,7 +595,10 @@ export class WeaponSystem {
       }
     }
 
-    if (shoulderPose && this.handMounted) {
+    if (
+      shoulderBlend > 0.015 &&
+      this.handMounted
+    ) {
       // Shooter architecture: crosshair/camera owns the weapon transform.
       // Hands follow the weapon sockets via IK after this pose is resolved.
       const shoulder =
@@ -606,36 +678,115 @@ export class WeaponSystem {
           .multiply(model.scale)
           .applyQuaternion(this.tmpDesiredLocalQ);
 
-        const targetPosition = this.tmpGripLocal
+        const shoulderTargetPosition = this.tmpGripLocal
           .clone()
           .sub(this.tmpGripOffset);
+        const shoulderTargetQuaternion =
+          this.tmpDesiredLocalQ.clone();
+
+        let finalTargetPosition =
+          shoulderTargetPosition;
+        let finalTargetQuaternion =
+          shoulderTargetQuaternion;
+
+        // Master-hand weapons have a real low-ready carry state. Blend from
+        // that hand-owned pose into the camera-owned shoulder pose instead of
+        // snapping ownership the instant the trigger/ADS starts.
+        if (cfg.masterHandCarry) {
+          const carryHandWorld =
+            this.player.getHandWorldPosition?.(
+              'right',
+              this.tmpHandWorld
+            ) ?? null;
+
+          if (carryHandWorld) {
+            const carryGripLocal =
+              carryHandWorld.clone();
+            this.player.group.worldToLocal(
+              carryGripLocal
+            );
+
+            const carryQuaternion =
+              new THREE.Quaternion().setFromEuler(
+                new THREE.Euler(
+                  (cfg.carryPitch ?? -0.11),
+                  cfg.carryYaw ?? 0,
+                  cfg.carryRoll ?? -0.055,
+                  'YXZ'
+                )
+              );
+
+            const carryGripOffset =
+              modelData.rightGrip.position
+                .clone()
+                .multiply(model.scale)
+                .applyQuaternion(carryQuaternion);
+
+            const carryTargetPosition =
+              carryGripLocal
+                .clone()
+                .sub(carryGripOffset);
+
+            finalTargetPosition =
+              carryTargetPosition.lerp(
+                shoulderTargetPosition,
+                shoulderBlend
+              );
+
+            finalTargetQuaternion =
+              carryQuaternion.slerp(
+                shoulderTargetQuaternion,
+                shoulderBlend
+              );
+          }
+        }
+
+        const poseLambda =
+          shoulderRequested
+            ? (cfg.shoulderPoseSpeed ?? 34)
+            : (cfg.shoulderLowerPoseSpeed ?? 20);
 
         model.position.x = THREE.MathUtils.damp(
           model.position.x,
-          targetPosition.x,
-          30 / cfg.mass,
+          finalTargetPosition.x,
+          poseLambda / cfg.mass,
           dt
         );
         model.position.y = THREE.MathUtils.damp(
           model.position.y,
-          targetPosition.y,
-          30 / cfg.mass,
+          finalTargetPosition.y,
+          poseLambda / cfg.mass,
           dt
         );
         model.position.z = THREE.MathUtils.damp(
           model.position.z,
-          targetPosition.z,
-          32 / cfg.mass,
+          finalTargetPosition.z,
+          (poseLambda + 2) / cfg.mass,
           dt
         );
 
         model.quaternion.slerp(
-          this.tmpDesiredLocalQ,
-          1 - Math.exp(-(28 / cfg.mass) * dt)
+          finalTargetQuaternion,
+          1 -
+            Math.exp(
+              -(poseLambda / cfg.mass) * dt
+            )
         );
 
         model.updateWorldMatrix(true, true);
-        this.updateGripPose(true, true);
+
+        const shoulderIK =
+          shoulderBlend > 0.14;
+
+        this.updateGripPose(
+          shoulderIK,
+          shoulderIK,
+          THREE.MathUtils.lerp(
+            cfg.supportHandIKLambda ?? 150,
+            34,
+            shoulderBlend
+          )
+        );
         return;
       }
     }
@@ -1122,6 +1273,7 @@ export class WeaponSystem {
       entry.state.sustainedFire = 0;
       entry.state.shotIndex = 0;
       entry.state.burstShots = 0;
+      entry.state.shoulderBlend = 0;
       entry.state.sinceShot = 999;
       entry.state.pumpSoundPlayed = true;
       if (entry.model.pumpRoot) {

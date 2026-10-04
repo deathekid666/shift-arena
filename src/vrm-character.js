@@ -1468,11 +1468,26 @@ function updatePose(character, dt, state) {
   const time = performance.now() * 0.001;
   const breathe = Math.sin(time * 2.4) * 0.025;
 
-  // Upper-body weapon layer runs after locomotion.
-  if (state.aiming && !fang) {
-    applyWeaponAimPose(bones, baseRotations, state, dt);
-  } else if (combat && !fang) {
-    applyHipFirePose(bones, baseRotations, state, dt);
+  // Fortnite-like upper-body weapon state:
+  // - equipped but not fighting: stable low-ready two-hand carry
+  // - firing OR ADS: same shouldered aim architecture
+  // Lower-body locomotion remains authored underneath.
+  if (combat && !fang) {
+    applyWeaponAimPose(
+      bones,
+      baseRotations,
+      state,
+      dt
+    );
+  } else if (
+    state.weaponEquipped &&
+    !fang
+  ) {
+    applyWeaponCarryPose(
+      bones,
+      baseRotations,
+      dt
+    );
   } else if (!fang && !authored) {
     const armAmplitude =
       stateName === 'RUN' ? 0.58 :
@@ -1984,17 +1999,96 @@ function applyWeaponAimPose(bones, baseRotations, state, dt) {
   );
 }
 
-function applyHipFirePose(bones, baseRotations, state, dt) {
-  const pitch = THREE.MathUtils.clamp(state.aimPitch ?? 0, -0.55, 0.55);
-  const yaw = THREE.MathUtils.clamp(state.aimYawOffset ?? 0, -0.92, 0.92);
+function applyWeaponCarryPose(
+  bones,
+  baseRotations,
+  dt
+) {
+  // Low-ready Fortnite-style carry: both hands stay on the weapon and the
+  // upper body remains stable while locomotion continues underneath.
+  dampBoneEuler(
+    bones.spine,
+    baseRotations,
+    -0.025,
+    0,
+    0,
+    16,
+    dt
+  );
+  dampBoneEuler(
+    bones.chest,
+    baseRotations,
+    -0.045,
+    0,
+    0,
+    17,
+    dt
+  );
+  dampBoneEuler(
+    bones.upperChest,
+    baseRotations,
+    -0.025,
+    0,
+    0,
+    17,
+    dt
+  );
 
-  dampBoneEuler(bones.spine, baseRotations, -pitch * 0.12, yaw * 0.18, 0, 14, dt);
-  dampBoneEuler(bones.chest, baseRotations, -pitch * 0.16, yaw * 0.22, 0, 16, dt);
+  dampBoneEuler(
+    bones.leftShoulder,
+    baseRotations,
+    -0.035,
+    0.035,
+    -0.08,
+    18,
+    dt
+  );
+  dampBoneEuler(
+    bones.rightShoulder,
+    baseRotations,
+    -0.03,
+    -0.03,
+    0.08,
+    18,
+    dt
+  );
 
-  dampBoneEuler(bones.leftUpperArm, baseRotations, -0.72, 0.12, -0.66, 18, dt);
-  dampBoneEuler(bones.leftLowerArm, baseRotations, -0.82, -0.04, -0.18, 18, dt);
-  dampBoneEuler(bones.rightUpperArm, baseRotations, -0.62, -0.08, 0.68, 18, dt);
-  dampBoneEuler(bones.rightLowerArm, baseRotations, -0.80, 0.03, 0.16, 18, dt);
+  dampBoneEuler(
+    bones.leftUpperArm,
+    baseRotations,
+    -0.50,
+    0.10,
+    -0.60,
+    19,
+    dt
+  );
+  dampBoneEuler(
+    bones.leftLowerArm,
+    baseRotations,
+    -0.68,
+    -0.035,
+    -0.16,
+    19,
+    dt
+  );
+  dampBoneEuler(
+    bones.rightUpperArm,
+    baseRotations,
+    -0.40,
+    -0.06,
+    0.60,
+    19,
+    dt
+  );
+  dampBoneEuler(
+    bones.rightLowerArm,
+    baseRotations,
+    -0.66,
+    0.025,
+    0.15,
+    19,
+    dt
+  );
 }
 
 const IK_TMP = {

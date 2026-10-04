@@ -462,6 +462,7 @@ export class PlayerController {
       slideProgress: this.sliding
         ? 1 - THREE.MathUtils.clamp(this.slideTimer / cfg.slideDuration, 0, 1)
         : 0,
+      weaponEquipped: this.weaponVisualActive,
       combat: this.weaponVisualActive && combatFacing,
       aiming: this.weaponVisualActive && this.weaponAiming,
       aimPitch: this.aimPitch,
