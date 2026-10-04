@@ -79,7 +79,7 @@ export const GAME_CONFIG = {
       // Same stable shooter hierarchy used by the other hero weapons:
       // right/master hand owns the AR, left hand follows the front support point.
       masterHandCarry: true,
-      supportHandIKLambda: 105,
+      supportHandIKLambda: 88,
       rightGripX: 0,
       rightGripY: -0.205,
       rightGripZ: 0.185,
@@ -92,7 +92,7 @@ export const GAME_CONFIG = {
       shoulderLowerSpeed: 11,
       shoulderPoseSpeed: 36,
       shoulderLowerPoseSpeed: 20,
-      shoulderSupportIKLambda: 54,
+      shoulderSupportIKLambda: 150,
       adsPoseInSpeed: 30,
       adsPoseOutSpeed: 21,
 
@@ -208,7 +208,7 @@ export const GAME_CONFIG = {
       // Stable shooter hierarchy: right/master hand owns the weapon,
       // left/support hand follows the pump grip with IK.
       masterHandCarry: true,
-      supportHandIKLambda: 120,
+      supportHandIKLambda: 92,
       rightGripX: 0,
       rightGripY: -0.205,
       rightGripZ: 0.205,
@@ -220,7 +220,7 @@ export const GAME_CONFIG = {
       shoulderLowerSpeed: 9.5,
       shoulderPoseSpeed: 34,
       shoulderLowerPoseSpeed: 18,
-      shoulderSupportIKLambda: 50,
+      shoulderSupportIKLambda: 158,
       adsPoseInSpeed: 27,
       adsPoseOutSpeed: 18,
 
@@ -334,7 +334,7 @@ export const GAME_CONFIG = {
       heldScale: 0.58,
       pickupScale: 0.82,
       masterHandCarry: true,
-      supportHandIKLambda: 150,
+      supportHandIKLambda: 96,
       rightGripX: 0,
       rightGripY: -0.205,
       rightGripZ: 0.190,
@@ -346,7 +346,7 @@ export const GAME_CONFIG = {
       shoulderLowerSpeed: 8.5,
       shoulderPoseSpeed: 32,
       shoulderLowerPoseSpeed: 17,
-      shoulderSupportIKLambda: 48,
+      shoulderSupportIKLambda: 164,
       adsPoseInSpeed: 24,
       adsPoseOutSpeed: 16,
       combatGripForward: 0.220,
@@ -403,7 +403,7 @@ export const GAME_CONFIG = {
       // Stable hero-weapon rig: right/master hand owns the compact SMG,
       // left/support hand follows the front of the dispenser body.
       masterHandCarry: true,
-      supportHandIKLambda: 115,
+      supportHandIKLambda: 90,
       rightGripX: 0,
       rightGripY: -0.205,
       rightGripZ: 0.165,
@@ -416,7 +416,7 @@ export const GAME_CONFIG = {
       shoulderLowerSpeed: 13,
       shoulderPoseSpeed: 40,
       shoulderLowerPoseSpeed: 22,
-      shoulderSupportIKLambda: 58,
+      shoulderSupportIKLambda: 170,
       adsPoseInSpeed: 34,
       adsPoseOutSpeed: 24,
 

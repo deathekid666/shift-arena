@@ -69,6 +69,7 @@ export class WeaponSystem {
       weaponQuaternion: new THREE.Quaternion(),
       rightHandIK: false,
       rightHandOrient: false,
+      rightHandIKBlend: 0,
       leftHandLambda: 30,
       adsBlend: 0,
       shoulderBlend: 0
@@ -835,19 +836,27 @@ export class WeaponSystem {
 
         model.updateWorldMatrix(true, true);
 
+        const shoulderIKBlend =
+          THREE.MathUtils.smoothstep(
+            shoulderBlend,
+            0.02,
+            0.72
+          );
+
         const shoulderIK =
-          shoulderBlend > 0.14;
+          shoulderIKBlend > 0.01;
 
         this.updateGripPose(
           shoulderIK,
           shoulderIK,
           THREE.MathUtils.lerp(
-            cfg.supportHandIKLambda ?? 150,
-            cfg.shoulderSupportIKLambda ?? 52,
-            shoulderBlend
+            cfg.supportHandIKLambda ?? 90,
+            cfg.shoulderSupportIKLambda ?? 150,
+            shoulderIKBlend
           ),
           adsBlend,
-          shoulderBlend
+          shoulderBlend,
+          shoulderIKBlend
         );
         return;
       }
@@ -1047,7 +1056,8 @@ export class WeaponSystem {
     rightHandOrient = false,
     leftHandLambda = 30,
     adsBlend = 0,
-    shoulderBlend = 0
+    shoulderBlend = 0,
+    rightHandIKBlend = 0
   ) {
     const model = this.active.model;
     model.rightGrip.getWorldPosition(this.gripPose.rightGrip);
@@ -1066,6 +1076,12 @@ export class WeaponSystem {
       !this.blocked;
     this.gripPose.rightHandIK = Boolean(rightHandIK);
     this.gripPose.rightHandOrient = Boolean(rightHandOrient);
+    this.gripPose.rightHandIKBlend =
+      THREE.MathUtils.clamp(
+        rightHandIKBlend,
+        0,
+        1
+      );
     this.gripPose.leftHandLambda = leftHandLambda;
     this.gripPose.adsBlend =
       THREE.MathUtils.clamp(adsBlend, 0, 1);

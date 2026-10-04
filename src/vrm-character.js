@@ -2190,8 +2190,15 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
   // Solving that same hand back to a grip on the weapon creates a circular
   // dependency and visible jitter. Right-arm IK is only enabled when the
   // camera/shoulder owns the weapon transform (ADS / active combat pose).
+  const rightIKBlend = THREE.MathUtils.clamp(
+    gripPose.rightHandIKBlend ??
+      (gripPose.rightHandIK ? 1 : 0),
+    0,
+    1
+  );
+
   if (
-    gripPose.rightHandIK &&
+    rightIKBlend > 0.001 &&
     bones.rightUpperArm &&
     bones.rightLowerArm &&
     bones.rightHand
@@ -2225,7 +2232,11 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       bones.rightHand,
       gripPose.rightGrip,
       IK_TMP.pole,
-      THREE.MathUtils.lerp(40, 50, ads),
+      THREE.MathUtils.lerp(
+        10,
+        THREE.MathUtils.lerp(42, 54, ads),
+        rightIKBlend
+      ),
       dt
     );
 
@@ -2233,6 +2244,7 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
   }
 
   if (
+    rightIKBlend > 0.001 &&
     gripPose.rightHandOrient &&
     bones.rightHand
   ) {
@@ -2240,7 +2252,11 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       character,
       bones.rightHand,
       gripPose.weaponQuaternion,
-      gripPose.rightHandIK ? 30 : 24,
+      THREE.MathUtils.lerp(
+        8,
+        THREE.MathUtils.lerp(32, 44, gripPose.adsBlend ?? 0),
+        rightIKBlend
+      ),
       dt
     );
     character.root.updateWorldMatrix(true, true);
@@ -2279,7 +2295,7 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     IK_TMP.pole,
     Math.max(
       gripPose.leftHandLambda ?? 30,
-      THREE.MathUtils.lerp(42, 54, supportAds)
+      THREE.MathUtils.lerp(62, 82, supportAds)
     ),
     dt
   );
