@@ -1125,29 +1125,29 @@ export class WeaponSystem {
     state.pumpSoundPlayed = !cfg.pumpAction;
     state.visualKick = Math.max(state.visualKick, cfg.visualKick);
 
-    const pattern = cfg.recoilPattern[state.shotIndex % cfg.recoilPattern.length];
     const shotNumber = state.shotIndex;
     state.shotIndex += 1;
 
-    const sustainedScale =
-      1 +
-      state.sustainedFire *
-      (cfg.sustainedRecoilScale ?? 0);
+    const recoil = getFortniteStyleRecoil(
+      cfg,
+      shotNumber
+    );
 
-    // ADS reduces camera displacement, but every weapon keeps its own recoil
-    // identity and sustained-fire climb.
+    // Fortnite separates bloom/spread from recoil. The recoil impulse stays
+    // weapon-specific while ADS mainly improves accuracy rather than deleting
+    // camera movement.
     const cameraRecoilMul = this.aiming
-      ? (cfg.adsRecoilMultiplier ?? 0.62)
+      ? (cfg.adsRecoilMultiplier ?? 0.90)
       : 1;
 
     this.cameraRig.kick(
-      pattern[0] * cameraRecoilMul * sustainedScale,
-      pattern[1] * cameraRecoilMul * sustainedScale,
+      recoil.pitch * cameraRecoilMul,
+      recoil.yaw * cameraRecoilMul,
       {
         recovery: cfg.recoilRecovery,
-        attack: cfg.recoilAttack ?? 34,
-        maxPitch: cfg.recoilMaxPitch ?? 0.20,
-        maxYaw: cfg.recoilMaxYaw ?? 0.12
+        attack: cfg.recoilAttack ?? 40,
+        maxPitch: cfg.recoilMaxPitch ?? 0.10,
+        maxYaw: cfg.recoilMaxYaw ?? 0.08
       }
     );
 
@@ -1159,19 +1159,20 @@ export class WeaponSystem {
       Math.max(0.72, cfg.mass);
 
     const posePitch =
-      (cfg.weaponRecoilPitch ?? cfg.visualKick * 0.28) *
-      (this.aiming ? 0.72 : 1) *
-      sustainedScale;
-    const poseYawBase =
-      cfg.weaponRecoilYaw ?? 0.012;
+      (cfg.weaponRecoilPitch ??
+        Math.max(0.006, recoil.pitch * 1.35)) *
+      (this.aiming ? 0.82 : 1);
+
     const poseYaw =
-      poseYawBase *
-      ((shotNumber % 2 === 0) ? 1 : -1) *
-      (this.aiming ? 0.58 : 1);
+      (cfg.weaponRecoilYaw ??
+        Math.abs(recoil.yaw) * 1.20) *
+      Math.sign(recoil.yaw || 1) *
+      (this.aiming ? 0.82 : 1);
+
     const poseRoll =
-      (cfg.weaponRecoilRoll ?? 0.010) *
-      ((shotNumber % 2 === 0) ? -1 : 1) *
-      (this.aiming ? 0.55 : 1);
+      (cfg.weaponRecoilRoll ?? 0.006) *
+      -Math.sign(recoil.yaw || ((shotNumber & 1) ? -1 : 1)) *
+      (this.aiming ? 0.78 : 1);
 
     state.recoilPitch = THREE.MathUtils.clamp(
       state.recoilPitch + posePitch,
@@ -1193,7 +1194,7 @@ export class WeaponSystem {
       1,
       state.sustainedFire +
         (cfg.sustainedFirePerShot ??
-          (cfg.automatic ? 0.24 : 0.48))
+          (cfg.automatic ? 0.18 : 0.45))
     );
 
     this.triggerMuzzleFx(this.active);
@@ -1402,6 +1403,44 @@ export class WeaponSystem {
       leftGrip
     };
   }}
+
+function getFortniteStyleRecoil(cfg, shotNumber) {
+  const profile = cfg.fortniteRecoil;
+
+  if (!profile) {
+    const pattern =
+      cfg.recoilPattern[
+        shotNumber % cfg.recoilPattern.length
+      ];
+    return {
+      pitch: pattern[0],
+      yaw: pattern[1]
+    };
+  }
+
+  // Public Fortnite weapon rows expose vertical/horizontal recoil as balance
+  // values rather than radians. A shared conversion scale preserves the real
+  // class-to-class ratios while fitting SHIFT's third-person camera.
+  const unit = profile.unitScale ?? 0.0036;
+  const horizontalPattern =
+    profile.horizontalPattern ?? [-1, 1];
+  const side =
+    horizontalPattern[
+      shotNumber % horizontalPattern.length
+    ] ?? 0;
+
+  const earlyRampShots = profile.earlyRampShots ?? 0;
+  const earlyRampPerShot = profile.earlyRampPerShot ?? 0;
+  const ramp =
+    1 +
+    Math.min(shotNumber, earlyRampShots) *
+      earlyRampPerShot;
+
+  return {
+    pitch: profile.vertical * unit * ramp,
+    yaw: profile.horizontal * unit * side
+  };
+}
 
 function buildMuzzleFx(cfg) {
   const group = new THREE.Group();
