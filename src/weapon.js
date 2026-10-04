@@ -647,6 +647,95 @@ export class WeaponSystem {
       0.020
     );
 
+    // During authored slide, restore the exact ownership model used by the
+    // last confirmed-good slide build (010.20J): the authored RIGHT hand owns
+    // the weapon and only the LEFT support hand follows via IK. Do not force
+    // the slide arms toward the body-space rifle target.
+    if (
+      this.player.sliding &&
+      cfg.masterHandCarry &&
+      this.handMounted
+    ) {
+      const handWorld =
+        this.player.getHandWorldPosition?.(
+          'right',
+          this.tmpHandWorld
+        ) ??
+        null;
+
+      if (handWorld) {
+        this.tmpGripLocal.copy(
+          handWorld
+        );
+        this.player.group.worldToLocal(
+          this.tmpGripLocal
+        );
+
+        // Same fixed carry orientation used by the working 010.20J slide.
+        // The authored hand controls position; gameplay owns only weapon local
+        // orientation and recoil.
+        const recoilPose =
+          cfg.recoilPoseScale
+            ? Math.max(
+                0,
+                state.visualKick
+              ) *
+              cfg.recoilPoseScale
+            : 0;
+
+        this.tmpDesiredLocalQ.setFromEuler(
+          new THREE.Euler(
+            (cfg.carryPitch ?? -0.11) +
+              recoilPose,
+            cfg.carryYaw ?? 0,
+            cfg.carryRoll ?? -0.055,
+            'YXZ'
+          )
+        );
+
+        this.tmpGripOffset
+          .copy(
+            modelData.rightGrip.position
+          )
+          .multiply(model.scale)
+          .applyQuaternion(
+            this.tmpDesiredLocalQ
+          );
+
+        const slideTargetPosition =
+          this.tmpGripLocal
+            .clone()
+            .sub(
+              this.tmpGripOffset
+            );
+
+        // Rigid attachment is intentional: damping makes the gun chase the
+        // authored hand and creates visible separation during the fast slide.
+        model.position.copy(
+          slideTargetPosition
+        );
+        model.quaternion.copy(
+          this.tmpDesiredLocalQ
+        );
+
+        model.updateWorldMatrix(
+          true,
+          true
+        );
+
+        this.updateGripPose(
+          false,
+          false,
+          cfg.supportHandIKLambda ?? 150,
+          0,
+          0,
+          0
+        );
+
+        return;
+      }
+    }
+
     // Fortnite-like weapon stack:
     // body/chest defines a stable rifle-ready grip target,
     // aim direction rotates that target toward the crosshair,

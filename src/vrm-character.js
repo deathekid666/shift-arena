@@ -391,7 +391,6 @@ function buildCharacterInterface({
     stablePelvis: {
       slideBlend: 0
     },
-    authoredSlideCoreBlend: 0,
     coreRotationStabilizer: {
       active: false,
       filtered: new Map()
@@ -442,17 +441,6 @@ function buildCharacterInterface({
           localZ: state.localZ ?? 0
         },
         dt
-      );
-
-      // UAL2 supplies the proven slide timing, leg motion and pelvis height,
-      // but its torso can roll nearly onto the side on this VRM. Stabilize only
-      // the core rotation to the same low two-knee silhouette used by our
-      // procedural fallback. Legs and hips.position remain fully authored.
-      stabilizeAuthoredSlideCore(
-        this,
-        dt,
-        state,
-        authoredSlideActive
       );
 
       // Restore the last confirmed-good slide architecture: when UAL2 is
@@ -1411,146 +1399,6 @@ function applyIdlePose(bones, baseRotations, blend = 1) {
   setBoneEuler(bones.rightUpperArm, baseRotations, 0.05, -0.05, 1.08, blend);
   setBoneEuler(bones.leftLowerArm, baseRotations, 0.10, 0.0, -0.12, blend);
   setBoneEuler(bones.rightLowerArm, baseRotations, 0.10, 0.0, 0.12, blend);
-}
-
-function stabilizeAuthoredSlideCore(
-  character,
-  dt,
-  state,
-  authoredSlideActive
-) {
-  const targetBlend = state?.sliding
-    ? 1
-    : authoredSlideActive
-      ? 0.42
-      : 0;
-
-  character.authoredSlideCoreBlend =
-    THREE.MathUtils.damp(
-      character.authoredSlideCoreBlend ?? 0,
-      targetBlend,
-      targetBlend >
-        (character.authoredSlideCoreBlend ?? 0)
-        ? 40
-        : 14,
-      dt
-    );
-
-  const blend =
-    THREE.MathUtils.clamp(
-      character.authoredSlideCoreBlend ?? 0,
-      0,
-      1
-    );
-
-  if (blend < 0.002) {
-    character.authoredSlideCoreBlend = 0;
-    return;
-  }
-
-  const { bones, baseRotations } =
-    character;
-
-  // These are the same proven torso offsets used by slide-pose.js, applied
-  // only to core bones. A 96% maximum correction preserves a trace of the
-  // authored animation while preventing the sideways roll seen in the clip.
-  const coreBlend = blend * 0.96;
-
-  applyStableSlideCoreBone(
-    bones.hips,
-    baseRotations,
-    0.20,
-    0.00,
-    -0.08,
-    coreBlend
-  );
-
-  applyStableSlideCoreBone(
-    bones.spine,
-    baseRotations,
-    -0.13,
-    0.00,
-    0.055,
-    coreBlend
-  );
-
-  applyStableSlideCoreBone(
-    bones.chest,
-    baseRotations,
-    -0.06,
-    0.00,
-    0.035,
-    coreBlend
-  );
-
-  applyStableSlideCoreBone(
-    bones.upperChest,
-    baseRotations,
-    -0.035,
-    0.00,
-    0.020,
-    coreBlend
-  );
-
-  applyStableSlideCoreBone(
-    bones.neck,
-    baseRotations,
-    0.015,
-    0.00,
-    -0.010,
-    coreBlend * 0.94
-  );
-
-  applyStableSlideCoreBone(
-    bones.head,
-    baseRotations,
-    0.010,
-    0.00,
-    0.000,
-    coreBlend * 0.92
-  );
-
-  character.root.updateWorldMatrix(
-    true,
-    true
-  );
-}
-
-function applyStableSlideCoreBone(
-  node,
-  baseRotations,
-  x,
-  y,
-  z,
-  blend
-) {
-  if (!node) return;
-
-  const base =
-    baseRotations?.get(node);
-
-  if (!base) return;
-
-  const target =
-    base.clone().multiply(
-      new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(
-          x,
-          y,
-          z,
-          'XYZ'
-        )
-      )
-    );
-
-  node.quaternion.slerp(
-    target,
-    THREE.MathUtils.clamp(
-      blend,
-      0,
-      1
-    )
-  );
 }
 
 function stabilizeBaseCoreRotation(character, dt, state) {
@@ -2769,14 +2617,22 @@ function filterWeaponIkTarget(
 function applyTwoHandWeaponIK(character, gripPose, dt) {
   const { bones } = character;
 
+  const rightHandIK =
+    Boolean(gripPose?.rightHandIK);
+
   if (
     !gripPose?.aiming ||
-    !bones.rightUpperArm ||
-    !bones.rightLowerArm ||
-    !bones.rightHand ||
     !bones.leftUpperArm ||
     !bones.leftLowerArm ||
-    !bones.leftHand
+    !bones.leftHand ||
+    (
+      rightHandIK &&
+      (
+        !bones.rightUpperArm ||
+        !bones.rightLowerArm ||
+        !bones.rightHand
+      )
+    )
   ) {
     const filter =
       WEAPON_IK_TARGET_FILTER.get(
@@ -2818,29 +2674,33 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     );
 
   if (!targetFilter.initialized) {
-    targetFilter.right.copy(
-      gripPose.rightGrip
-    );
+    if (rightHandIK) {
+      targetFilter.right.copy(
+        gripPose.rightGrip
+      );
+    }
     targetFilter.left.copy(
       gripPose.leftGrip
     );
     targetFilter.initialized = true;
   }
 
-  filterWeaponIkTarget(
-    targetFilter.right,
-    gripPose.rightGrip,
-    dt,
-    {
-      lambda:
-        THREE.MathUtils.lerp(
-          68,
-          78,
-          ads
-        ),
-      epsilon: 0.00004
-    }
-  );
+  if (rightHandIK) {
+    filterWeaponIkTarget(
+      targetFilter.right,
+      gripPose.rightGrip,
+      dt,
+      {
+        lambda:
+          THREE.MathUtils.lerp(
+            68,
+            78,
+            ads
+          ),
+        epsilon: 0.00004
+      }
+    );
+  }
 
   filterWeaponIkTarget(
     targetFilter.left,
@@ -2857,58 +2717,62 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     }
   );
 
-  // Trigger/master hand: elbow stays bent and tucked instead of extending
-  // sideways. Target is independent from the arm, so this is not feedback.
-  bones.rightUpperArm.getWorldPosition(
-    IK_TMP.shoulder
-  );
-
-  IK_TMP.pole
-    .copy(IK_TMP.shoulder)
-    .addScaledVector(
-      IK_TMP.right,
-      THREE.MathUtils.lerp(
-        0.17,
-        0.12,
-        ads
-      )
-    )
-    .addScaledVector(
-      IK_TMP.down,
-      THREE.MathUtils.lerp(
-        0.16,
-        0.13,
-        ads
-      )
-    )
-    .addScaledVector(
-      IK_TMP.forward,
-      THREE.MathUtils.lerp(
-        0.055,
-        0.040,
-        ads
-      )
+  if (rightHandIK) {
+    // Trigger/master hand: elbow stays bent and tucked instead of extending
+    // sideways. Target is independent from the arm, so this is not feedback.
+    bones.rightUpperArm.getWorldPosition(
+      IK_TMP.shoulder
     );
 
-  solveTwoBoneIK(
-    character.root,
-    bones.rightUpperArm,
-    bones.rightLowerArm,
-    bones.rightHand,
-    targetFilter.right,
-    IK_TMP.pole,
-    THREE.MathUtils.lerp(
-      74,
-      88,
-      ads
-    ),
-    dt
-  );
+    IK_TMP.pole
+      .copy(IK_TMP.shoulder)
+      .addScaledVector(
+        IK_TMP.right,
+        THREE.MathUtils.lerp(
+          0.17,
+          0.12,
+          ads
+        )
+      )
+      .addScaledVector(
+        IK_TMP.down,
+        THREE.MathUtils.lerp(
+          0.16,
+          0.13,
+          ads
+        )
+      )
+      .addScaledVector(
+        IK_TMP.forward,
+        THREE.MathUtils.lerp(
+          0.055,
+          0.040,
+          ads
+        )
+      );
 
-  character.root.updateWorldMatrix(
-    true,
-    true
-  );
+    solveTwoBoneIK(
+      character.root,
+      bones.rightUpperArm,
+      bones.rightLowerArm,
+      bones.rightHand,
+      targetFilter.right,
+      IK_TMP.pole,
+      THREE.MathUtils.lerp(
+        74,
+        88,
+        ads
+      ),
+      dt
+    );
+
+    character.root.updateWorldMatrix(
+      true,
+      true
+    );
+
+
+  }
 
   // Support hand reaches forward under the weapon and stays slightly lower.
   bones.leftUpperArm.getWorldPosition(
