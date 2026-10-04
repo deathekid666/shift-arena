@@ -2444,12 +2444,16 @@ function filterWeaponIkTarget(
 
 function applyTwoHandWeaponIK(character, gripPose, dt) {
   const { bones } = character;
+
   if (
     !gripPose?.aiming ||
     !bones.leftUpperArm ||
     !bones.leftLowerArm ||
     !bones.leftHand
   ) {
+    const filter =
+      WEAPON_IK_TARGET_FILTER.get(character);
+    if (filter) filter.initialized = false;
     return;
   }
 
@@ -2465,71 +2469,15 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     .applyQuaternion(IK_TMP.rootQ)
     .normalize();
 
-  // In normal carry the right hand OWNS the weapon via weaponSocket.
-  // Solving that same hand back to a grip on the weapon creates a circular
-  // dependency and visible jitter. Right-arm IK is only enabled when the
-  // camera/shoulder owns the weapon transform (ADS / active combat pose).
-  const rightIKBlend = THREE.MathUtils.clamp(
-    gripPose.rightHandIKBlend ??
-      (gripPose.rightHandIK ? 1 : 0),
+  const ads = THREE.MathUtils.clamp(
+    gripPose.adsBlend ?? 0,
     0,
     1
   );
 
-  if (
-    rightIKBlend > 0.001 &&
-    bones.rightUpperArm &&
-    bones.rightLowerArm &&
-    bones.rightHand
-  ) {
-    const ads = THREE.MathUtils.clamp(
-      gripPose.adsBlend ?? 0,
-      0,
-      1
-    );
-
-    bones.rightUpperArm.getWorldPosition(IK_TMP.shoulder);
-    IK_TMP.pole
-      .copy(IK_TMP.shoulder)
-      .addScaledVector(
-        IK_TMP.right,
-        THREE.MathUtils.lerp(0.24, 0.155, ads)
-      )
-      .addScaledVector(
-        IK_TMP.down,
-        THREE.MathUtils.lerp(0.19, 0.145, ads)
-      )
-      .addScaledVector(
-        IK_TMP.forward,
-        THREE.MathUtils.lerp(0.050, 0.030, ads)
-      );
-
-    solveTwoBoneIK(
-      character.root,
-      bones.rightUpperArm,
-      bones.rightLowerArm,
-      bones.rightHand,
-      getWeaponIkTargetFilter(
-        character
-      ).right,
-      IK_TMP.pole,
-      THREE.MathUtils.lerp(
-        10,
-        THREE.MathUtils.lerp(42, 54, ads),
-        rightIKBlend
-      ),
-      dt
-    );
-
-    character.root.updateWorldMatrix(true, true);
-  }
-
-
-
-  // The support elbow drops slightly and tucks inward as ADS tightens,
-  // matching a shouldered rifle silhouette instead of a wide T-pose bend.
-  const supportAds = THREE.MathUtils.clamp(
-    gripPose.adsBlend ?? 0,
+  const rightIKBlend = THREE.MathUtils.clamp(
+    gripPose.rightHandIKBlend ??
+      (gripPose.rightHandIK ? 1 : 0),
     0,
     1
   );
@@ -2538,12 +2486,8 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     getWeaponIkTargetFilter(character);
 
   if (!targetFilter.initialized) {
-    targetFilter.right.copy(
-      gripPose.rightGrip
-    );
-    targetFilter.left.copy(
-      gripPose.leftGrip
-    );
+    targetFilter.right.copy(gripPose.rightGrip);
+    targetFilter.left.copy(gripPose.leftGrip);
     targetFilter.initialized = true;
   }
 
@@ -2552,18 +2496,8 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     gripPose.rightGrip,
     dt,
     {
-      lambda:
-        THREE.MathUtils.lerp(
-          62,
-          78,
-          supportAds
-        ),
-      deadzone:
-        THREE.MathUtils.lerp(
-          0.0010,
-          0.0018,
-          supportAds
-        )
+      lambda: THREE.MathUtils.lerp(52, 66, ads),
+      deadzone: THREE.MathUtils.lerp(0.0012, 0.0028, ads)
     }
   );
 
@@ -2572,35 +2506,65 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     gripPose.leftGrip,
     dt,
     {
-      lambda:
-        THREE.MathUtils.lerp(
-          60,
-          76,
-          supportAds
-        ),
-      deadzone:
-        THREE.MathUtils.lerp(
-          0.0010,
-          0.0018,
-          supportAds
-        )
+      lambda: THREE.MathUtils.lerp(50, 64, ads),
+      deadzone: THREE.MathUtils.lerp(0.0012, 0.0028, ads)
     }
   );
+
+  if (
+    rightIKBlend > 0.001 &&
+    bones.rightUpperArm &&
+    bones.rightLowerArm &&
+    bones.rightHand
+  ) {
+    bones.rightUpperArm.getWorldPosition(IK_TMP.shoulder);
+    IK_TMP.pole
+      .copy(IK_TMP.shoulder)
+      .addScaledVector(
+        IK_TMP.right,
+        THREE.MathUtils.lerp(0.235, 0.145, ads)
+      )
+      .addScaledVector(
+        IK_TMP.down,
+        THREE.MathUtils.lerp(0.185, 0.135, ads)
+      )
+      .addScaledVector(
+        IK_TMP.forward,
+        THREE.MathUtils.lerp(0.046, 0.025, ads)
+      );
+
+    solveTwoBoneIK(
+      character.root,
+      bones.rightUpperArm,
+      bones.rightLowerArm,
+      bones.rightHand,
+      targetFilter.right,
+      IK_TMP.pole,
+      THREE.MathUtils.lerp(
+        12,
+        THREE.MathUtils.lerp(46, 56, ads),
+        rightIKBlend
+      ),
+      dt
+    );
+
+    character.root.updateWorldMatrix(true, true);
+  }
 
   bones.leftUpperArm.getWorldPosition(IK_TMP.shoulder);
   IK_TMP.pole
     .copy(IK_TMP.shoulder)
     .addScaledVector(
       IK_TMP.right,
-      THREE.MathUtils.lerp(-0.235, -0.165, supportAds)
+      THREE.MathUtils.lerp(-0.225, -0.155, ads)
     )
     .addScaledVector(
       IK_TMP.down,
-      THREE.MathUtils.lerp(0.18, 0.235, supportAds)
+      THREE.MathUtils.lerp(0.18, 0.230, ads)
     )
     .addScaledVector(
       IK_TMP.forward,
-      THREE.MathUtils.lerp(0.070, 0.100, supportAds)
+      THREE.MathUtils.lerp(0.074, 0.105, ads)
     );
 
   solveTwoBoneIK(
@@ -2608,54 +2572,16 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     bones.leftUpperArm,
     bones.leftLowerArm,
     bones.leftHand,
-    getWeaponIkTargetFilter(
-      character
-    ).left,
+    targetFilter.left,
     IK_TMP.pole,
     Math.max(
       gripPose.leftHandLambda ?? 30,
-      THREE.MathUtils.lerp(62, 82, supportAds)
+      THREE.MathUtils.lerp(66, 84, ads)
     ),
     dt
   );
 }
 
-function alignWeaponHandToSocket(
-  character,
-  hand,
-  weaponWorldQuaternion,
-  lambda,
-  dt
-) {
-  const socket = character.weaponSocket;
-  if (!socket || !hand?.parent || !weaponWorldQuaternion) return;
-
-  // weaponWorldQ = handWorldQ * socketLocalQ
-  // => handWorldQ = weaponWorldQ * inverse(socketLocalQ)
-  IK_TMP.deltaWorldQ
-    .copy(socket.quaternion)
-    .invert();
-
-  IK_TMP.desiredWorldQ
-    .copy(weaponWorldQuaternion)
-    .multiply(IK_TMP.deltaWorldQ);
-
-  hand.parent.getWorldQuaternion(IK_TMP.parentWorldQ);
-  IK_TMP.parentWorldQInv
-    .copy(IK_TMP.parentWorldQ)
-    .invert();
-
-  IK_TMP.desiredLocalQ
-    .copy(IK_TMP.parentWorldQInv)
-    .multiply(IK_TMP.desiredWorldQ);
-
-  hand.quaternion.slerp(
-    IK_TMP.desiredLocalQ,
-    1 - Math.exp(-lambda * dt)
-  );
-
-  character.root.updateWorldMatrix(true, true);
-}
 
 function solveTwoBoneIK(
   root,

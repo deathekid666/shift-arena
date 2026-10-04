@@ -58,6 +58,9 @@ export class WeaponSystem {
     this.tmpParentWorldQInv = new THREE.Quaternion();
     this.tmpDesiredWorldQ = new THREE.Quaternion();
     this.tmpDesiredLocalQ = new THREE.Quaternion();
+    this.tmpGripRight = new THREE.Vector3();
+    this.tmpGripUp = new THREE.Vector3();
+    this.tmpGripForwardWorld = new THREE.Vector3();
     this.tmpCarryCorrectionQ = new THREE.Quaternion();
     this.tmpGripOffset = new THREE.Vector3();
     this.gripPose = {
@@ -581,6 +584,13 @@ export class WeaponSystem {
         1
       );
 
+    const adsPoseMotionScale =
+      THREE.MathUtils.lerp(
+        1,
+        cfg.adsPoseMotionScale ?? 0.05,
+        adsBlend
+      );
+
     const bobScale =
       cfg.bob *
       moving *
@@ -588,7 +598,8 @@ export class WeaponSystem {
         0.55,
         0.10,
         shoulderBlend
-      );
+      ) *
+      adsPoseMotionScale;
 
     const bobX =
       Math.cos(state.bobTime) *
@@ -604,14 +615,31 @@ export class WeaponSystem {
         0.62,
         0.18,
         shoulderBlend
+      ) *
+      adsPoseMotionScale;
+    const poseLookDeadzone =
+      THREE.MathUtils.lerp(
+        0.045,
+        0.20,
+        adsBlend
       );
+
+    const poseLookX =
+      Math.abs(this.cameraRig.lookX) < poseLookDeadzone
+        ? 0
+        : this.cameraRig.lookX;
+    const poseLookY =
+      Math.abs(this.cameraRig.lookY) < poseLookDeadzone
+        ? 0
+        : this.cameraRig.lookY;
+
     const swayX = THREE.MathUtils.clamp(
-      -this.cameraRig.lookX * swayScale,
+      -poseLookX * swayScale,
       -0.032,
       0.032
     );
     const swayY = THREE.MathUtils.clamp(
-      this.cameraRig.lookY * swayScale * 0.38,
+      poseLookY * swayScale * 0.38,
       -0.020,
       0.020
     );
@@ -1134,10 +1162,47 @@ export class WeaponSystem {
     model.muzzle.getWorldPosition(this.gripPose.muzzle);
     model.group.getWorldQuaternion(this.gripPose.weaponQuaternion);
 
-    this.gripPose.forward
+    this.tmpGripForwardWorld
       .set(0, 0, -1)
       .applyQuaternion(this.gripPose.weaponQuaternion)
       .normalize();
+    this.tmpGripRight
+      .set(1, 0, 0)
+      .applyQuaternion(this.gripPose.weaponQuaternion)
+      .normalize();
+    this.tmpGripUp
+      .set(0, 1, 0)
+      .applyQuaternion(this.gripPose.weaponQuaternion)
+      .normalize();
+
+    this.gripPose.forward.copy(this.tmpGripForwardWorld);
+
+    // Grip socket is a weapon anchor; the hand bone is at the wrist.
+    // Offset the IK target so the palm wraps the handle naturally instead of
+    // putting the wrist joint inside the center of the pistol grip.
+    this.gripPose.rightGrip
+      .addScaledVector(
+        this.tmpGripUp,
+        this.cfg.rightWristGripUp ?? 0.050
+      )
+      .addScaledVector(
+        this.tmpGripForwardWorld,
+        -(this.cfg.rightWristGripBack ?? 0.018)
+      )
+      .addScaledVector(
+        this.tmpGripRight,
+        this.cfg.rightWristGripRight ?? 0.010
+      );
+
+    this.gripPose.leftGrip
+      .addScaledVector(
+        this.tmpGripUp,
+        this.cfg.leftWristGripUp ?? 0.016
+      )
+      .addScaledVector(
+        this.tmpGripForwardWorld,
+        -(this.cfg.leftWristGripBack ?? 0.006)
+      );
 
     this.gripPose.aiming =
       this.holdPoseActive &&
