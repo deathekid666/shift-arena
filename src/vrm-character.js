@@ -281,6 +281,9 @@ function buildCharacterInterface({
       landing: 0,
       moveBlend: 0
     },
+    stablePelvis: {
+      slideBlend: 0
+    },
     authoredLocomotion: null,
     authoredLocomotionReady: null,
     update(dt, state = {}) {
@@ -290,6 +293,11 @@ function buildCharacterInterface({
       this.crouchPoseLayer?.restore();
 
       this.authoredLocomotion?.update(dt, state);
+
+      // Keep the normalized hips translation deterministic. Authored clips own
+      // bone rotations only; gameplay states own vertical stance offsets.
+      applyStablePelvis(this, dt, state);
+
       updatePose(this, dt, state);
 
       this.crouchPoseLayer ??= createCrouchPoseLayer(this);
@@ -1250,6 +1258,38 @@ function applyIdlePose(bones, baseRotations, blend = 1) {
   setBoneEuler(bones.rightUpperArm, baseRotations, 0.05, -0.05, 1.08, blend);
   setBoneEuler(bones.leftLowerArm, baseRotations, 0.10, 0.0, -0.12, blend);
   setBoneEuler(bones.rightLowerArm, baseRotations, 0.10, 0.0, 0.12, blend);
+}
+
+function applyStablePelvis(character, dt, state) {
+  const hips = character.bones?.hips;
+  const base = hips
+    ? character.basePositions?.get(hips)
+    : null;
+
+  if (!hips || !base) return;
+
+  const targetSlide =
+    state?.sliding && state?.grounded !== false
+      ? 1
+      : 0;
+
+  character.stablePelvis.slideBlend = THREE.MathUtils.damp(
+    character.stablePelvis.slideBlend,
+    targetSlide,
+    targetSlide > character.stablePelvis.slideBlend
+      ? 20
+      : 14,
+    dt
+  );
+
+  const slide = character.stablePelvis.slideBlend;
+
+  // Never inherit Y translation from an external animation source. This is
+  // the single stable stance position used by idle/run; crouch/jump layers
+  // deliberately modify it later in this frame.
+  hips.position.x = base.x;
+  hips.position.y = base.y - 0.34 * slide;
+  hips.position.z = base.z + 0.055 * slide;
 }
 
 function updatePose(character, dt, state) {
