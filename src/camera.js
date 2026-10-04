@@ -14,6 +14,9 @@ export class ThirdPersonCamera {
     this.recoilYaw = 0;
     this.recoilTargetPitch = 0;
     this.recoilTargetYaw = 0;
+    this.pendingAimRecoilPitch = 0;
+    this.pendingAimRecoilYaw = 0;
+    this.aimRecoilAttack = 58;
     this.recoilAttack = 34;
     this.recoilRecovery = 12;
     this.recoilMaxPitch = 0.20;
@@ -60,6 +63,36 @@ export class ThirdPersonCamera {
       20,
       dt
     );
+
+    // Deliver actual aim recoil over a very short weapon-specific response
+    // instead of teleporting the crosshair by the full amount in one frame.
+    // The delivered displacement stays in pitch/yaw, so the player still has
+    // to counter it manually; only the separate visual impulse recenters.
+    const aimStep =
+      1 - Math.exp(-this.aimRecoilAttack * dt);
+
+    const appliedPitch =
+      this.pendingAimRecoilPitch * aimStep;
+    const appliedYaw =
+      this.pendingAimRecoilYaw * aimStep;
+
+    this.pendingAimRecoilPitch -= appliedPitch;
+    this.pendingAimRecoilYaw -= appliedYaw;
+
+    this.pitch = THREE.MathUtils.clamp(
+      this.pitch + appliedPitch,
+      cfg.pitchMin,
+      cfg.pitchMax
+    );
+    this.yaw += appliedYaw;
+
+    if (Math.abs(this.pendingAimRecoilPitch) < 0.00002) {
+      this.pendingAimRecoilPitch = 0;
+    }
+    if (Math.abs(this.pendingAimRecoilYaw) < 0.00002) {
+      this.pendingAimRecoilYaw = 0;
+    }
+
     // Two-stage recoil envelope:
     // 1) the visible camera catches the shot target quickly;
     // 2) the target itself returns to zero more slowly.
@@ -315,7 +348,8 @@ export class ThirdPersonCamera {
       maxYaw = 0.12,
       aimPitchFraction = 0.72,
       aimYawFraction = 0.72,
-      visualFraction = 0.28
+      visualFraction = 0.28,
+      aimAttack = 58
     } = {}
   ) {
     this.recoilRecovery = recovery;
@@ -323,16 +357,15 @@ export class ThirdPersonCamera {
     this.recoilMaxPitch = maxPitch;
     this.recoilMaxYaw = maxYaw;
 
-    // Fortnite-style recoil must move the player's actual aim enough that the
-    // player can counter it by pulling the mouse/stick in the opposite
-    // direction. Do not hide the whole impulse inside a temporary camera
-    // offset that automatically recenters.
-    this.pitch = THREE.MathUtils.clamp(
-      this.pitch + pitchAmount * aimPitchFraction,
-      GAME_CONFIG.camera.pitchMin,
-      GAME_CONFIG.camera.pitchMax
-    );
-    this.yaw += yawAmount * aimYawFraction;
+    // Queue the controllable part into a short impulse envelope. It still
+    // permanently changes the player's actual aim once delivered, but reaches
+    // that displacement across a handful of frames like a polished shooter.
+    this.aimRecoilAttack = aimAttack;
+
+    this.pendingAimRecoilPitch +=
+      pitchAmount * aimPitchFraction;
+    this.pendingAimRecoilYaw +=
+      yawAmount * aimYawFraction;
 
     // Keep only a smaller visual punch as a recovering camera offset. This
     // gives the shot impact without erasing the controllable aim displacement.

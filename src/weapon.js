@@ -90,6 +90,7 @@ export class WeaponSystem {
         sustainedFire: 0,
         shotIndex: 0,
         sinceShot: 999,
+        burstShots: 0,
         bobTime: 0,
         pumpSoundPlayed: true
       };
@@ -323,7 +324,13 @@ export class WeaponSystem {
       this.updatePumpCycle(entry, dt);
       this.updateTapeRattler(entry, dt);
 
-      if (s.sinceShot > 0.6) s.shotIndex = 0;
+      if (
+        s.sinceShot >
+        (entry.cfg.recoilResetDelay ?? 0.6)
+      ) {
+        s.shotIndex = 0;
+        s.burstShots = 0;
+      }
 
       if (s.flashTimer > 0) {
         s.flashTimer = Math.max(0, s.flashTimer - dt);
@@ -961,7 +968,8 @@ export class WeaponSystem {
       this.aiming &&
       this.player.grounded &&
       this.player.horizontalSpeed() < 0.25 &&
-      this.state.sinceShot > 0.42
+      this.state.sinceShot >
+        (this.cfg.firstShotResetTime ?? 0.42)
     );
   }
 
@@ -975,7 +983,9 @@ export class WeaponSystem {
     if (!this.player.grounded) spread *= cfg.airSpreadMult;
     if (this.player.crouching && this.player.grounded) spread *= cfg.crouchSpreadMult;
 
-    if (this.isFirstShotReady()) spread *= 0.22;
+    if (this.isFirstShotReady()) {
+      spread *= this.cfg.firstShotAccuracyScale ?? 0.04;
+    }
     return spread;
   }
 
@@ -1101,6 +1111,7 @@ export class WeaponSystem {
       entry.state.recoilRoll = 0;
       entry.state.sustainedFire = 0;
       entry.state.shotIndex = 0;
+      entry.state.burstShots = 0;
       entry.state.sinceShot = 999;
       entry.state.pumpSoundPlayed = true;
       if (entry.model.pumpRoot) {
@@ -1130,8 +1141,10 @@ export class WeaponSystem {
 
     const recoil = getFortniteStyleRecoil(
       cfg,
-      shotNumber
+      shotNumber,
+      state.burstShots
     );
+    state.burstShots += 1;
 
     // Fortnite separates bloom/spread from recoil. The recoil impulse stays
     // weapon-specific while ADS mainly improves accuracy rather than deleting
@@ -1153,7 +1166,9 @@ export class WeaponSystem {
         aimYawFraction:
           cfg.aimRecoilYawFraction ?? 0.72,
         visualFraction:
-          cfg.visualRecoilFraction ?? 0.28
+          cfg.visualRecoilFraction ?? 0.28,
+        aimAttack:
+          cfg.aimRecoilAttack ?? 58
       }
     );
 
@@ -1410,7 +1425,7 @@ export class WeaponSystem {
     };
   }}
 
-function getFortniteStyleRecoil(cfg, shotNumber) {
+function getFortniteStyleRecoil(cfg, shotNumber, burstShots = 0) {
   const profile = cfg.fortniteRecoil;
 
   if (!profile) {
@@ -1439,14 +1454,22 @@ function getFortniteStyleRecoil(cfg, shotNumber) {
   const earlyRampPerShot = profile.earlyRampPerShot ?? 0;
   const ramp =
     1 +
-    Math.min(shotNumber, earlyRampShots) *
+    Math.min(burstShots, earlyRampShots) *
       earlyRampPerShot;
+
+  const verticalPattern =
+    profile.verticalPattern ?? [1];
+  const verticalStep =
+    verticalPattern[
+      shotNumber % verticalPattern.length
+    ] ?? 1;
 
   return {
     pitch:
       THREE.MathUtils.degToRad(profile.vertical) *
       cameraScale *
-      ramp,
+      ramp *
+      verticalStep,
     yaw:
       THREE.MathUtils.degToRad(profile.horizontal) *
       cameraScale *

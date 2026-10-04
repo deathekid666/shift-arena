@@ -132,10 +132,15 @@ export const GAME_CONFIG = {
       fortniteRecoil: {
         vertical: 3.15,
         horizontal: 0.25,
-        horizontalPattern: [-0.35, 0.20, -0.55, 0.40, -0.75, 0.60],
-        earlyRampShots: 4,
-        earlyRampPerShot: 0.025
+        horizontalPattern: [-0.18, 0.10, -0.28, 0.22, -0.34, 0.30, -0.22, 0.16],
+        verticalPattern: [0.82, 0.94, 1.00, 1.04, 1.07, 1.09, 1.10, 1.10],
+        earlyRampShots: 5,
+        earlyRampPerShot: 0.018
       },
+      recoilResetDelay: 0.62,
+      firstShotResetTime: 0.58,
+      firstShotAccuracyScale: 0.02,
+      aimRecoilAttack: 62,
       recoilRecovery: 10.5,
       recoilAttack: 68,
       recoilMaxPitch: 0.14,
@@ -237,8 +242,11 @@ export const GAME_CONFIG = {
       fortniteRecoil: {
         vertical: 7.2,
         horizontal: 2.0,
-        horizontalPattern: [-0.72, 0.38, 0.66, -0.44]
+        horizontalPattern: [-0.62, 0.31, 0.54, -0.38],
+        verticalPattern: [1.0, 0.98]
       },
+      recoilResetDelay: 0.95,
+      aimRecoilAttack: 76,
       recoilRecovery: 7.2,
       recoilAttack: 74,
       recoilMaxPitch: 0.18,
@@ -312,8 +320,11 @@ export const GAME_CONFIG = {
       fortniteRecoil: {
         vertical: 8.5,
         horizontal: 2.0,
-        horizontalPattern: [0.52, -0.34, 0.68, -0.46]
+        horizontalPattern: [0.44, -0.30, 0.58, -0.40],
+        verticalPattern: [1.0, 0.98]
       },
+      recoilResetDelay: 1.10,
+      aimRecoilAttack: 70,
       recoilRecovery: 5.8, recoilAttack: 72, recoilMaxPitch: 0.21, recoilMaxYaw: 0.070,
       adsRecoilMultiplier: 1.0, aimRecoilPitchFraction: 0.84, aimRecoilYawFraction: 0.78,
       visualRecoilFraction: 0.22, sustainedFirePerShot: 0.50,
@@ -387,8 +398,11 @@ export const GAME_CONFIG = {
       fortniteRecoil: {
         vertical: 1.8,
         horizontal: 1.45,
-        horizontalPattern: [-0.85, 0.65, -1.0, 0.90, -0.60, 1.0]
+        horizontalPattern: [-0.82, 0.58, -1.0, 0.86, -0.52, 0.96, -0.72, 0.66],
+        verticalPattern: [0.82, 0.96, 1.08, 0.92, 1.10, 1.0]
       },
+      recoilResetDelay: 0.34,
+      aimRecoilAttack: 78,
       recoilRecovery: 18,
       recoilAttack: 72,
       recoilMaxPitch: 0.10,
