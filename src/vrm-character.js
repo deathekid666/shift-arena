@@ -395,6 +395,7 @@ function buildCharacterInterface({
       active: false,
       filtered: new Map()
     },
+    combatStrafeYaw: 0,
     authoredLocomotion: null,
     authoredLocomotionReady: null,
     debugFreezeAuthored: false,
@@ -1479,6 +1480,14 @@ function updatePose(character, dt, state) {
   const locomotion = updateLocomotionLayer(character, dt, state);
   const { cycle, moveBlend, stateName, authored } = locomotion;
 
+  const combatStrafeYaw =
+    applyCombatStrafeOrientationWarp(
+      character,
+      state,
+      locomotion,
+      dt
+    );
+
   const time = performance.now() * 0.001;
   const breathe = Math.sin(time * 2.4) * 0.025;
 
@@ -1498,7 +1507,10 @@ function updatePose(character, dt, state) {
     applyWeaponAimPose(
       bones,
       baseRotations,
-      state,
+      {
+        ...state,
+        combatStrafeYaw
+      },
       dt
     );
   } else if (
@@ -2049,6 +2061,158 @@ function animateScoutAccessories(
   }
 }
 
+function applyCombatStrafeOrientationWarp(
+  character,
+  state,
+  locomotion,
+  dt
+) {
+  const authored =
+    character.authoredLocomotion;
+
+  const slideVisualActive = Boolean(
+    state.sliding ||
+    authored?.slideExitActive ||
+    authored?.state === 'SLIDE_START' ||
+    authored?.state === 'SLIDE_LOOP' ||
+    authored?.state === 'SLIDE_EXIT'
+  );
+
+  const crouchBlend =
+    THREE.MathUtils.clamp(
+      state.crouchBlend ??
+        (state.crouching ? 1 : 0),
+      0,
+      1
+    );
+
+  const speed =
+    Math.max(
+      0,
+      state.speed ?? 0
+    );
+
+  const active =
+    Boolean(state.combat) &&
+    state.grounded !== false &&
+    !slideVisualActive &&
+    crouchBlend < 0.08 &&
+    speed > 0.22;
+
+  let targetYaw = 0;
+
+  if (active) {
+    const localForward =
+      THREE.MathUtils.clamp(
+        locomotion.localForward ?? 1,
+        -1,
+        1
+      );
+
+    const localStrafe =
+      THREE.MathUtils.clamp(
+        locomotion.localStrafe ?? 0,
+        -1,
+        1
+      );
+
+    // Forward + side movement can warp strongly. Backpedal keeps the reversed
+    // gait and only gets a modest directional bias so legs never spin 180°.
+    if (localForward >= -0.18) {
+      targetYaw =
+        Math.atan2(
+          localStrafe,
+          Math.max(
+            0.22,
+            localForward
+          )
+        );
+
+      targetYaw =
+        THREE.MathUtils.clamp(
+          targetYaw,
+          -1.08,
+          1.08
+        );
+    } else {
+      const backAmount =
+        THREE.MathUtils.smoothstep(
+          -localForward,
+          0.18,
+          1
+        );
+
+      targetYaw =
+        THREE.MathUtils.clamp(
+          localStrafe * 0.48 *
+            (1 - backAmount * 0.42),
+          -0.46,
+          0.46
+        );
+    }
+
+    const speedBlend =
+      THREE.MathUtils.smoothstep(
+        speed,
+        0.25,
+        3.8
+      );
+
+    targetYaw *= speedBlend;
+  }
+
+  character.combatStrafeYaw =
+    THREE.MathUtils.damp(
+      character.combatStrafeYaw ?? 0,
+      targetYaw,
+      active ? 13.5 : 17,
+      dt
+    );
+
+  if (
+    !active &&
+    Math.abs(
+      character.combatStrafeYaw
+    ) < 0.0015
+  ) {
+    character.combatStrafeYaw = 0;
+  }
+
+  const warp =
+    character.combatStrafeYaw ?? 0;
+
+  if (
+    Math.abs(warp) < 0.0005
+  ) {
+    return 0;
+  }
+
+  const hips =
+    character.bones?.hips;
+
+  if (!hips) return 0;
+
+  // Apply yaw on top of the authored frame rather than replacing the gait.
+  // The mixer rewrites the bone next frame, so this never accumulates.
+  const currentEuler =
+    new THREE.Euler().setFromQuaternion(
+      hips.quaternion,
+      'YXZ'
+    );
+
+  currentEuler.y += warp;
+  hips.quaternion.setFromEuler(
+    currentEuler
+  );
+
+  character.root.updateWorldMatrix(
+    true,
+    true
+  );
+
+  return warp;
+}
+
 function applyWeaponAimPose(
   bones,
   baseRotations,
@@ -2066,6 +2230,13 @@ function applyWeaponAimPose(
     -0.78,
     0.78
   );
+
+  const strafeCounter =
+    THREE.MathUtils.clamp(
+      state.combatStrafeYaw ?? 0,
+      -1.08,
+      1.08
+    );
 
   const ads = THREE.MathUtils.clamp(
     state.weaponAimBlend ??
@@ -2093,12 +2264,15 @@ function applyWeaponAimPose(
         ads
       ) *
       shoulder,
-    yaw *
-      THREE.MathUtils.lerp(
-        0.12,
-        0.18,
-        ads
-      ) *
+    (
+      yaw *
+        THREE.MathUtils.lerp(
+          0.12,
+          0.18,
+          ads
+        ) -
+      strafeCounter * 0.42
+    ) *
       shoulder,
     -yaw * 0.012 * shoulder,
     22,
@@ -2115,12 +2289,15 @@ function applyWeaponAimPose(
         ads
       ) *
       shoulder,
-    yaw *
-      THREE.MathUtils.lerp(
-        0.18,
-        0.24,
-        ads
-      ) *
+    (
+      yaw *
+        THREE.MathUtils.lerp(
+          0.18,
+          0.24,
+          ads
+        ) -
+      strafeCounter * 0.36
+    ) *
       shoulder,
     -yaw * 0.018 * shoulder,
     24,
@@ -2137,12 +2314,15 @@ function applyWeaponAimPose(
         ads
       ) *
       shoulder,
-    yaw *
-      THREE.MathUtils.lerp(
-        0.16,
-        0.22,
-        ads
-      ) *
+    (
+      yaw *
+        THREE.MathUtils.lerp(
+          0.16,
+          0.22,
+          ads
+        ) -
+      strafeCounter * 0.22
+    ) *
       shoulder,
     0,
     25,

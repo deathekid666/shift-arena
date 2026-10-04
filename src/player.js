@@ -346,8 +346,8 @@ export class PlayerController {
         // with some pelvis separation; ADS keeps the stock/shoulder line clean.
         const maxCombatTwist =
           THREE.MathUtils.lerp(
-            0.62,
-            0.30,
+            0.24,
+            0.10,
             aimBlend
           );
 
@@ -365,8 +365,8 @@ export class PlayerController {
           this.group.rotation.y,
           rootTarget,
           THREE.MathUtils.lerp(
-            18,
-            24,
+            21,
+            27,
             aimBlend
           ),
           dt
