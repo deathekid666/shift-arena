@@ -377,6 +377,10 @@ function buildCharacterInterface({
     stablePelvis: {
       slideBlend: 0
     },
+    coreRotationStabilizer: {
+      active: false,
+      filtered: new Map()
+    },
     authoredLocomotion: null,
     authoredLocomotionReady: null,
     debugFreezeAuthored: false,
@@ -393,6 +397,12 @@ function buildCharacterInterface({
       // Diagnostic freeze intentionally stops only the authored mixer. The
       // gameplay root, procedural layers and final normalized->raw sync remain
       // active so Jitter Lab can isolate the source without changing physics.
+
+      // Retargeted base clips still contain tiny frame-to-frame core rotations.
+      // On this VRM those micro corrections can read as whole-body vibration.
+      // Filter only base standing/walk/sprint core rotation; crouch, jump and
+      // the confirmed-good authored slide remain completely untouched.
+      stabilizeBaseCoreRotation(this, dt, state);
 
       // Build 010.9A's authored UAL2 slide needs its retargeted pelvis-height
       // track. Keep normal locomotion locked to a stable pelvis, but do not
@@ -1375,6 +1385,62 @@ function applyIdlePose(bones, baseRotations, blend = 1) {
   setBoneEuler(bones.rightUpperArm, baseRotations, 0.05, -0.05, 1.08, blend);
   setBoneEuler(bones.leftLowerArm, baseRotations, 0.10, 0.0, -0.12, blend);
   setBoneEuler(bones.rightLowerArm, baseRotations, 0.10, 0.0, 0.12, blend);
+}
+
+function stabilizeBaseCoreRotation(character, dt, state) {
+  const stabilizer = character.coreRotationStabilizer;
+  const authored = character.authoredLocomotion;
+
+  if (!stabilizer) return;
+
+  const crouchBlend = THREE.MathUtils.clamp(
+    state?.crouchBlend ?? (state?.crouching ? 1 : 0),
+    0,
+    1
+  );
+
+  const shouldStabilize = Boolean(
+    authored?.ready &&
+    authored.active &&
+    state?.grounded !== false &&
+    !state?.sliding &&
+    !authored.slideExitActive &&
+    crouchBlend < 0.02
+  );
+
+  if (!shouldStabilize) {
+    stabilizer.active = false;
+    stabilizer.filtered.clear();
+    return;
+  }
+
+  const entries = [
+    [character.bones?.hips, 24],
+    [character.bones?.spine, 30],
+    [character.bones?.chest, 34],
+    [character.bones?.upperChest, 36]
+  ];
+
+  for (const [node, lambda] of entries) {
+    if (!node) continue;
+
+    let filtered = stabilizer.filtered.get(node);
+
+    if (!stabilizer.active || !filtered) {
+      filtered = node.quaternion.clone();
+      stabilizer.filtered.set(node, filtered);
+      continue;
+    }
+
+    filtered.slerp(
+      node.quaternion,
+      1 - Math.exp(-lambda * dt)
+    );
+
+    node.quaternion.copy(filtered);
+  }
+
+  stabilizer.active = true;
 }
 
 function applyStablePelvis(character) {
