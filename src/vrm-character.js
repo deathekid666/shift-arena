@@ -1978,7 +1978,7 @@ function applyWeaponAimPose(
     -pitch * spinePitch * shoulder,
     yaw * spineYaw * shoulder,
     -yaw * 0.018 * shoulder,
-    21,
+    18,
     dt
   );
   dampBoneEuler(
@@ -1987,7 +1987,7 @@ function applyWeaponAimPose(
     -pitch * chestPitch * shoulder,
     yaw * chestYaw * shoulder,
     -yaw * 0.026 * shoulder,
-    23,
+    20,
     dt
   );
   dampBoneEuler(
@@ -1996,7 +1996,7 @@ function applyWeaponAimPose(
     -pitch * upperPitch * shoulder,
     yaw * upperYaw * shoulder,
     -yaw * 0.010 * shoulder,
-    24,
+    22,
     dt
   );
   dampBoneEuler(
@@ -2009,7 +2009,7 @@ function applyWeaponAimPose(
       THREE.MathUtils.lerp(0.045, 0.07, ads) *
       shoulder,
     0,
-    20,
+    29,
     dt
   );
   dampBoneEuler(
@@ -2022,7 +2022,7 @@ function applyWeaponAimPose(
       THREE.MathUtils.lerp(0.035, 0.05, ads) *
       shoulder,
     0,
-    20,
+    34,
     dt
   );
 
@@ -2030,19 +2030,19 @@ function applyWeaponAimPose(
   dampBoneEuler(
     bones.leftShoulder,
     baseRotations,
-    THREE.MathUtils.lerp(-0.045, -0.085, ads),
-    THREE.MathUtils.lerp(0.035, 0.060, ads),
-    THREE.MathUtils.lerp(-0.095, -0.135, ads),
-    26,
+    THREE.MathUtils.lerp(-0.045, -0.078, ads),
+    THREE.MathUtils.lerp(0.035, 0.052, ads),
+    THREE.MathUtils.lerp(-0.095, -0.122, ads),
+    24,
     dt
   );
   dampBoneEuler(
     bones.rightShoulder,
     baseRotations,
-    THREE.MathUtils.lerp(-0.040, -0.075, ads),
-    THREE.MathUtils.lerp(-0.030, -0.050, ads),
-    THREE.MathUtils.lerp(0.090, 0.120, ads),
-    26,
+    THREE.MathUtils.lerp(-0.040, -0.068, ads),
+    THREE.MathUtils.lerp(-0.030, -0.044, ads),
+    THREE.MathUtils.lerp(0.090, 0.108, ads),
+    24,
     dt
   );
 }
@@ -2207,11 +2207,11 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       .copy(IK_TMP.shoulder)
       .addScaledVector(
         IK_TMP.right,
-        THREE.MathUtils.lerp(0.25, 0.18, ads)
+        THREE.MathUtils.lerp(0.24, 0.155, ads)
       )
       .addScaledVector(
         IK_TMP.down,
-        THREE.MathUtils.lerp(0.20, 0.16, ads)
+        THREE.MathUtils.lerp(0.19, 0.145, ads)
       )
       .addScaledVector(
         IK_TMP.forward,

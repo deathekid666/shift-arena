@@ -44,6 +44,8 @@ export class PlayerController {
     this.fangAnimation = null;
     this.aimYawOffset = 0;
     this.aimPitch = 0;
+    this.aimYawTarget = 0;
+    this.aimPitchTarget = 0;
     this.weaponAiming = false;
 
     // Start the real anime/VRM pipeline immediately. The old geometry only
@@ -77,6 +79,10 @@ export class PlayerController {
         this.characterLoadState !== 'loading';
     }
     this.fangArmOverride = false;
+    this.aimYawOffset = 0;
+    this.aimPitch = 0;
+    this.aimYawTarget = 0;
+    this.aimPitchTarget = 0;
   }
 
   update(
@@ -323,21 +329,57 @@ export class PlayerController {
       : this.group.rotation.y;
 
     if (combatFacing) {
+      const aimBlend = THREE.MathUtils.clamp(
+        weaponAimBlend,
+        0,
+        1
+      );
+
       if (moving && Number.isFinite(movementFacing)) {
-        const desiredTwist = angleDelta(movementFacing, cameraYaw);
-        const allowedTwist = THREE.MathUtils.clamp(desiredTwist, -1.15, 1.15);
-        const rootTarget = cameraYaw - allowedTwist;
+        const desiredTwist = angleDelta(
+          movementFacing,
+          cameraYaw
+        );
+
+        // Fortnite-style combat locomotion turns the lower body toward the
+        // camera more aggressively as ADS tightens. Hip-fire can still strafe
+        // with some pelvis separation; ADS keeps the stock/shoulder line clean.
+        const maxCombatTwist =
+          THREE.MathUtils.lerp(
+            0.82,
+            0.46,
+            aimBlend
+          );
+
+        const allowedTwist =
+          THREE.MathUtils.clamp(
+            desiredTwist,
+            -maxCombatTwist,
+            maxCombatTwist
+          );
+
+        const rootTarget =
+          cameraYaw - allowedTwist;
+
         this.group.rotation.y = dampAngle(
           this.group.rotation.y,
           rootTarget,
-          16,
+          THREE.MathUtils.lerp(
+            18,
+            24,
+            aimBlend
+          ),
           dt
         );
       } else {
         this.group.rotation.y = dampAngle(
           this.group.rotation.y,
           cameraYaw,
-          20,
+          THREE.MathUtils.lerp(
+            22,
+            27,
+            aimBlend
+          ),
           dt
         );
       }
@@ -435,14 +477,66 @@ export class PlayerController {
       this.body.rotation.x = 0;
     }
 
-    this.aimYawOffset = combatFacing
+    const bodyAimBlend = THREE.MathUtils.clamp(
+      weaponAimBlend,
+      0,
+      1
+    );
+
+    const maxAimYaw =
+      THREE.MathUtils.lerp(
+        0.92,
+        0.62,
+        bodyAimBlend
+      );
+
+    this.aimYawTarget = combatFacing
       ? THREE.MathUtils.clamp(
-          angleDelta(this.group.rotation.y, cameraYaw),
-          -1.18,
-          1.18
+          angleDelta(
+            this.group.rotation.y,
+            cameraYaw
+          ),
+          -maxAimYaw,
+          maxAimYaw
         )
       : 0;
-    this.aimPitch = THREE.MathUtils.clamp(aimPitch, -0.68, 0.86);
+
+    this.aimPitchTarget = THREE.MathUtils.clamp(
+      aimPitch,
+      -0.68,
+      0.86
+    );
+
+    // Weapon/camera remain immediate. The skeleton follows with a tiny lag,
+    // which removes the robotic "entire torso snaps at once" look.
+    this.aimYawOffset = THREE.MathUtils.damp(
+      this.aimYawOffset,
+      this.aimYawTarget,
+      THREE.MathUtils.lerp(
+        18,
+        24,
+        bodyAimBlend
+      ),
+      dt
+    );
+    this.aimPitch = THREE.MathUtils.damp(
+      this.aimPitch,
+      this.aimPitchTarget,
+      THREE.MathUtils.lerp(
+        20,
+        27,
+        bodyAimBlend
+      ),
+      dt
+    );
+
+    if (
+      Math.abs(this.aimYawOffset) < 0.0008 &&
+      Math.abs(this.aimYawTarget) < 0.0008
+    ) {
+      this.aimYawOffset = 0;
+    }
+
     this.weaponAiming = Boolean(weaponAiming);
 
     // Collider height still changes when crouching, but a real humanoid must
