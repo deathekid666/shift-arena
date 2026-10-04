@@ -312,7 +312,10 @@ export class ThirdPersonCamera {
       recovery = 12,
       attack = 34,
       maxPitch = 0.20,
-      maxYaw = 0.12
+      maxYaw = 0.12,
+      aimPitchFraction = 0.72,
+      aimYawFraction = 0.72,
+      visualFraction = 0.28
     } = {}
   ) {
     this.recoilRecovery = recovery;
@@ -320,13 +323,28 @@ export class ThirdPersonCamera {
     this.recoilMaxPitch = maxPitch;
     this.recoilMaxYaw = maxYaw;
 
+    // Fortnite-style recoil must move the player's actual aim enough that the
+    // player can counter it by pulling the mouse/stick in the opposite
+    // direction. Do not hide the whole impulse inside a temporary camera
+    // offset that automatically recenters.
+    this.pitch = THREE.MathUtils.clamp(
+      this.pitch + pitchAmount * aimPitchFraction,
+      GAME_CONFIG.camera.pitchMin,
+      GAME_CONFIG.camera.pitchMax
+    );
+    this.yaw += yawAmount * aimYawFraction;
+
+    // Keep only a smaller visual punch as a recovering camera offset. This
+    // gives the shot impact without erasing the controllable aim displacement.
     this.recoilTargetPitch = THREE.MathUtils.clamp(
-      this.recoilTargetPitch + pitchAmount,
+      this.recoilTargetPitch +
+        pitchAmount * visualFraction,
       -maxPitch * 0.30,
       maxPitch
     );
     this.recoilTargetYaw = THREE.MathUtils.clamp(
-      this.recoilTargetYaw + yawAmount,
+      this.recoilTargetYaw +
+        yawAmount * visualFraction,
       -maxYaw,
       maxYaw
     );

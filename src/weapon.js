@@ -1147,7 +1147,13 @@ export class WeaponSystem {
         recovery: cfg.recoilRecovery,
         attack: cfg.recoilAttack ?? 40,
         maxPitch: cfg.recoilMaxPitch ?? 0.10,
-        maxYaw: cfg.recoilMaxYaw ?? 0.08
+        maxYaw: cfg.recoilMaxYaw ?? 0.08,
+        aimPitchFraction:
+          cfg.aimRecoilPitchFraction ?? 0.72,
+        aimYawFraction:
+          cfg.aimRecoilYawFraction ?? 0.72,
+        visualFraction:
+          cfg.visualRecoilFraction ?? 0.28
       }
     );
 
@@ -1418,9 +1424,9 @@ function getFortniteStyleRecoil(cfg, shotNumber) {
     };
   }
 
-  // Fortnite recoil values are degree-like angular magnitudes. Convert them
-  // directly to radians for Three.js instead of shrinking them with an
-  // arbitrary scalar; that was why 010.22B looked almost unchanged in-game.
+  // Treat the public recoil magnitudes as angular-class values and preserve
+  // their class-to-class ratios. The camera splits each impulse into persistent
+  // player-controllable aim displacement plus a smaller recovering visual kick.
   const cameraScale = profile.cameraScale ?? 1;
   const horizontalPattern =
     profile.horizontalPattern ?? [-1, 1];
