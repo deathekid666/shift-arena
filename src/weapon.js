@@ -96,6 +96,10 @@ export class WeaponSystem {
         burstShots: 0,
         shoulderBlend: 0,
         adsBlend: 0,
+        wasShoulderRequested: false,
+        raiseAnchorActive: false,
+        raiseAnchorPosition: new THREE.Vector3(),
+        raiseAnchorQuaternion: new THREE.Quaternion(),
         bobTime: 0,
         pumpSoundPlayed: true
       };
@@ -494,6 +498,37 @@ export class WeaponSystem {
     state.bobTime += dt * (3.5 + speed * 1.4);
 
     const shoulderRequested = this.shoulderRequested;
+
+    const shoulderJustRaised =
+      shoulderRequested &&
+      !state.wasShoulderRequested;
+    const shoulderJustLowered =
+      !shoulderRequested &&
+      state.wasShoulderRequested;
+
+    if (shoulderJustRaised) {
+      // Freeze the exact weapon pose at the start of the raise. From this
+      // point onward the weapon must NOT read the right hand while that hand
+      // is being IK-solved toward the weapon, or the two systems feed back
+      // into each other and visibly vibrate.
+      state.raiseAnchorPosition.copy(
+        model.position
+      );
+      state.raiseAnchorQuaternion.copy(
+        model.quaternion
+      );
+      state.raiseAnchorActive = true;
+    }
+
+    if (shoulderJustLowered) {
+      // Lowering gives ownership back to the hand. Right-arm IK is disabled
+      // below before the weapon begins following the live carry hand again.
+      state.raiseAnchorActive = false;
+    }
+
+    state.wasShoulderRequested =
+      shoulderRequested;
+
     const shoulderTarget = shoulderRequested ? 1 : 0;
     const shoulderResponse = shoulderRequested
       ? (cfg.shoulderRaiseSpeed ?? 26)
@@ -750,55 +785,87 @@ export class WeaponSystem {
         let finalTargetQuaternion =
           shoulderTargetQuaternion;
 
-        // Master-hand weapons have a real low-ready carry state. Blend from
-        // that hand-owned pose into the camera-owned shoulder pose instead of
-        // snapping ownership the instant the trigger/ADS starts.
+        // Stable ownership handoff for master-hand weapons:
+        // RAISE  = frozen carry pose -> camera/shoulder pose.
+        // LOWER  = camera/shoulder pose -> live hand carry, with right-arm IK
+        //          already disabled so there is no weapon<->hand feedback.
         if (cfg.masterHandCarry) {
-          const carryHandWorld =
-            this.player.getHandWorldPosition?.(
-              'right',
-              this.tmpHandWorld
-            ) ?? null;
-
-          if (carryHandWorld) {
-            const carryGripLocal =
-              carryHandWorld.clone();
-            this.player.group.worldToLocal(
-              carryGripLocal
-            );
-
-            const carryQuaternion =
-              new THREE.Quaternion().setFromEuler(
-                new THREE.Euler(
-                  (cfg.carryPitch ?? -0.11),
-                  cfg.carryYaw ?? 0,
-                  cfg.carryRoll ?? -0.055,
-                  'YXZ'
-                )
-              );
-
-            const carryGripOffset =
-              modelData.rightGrip.position
-                .clone()
-                .multiply(model.scale)
-                .applyQuaternion(carryQuaternion);
-
-            const carryTargetPosition =
-              carryGripLocal
-                .clone()
-                .sub(carryGripOffset);
-
+          if (
+            shoulderRequested &&
+            state.raiseAnchorActive
+          ) {
             finalTargetPosition =
-              carryTargetPosition.lerp(
-                shoulderTargetPosition,
-                shoulderBlend
-              );
+              state.raiseAnchorPosition
+                .clone()
+                .lerp(
+                  shoulderTargetPosition,
+                  shoulderBlend
+                );
 
             finalTargetQuaternion =
-              carryQuaternion.slerp(
-                shoulderTargetQuaternion,
-                shoulderBlend
+              state.raiseAnchorQuaternion
+                .clone()
+                .slerp(
+                  shoulderTargetQuaternion,
+                  shoulderBlend
+                );
+
+            if (shoulderBlend >= 0.995) {
+              state.raiseAnchorActive = false;
+            }
+          } else if (!shoulderRequested) {
+            const carryHandWorld =
+              this.player.getHandWorldPosition?.(
+                'right',
+                this.tmpHandWorld
+              ) ?? null;
+
+            if (carryHandWorld) {
+              const carryGripLocal =
+                carryHandWorld.clone();
+              this.player.group.worldToLocal(
+                carryGripLocal
               );
+
+              const carryQuaternion =
+                new THREE.Quaternion().setFromEuler(
+                  new THREE.Euler(
+                    cfg.carryPitch ?? -0.11,
+                    cfg.carryYaw ?? 0,
+                    cfg.carryRoll ?? -0.055,
+                    'YXZ'
+                  )
+                );
+
+              const carryGripOffset =
+                modelData.rightGrip.position
+                  .clone()
+                  .multiply(model.scale)
+                  .applyQuaternion(
+                    carryQuaternion
+                  );
+
+              const carryTargetPosition =
+                carryGripLocal
+                  .clone()
+                  .sub(carryGripOffset);
+
+              finalTargetPosition =
+                carryTargetPosition
+                  .clone()
+                  .lerp(
+                    shoulderTargetPosition,
+                    shoulderBlend
+                  );
+
+              finalTargetQuaternion =
+                carryQuaternion
+                  .clone()
+                  .slerp(
+                    shoulderTargetQuaternion,
+                    shoulderBlend
+                  );
+            }
           }
         }
 
@@ -837,11 +904,13 @@ export class WeaponSystem {
         model.updateWorldMatrix(true, true);
 
         const shoulderIKBlend =
-          THREE.MathUtils.smoothstep(
-            shoulderBlend,
-            0.02,
-            0.72
-          );
+          shoulderRequested
+            ? THREE.MathUtils.smoothstep(
+                shoulderBlend,
+                0.08,
+                0.78
+              )
+            : 0;
 
         const shoulderIK =
           shoulderIKBlend > 0.01;
@@ -1261,6 +1330,13 @@ export class WeaponSystem {
     previous.state.reloadTimer = 0;
 
     this.activeSlot = index;
+
+    const nextState = this.active.state;
+    nextState.shoulderBlend = 0;
+    nextState.adsBlend = 0;
+    nextState.wasShoulderRequested = false;
+    nextState.raiseAnchorActive = false;
+
     this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
     this.emitInventory();
@@ -1359,6 +1435,14 @@ export class WeaponSystem {
       entry.state.burstShots = 0;
       entry.state.shoulderBlend = 0;
       entry.state.adsBlend = 0;
+      entry.state.wasShoulderRequested = false;
+      entry.state.raiseAnchorActive = false;
+      entry.state.raiseAnchorPosition.copy(
+        entry.model.group.position
+      );
+      entry.state.raiseAnchorQuaternion.copy(
+        entry.model.group.quaternion
+      );
       entry.state.sinceShot = 999;
       entry.state.pumpSoundPlayed = true;
       if (entry.model.pumpRoot) {
