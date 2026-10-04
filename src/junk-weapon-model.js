@@ -3,6 +3,19 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 // Procedural scavenged-weapon kit.
 // Art direction: welded plumbing, bent sheet metal, tape, exposed wire,
 // springs, improvised wood/plastic and mismatched repair parts.
+
+function applyWeaponVisualScale(
+  group,
+  baseScale,
+  cfg
+) {
+  group.scale.set(
+    baseScale * (cfg.visualWidthScale ?? 1),
+    baseScale * (cfg.visualHeightScale ?? 1),
+    baseScale * (cfg.visualLengthScale ?? 1)
+  );
+}
+
 export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
   const group = new THREE.Group();
   group.name = `JunkWeapon_${cfg.junkStyle ?? 'scrap'}`;
@@ -187,7 +200,7 @@ export function buildJunkWeaponVisual(cfg, { pickup = false } = {}) {
   muzzle.position.set(0, 0.018, muzzleZ - 0.015);
   group.add(muzzle);
 
-  group.scale.setScalar(scale);
+  applyWeaponVisualScale(group, scale, cfg);
 
   return {
     group,
@@ -421,6 +434,14 @@ function buildStapleSlingerAR(cfg, mats, scale) {
   add(box(0.024, 0.125, 0.300, redDark), [-0.122, 0.040, -0.055], [0.01, 0, 0.02]);
   add(box(0.055, 0.038, 0.105, mats.dark), [0, 0.125, 0.165]);
 
+  // Third-person silhouette polish: compact rear aperture + cheek pad.
+  const rearSight = new THREE.Mesh(
+    new THREE.TorusGeometry(0.036, 0.008, 5, 10),
+    mats.dark
+  );
+  add(rearSight, [0, 0.225, 0.185]);
+  add(box(0.145, 0.055, 0.22, redDark), [0, 0.085, 0.520], [-0.03, 0, 0]);
+
   // Gameplay sockets line up with visible modeled grips.
   const rightGrip = new THREE.Object3D();
   rightGrip.name = 'RightGripSocket';
@@ -445,7 +466,7 @@ function buildStapleSlingerAR(cfg, mats, scale) {
   muzzle.position.set(0, 0.050, -0.990);
   group.add(muzzle);
 
-  group.scale.setScalar(scale);
+  applyWeaponVisualScale(group, scale, cfg);
 
   return {
     group,
@@ -733,6 +754,11 @@ function buildTapeRattlerSMG(cfg, mats, scale) {
     [0, 0, Math.PI / 2]
   );
 
+  // Compact top sights + front hand stop; detail without extra overall length.
+  add(box(0.075, 0.060, 0.045, blackMetal), [0, 0.230, 0.115]);
+  add(box(0.060, 0.075, 0.040, blackMetal), [0, 0.210, -0.255]);
+  add(box(0.115, 0.085, 0.050, orangeDark), [0, -0.075, -0.330], [0.10, 0, 0]);
+
   // Gameplay sockets align to visible grip/support geometry.
   const rightGrip = new THREE.Object3D();
   rightGrip.name = 'RightGripSocket';
@@ -757,7 +783,7 @@ function buildTapeRattlerSMG(cfg, mats, scale) {
   muzzle.position.set(0, 0.050, -0.955);
   group.add(muzzle);
 
-  group.scale.setScalar(scale);
+  applyWeaponVisualScale(group, scale, cfg);
 
   return {
     group,
@@ -1000,6 +1026,20 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
     [0.03, 0, 0]
   );
 
+  // Heavier shotgun silhouette: shoulder stock + rubber butt pad.
+  add(box(0.120, 0.090, 0.42, wood), [0, 0.035, 0.385], [-0.04, 0, 0]);
+  add(box(0.185, 0.245, 0.075, mats.rubber), [0, -0.005, 0.620], [-0.02, 0, 0]);
+
+  // Pump ribs make the moving support section visually clearer.
+  for (let i = 0; i < 3; i++) {
+    add(
+      box(0.165, 0.024, 0.035, cream),
+      [0, -0.176, -0.585 + i * 0.062],
+      [0.04, 0, 0],
+      pumpRoot
+    );
+  }
+
   // Gameplay sockets line up with visible grip geometry.
   const rightGrip = new THREE.Object3D();
   rightGrip.name = 'RightGripSocket';
@@ -1024,7 +1064,7 @@ function buildBugSprayerShotgun(cfg, mats, scale) {
   muzzle.position.set(0, 0.035, -0.965);
   group.add(muzzle);
 
-  group.scale.setScalar(scale);
+  applyWeaponVisualScale(group, scale, cfg);
 
   return {
     group,
@@ -1167,6 +1207,14 @@ function buildScrapEyeSniper(cfg, mats, scale) {
     stockRoot
   );
 
+  // Raised cheek rest makes the long rifle feel properly shouldered.
+  add(
+    box(0.165, 0.065, 0.26, mats.rubber),
+    [0, 0.165, 0.205],
+    [-0.035, 0, 0],
+    stockRoot
+  );
+
   // --- Oversized scavenged camera-lens scope ---
   const scopeRoot = new THREE.Group();
   scopeRoot.position.set(0, 0.245, -0.10);
@@ -1285,7 +1333,7 @@ function buildScrapEyeSniper(cfg, mats, scale) {
   muzzle.position.set(0, 0.035, muzzleZ - 0.135);
   group.add(muzzle);
 
-  group.scale.setScalar(scale);
+  applyWeaponVisualScale(group, scale, cfg);
 
   return {
     group,

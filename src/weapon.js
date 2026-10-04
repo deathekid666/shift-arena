@@ -760,26 +760,29 @@ export class WeaponSystem {
         // Fortnite-style stable root-space grip. The weapon sits across the
         // chest at rest, rises slightly for hip-fire, then moves inward/up for
         // ADS. Position does not inherit per-frame chest animation noise.
-        const readyGripX = 0.010;
-        const readyGripY = -0.090;
-        const readyGripZ = -0.105;
+        const readyGripX =
+          cfg.stanceReadyX ?? 0.010;
+        const readyGripY =
+          cfg.stanceReadyY ?? -0.090;
+        const readyGripZ =
+          cfg.stanceReadyZ ?? -0.105;
 
         const fireGripX =
           THREE.MathUtils.lerp(
-            0.006,
-            -0.006,
+            cfg.stanceHipX ?? 0.006,
+            cfg.stanceAdsX ?? -0.006,
             adsBlend
           );
         const fireGripY =
           THREE.MathUtils.lerp(
-            -0.045,
-            -0.010,
+            cfg.stanceHipY ?? -0.045,
+            cfg.stanceAdsY ?? -0.010,
             adsBlend
           );
         const fireGripZ =
           THREE.MathUtils.lerp(
-            -0.155,
-            -0.185,
+            cfg.stanceHipZ ?? -0.155,
+            cfg.stanceAdsZ ?? -0.185,
             adsBlend
           );
 

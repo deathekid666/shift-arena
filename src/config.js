@@ -75,6 +75,19 @@ export const GAME_CONFIG = {
       junkPaint: 0xb84b3d,
       heldScale: 0.66,
       pickupScale: 0.86,
+      visualWidthScale: 1.00,
+      visualHeightScale: 1.00,
+      visualLengthScale: 1.00,
+
+      stanceReadyX: 0.010,
+      stanceReadyY: -0.090,
+      stanceReadyZ: -0.105,
+      stanceHipX: 0.006,
+      stanceHipY: -0.045,
+      stanceHipZ: -0.155,
+      stanceAdsX: -0.006,
+      stanceAdsY: -0.010,
+      stanceAdsZ: -0.185,
 
       // Same stable shooter hierarchy used by the other hero weapons:
       // right/master hand owns the AR, left hand follows the front support point.
@@ -208,8 +221,21 @@ export const GAME_CONFIG = {
     pumpShotgun: {
       junkStyle: 'bugSprayer',
       junkPaint: 0xb84c38,
-      heldScale: 0.67,
-      pickupScale: 0.86,
+      heldScale: 0.74,
+      pickupScale: 0.90,
+      visualWidthScale: 1.10,
+      visualHeightScale: 1.06,
+      visualLengthScale: 1.02,
+
+      stanceReadyX: 0.012,
+      stanceReadyY: -0.102,
+      stanceReadyZ: -0.118,
+      stanceHipX: 0.008,
+      stanceHipY: -0.054,
+      stanceHipZ: -0.168,
+      stanceAdsX: -0.004,
+      stanceAdsY: -0.016,
+      stanceAdsZ: -0.196,
 
       // Stable shooter hierarchy: right/master hand owns the weapon,
       // left/support hand follows the pump grip with IK.
@@ -343,8 +369,21 @@ export const GAME_CONFIG = {
     marksmanSniper: {
       junkStyle: 'antenna',
       junkPaint: 0xa94c37,
-      heldScale: 0.58,
-      pickupScale: 0.82,
+      heldScale: 0.60,
+      pickupScale: 0.84,
+      visualWidthScale: 0.96,
+      visualHeightScale: 0.98,
+      visualLengthScale: 1.06,
+
+      stanceReadyX: 0.008,
+      stanceReadyY: -0.108,
+      stanceReadyZ: -0.140,
+      stanceHipX: 0.004,
+      stanceHipY: -0.066,
+      stanceHipZ: -0.202,
+      stanceAdsX: -0.010,
+      stanceAdsY: -0.024,
+      stanceAdsZ: -0.232,
       masterHandCarry: true,
       supportHandIKLambda: 96,
       rightGripX: 0,
@@ -415,8 +454,21 @@ export const GAME_CONFIG = {
     compactSMG: {
       junkStyle: 'tapeRattler',
       junkPaint: 0xd88a2f,
-      heldScale: 0.70,
-      pickupScale: 0.88,
+      heldScale: 0.66,
+      pickupScale: 0.82,
+      visualWidthScale: 0.94,
+      visualHeightScale: 0.94,
+      visualLengthScale: 0.90,
+
+      stanceReadyX: 0.014,
+      stanceReadyY: -0.080,
+      stanceReadyZ: -0.082,
+      stanceHipX: 0.010,
+      stanceHipY: -0.034,
+      stanceHipZ: -0.126,
+      stanceAdsX: 0.002,
+      stanceAdsY: -0.004,
+      stanceAdsZ: -0.152,
 
       // Stable hero-weapon rig: right/master hand owns the compact SMG,
       // left/support hand follows the front of the dispenser body.
