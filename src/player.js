@@ -838,14 +838,18 @@ export class PlayerController {
 
   getHandWorldPosition(side = 'right', target = new THREE.Vector3()) {
     const key = side === 'left' ? 'leftHand' : 'rightHand';
-    const hand = this.vrmCharacter?.bones?.[key];
+    const hand =
+      this.vrmCharacter?.rawBones?.[key] ??
+      this.vrmCharacter?.bones?.[key];
     if (!hand) return null;
     hand.getWorldPosition(target);
     return target;
   }
 
   getBoneWorldPosition(name, target = new THREE.Vector3()) {
-    const bone = this.vrmCharacter?.bones?.[name];
+    const bone =
+      this.vrmCharacter?.rawBones?.[name] ??
+      this.vrmCharacter?.bones?.[name];
     if (!bone) return null;
     bone.getWorldPosition(target);
     return target;

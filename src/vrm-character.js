@@ -57,11 +57,13 @@ async function loadVrmAvatar(url) {
   modelRoot.rotation.y = Math.PI;
 
   const bones = vrmBones(vrm);
+  const rawBones = vrmRawBones(vrm);
   const character = buildCharacterInterface({
     root,
     modelRoot,
     scene: vrm.scene,
     bones,
+    rawBones,
     vrm,
     applyScoutAccessories: !isFinal
   });
@@ -120,6 +122,7 @@ async function loadHumanoidGlb(url) {
     modelRoot,
     scene,
     bones,
+    rawBones: bones,
     vrm: null,
     applyScoutAccessories: false
   });
@@ -149,6 +152,36 @@ function vrmBones(vrm) {
     rightFoot: bone(vrm, 'rightFoot'),
     leftToes: bone(vrm, 'leftToes'),
     rightToes: bone(vrm, 'rightToes')
+  };
+}
+
+function vrmRawBones(vrm) {
+  const raw = (name) =>
+    vrm.humanoid?.getRawBoneNode?.(name) ?? null;
+
+  return {
+    head: raw('head'),
+    neck: raw('neck'),
+    spine: raw('spine'),
+    chest: raw('chest') ?? raw('upperChest'),
+    upperChest: raw('upperChest') ?? raw('chest'),
+    leftShoulder: raw('leftShoulder'),
+    rightShoulder: raw('rightShoulder'),
+    leftUpperArm: raw('leftUpperArm'),
+    rightUpperArm: raw('rightUpperArm'),
+    leftLowerArm: raw('leftLowerArm'),
+    rightLowerArm: raw('rightLowerArm'),
+    leftHand: raw('leftHand'),
+    rightHand: raw('rightHand'),
+    hips: raw('hips'),
+    leftUpperLeg: raw('leftUpperLeg'),
+    rightUpperLeg: raw('rightUpperLeg'),
+    leftLowerLeg: raw('leftLowerLeg'),
+    rightLowerLeg: raw('rightLowerLeg'),
+    leftFoot: raw('leftFoot'),
+    rightFoot: raw('rightFoot'),
+    leftToes: raw('leftToes'),
+    rightToes: raw('rightToes')
   };
 }
 
@@ -201,11 +234,56 @@ function glbBones(scene) {
   return result;
 }
 
+function createRenderAttachmentBones(
+  root,
+  normalizedBones,
+  rawBones
+) {
+  const anchors = {};
+
+  // First author all attachment roots in normalized-bone local space so the
+  // existing hero offsets keep the exact same intended placement.
+  for (const [key, normalizedBone] of Object.entries(
+    normalizedBones
+  )) {
+    if (!normalizedBone) {
+      anchors[key] = null;
+      continue;
+    }
+
+    const anchor = new THREE.Group();
+    anchor.name = `RenderAttachment_${key}`;
+    normalizedBone.add(anchor);
+    anchors[key] = anchor;
+  }
+
+  root.updateWorldMatrix(true, true);
+
+  // Reparent each anchor to the matching raw/render bone while preserving its
+  // current world transform. From this point on visible hero pieces follow the
+  // same skeleton that skins the VRM mesh, not the normalized proxy hierarchy.
+  for (const [key, anchor] of Object.entries(anchors)) {
+    if (!anchor) continue;
+
+    const rawBone = rawBones?.[key];
+    if (!rawBone) {
+      root.attach(anchor);
+      continue;
+    }
+
+    rawBone.attach(anchor);
+  }
+
+  root.updateWorldMatrix(true, true);
+  return anchors;
+}
+
 function buildCharacterInterface({
   root,
   modelRoot,
   scene,
   bones,
+  rawBones = bones,
   vrm,
   applyScoutAccessories
 }) {
@@ -217,16 +295,29 @@ function buildCharacterInterface({
     basePositions.set(node, node.position.clone());
   }
 
+  // Normalized bones are animation proxies in three-vrm. Visible geometry
+  // must ultimately follow raw/render bones. We build the hero parts in the
+  // normalized coordinate system (where all current offsets are authored),
+  // then reparent the anchor groups to raw bones while preserving world pose.
+  const attachmentBones =
+    vrm
+      ? createRenderAttachmentBones(
+          root,
+          bones,
+          rawBones
+        )
+      : rawBones;
+
   const accessories = applyScoutAccessories
-    ? attachRoachAccessories(bones)
+    ? attachRoachAccessories(attachmentBones)
     : {};
 
   const weaponSocket = new THREE.Object3D();
   weaponSocket.name = 'weaponSocket';
-  if (bones.rightHand) {
+  if (attachmentBones.rightHand) {
     weaponSocket.position.set(0, 0.025, 0.08);
     weaponSocket.rotation.set(-0.18, Math.PI, 0.12);
-    bones.rightHand.add(weaponSocket);
+    attachmentBones.rightHand.add(weaponSocket);
   } else {
     weaponSocket.position.set(0.28, 0.18, -0.42);
     root.add(weaponSocket);
@@ -234,9 +325,9 @@ function buildCharacterInterface({
 
   const fangSocket = new THREE.Object3D();
   fangSocket.name = 'fangSocket';
-  if (bones.rightHand) {
+  if (attachmentBones.rightHand) {
     fangSocket.position.set(0, 0.02, 0.055);
-    bones.rightHand.add(fangSocket);
+    attachmentBones.rightHand.add(fangSocket);
   } else {
     root.add(fangSocket);
   }
@@ -245,10 +336,10 @@ function buildCharacterInterface({
   // the active Fang stays attached to the right hand for draw/throw attacks.
   const holsterSocket = new THREE.Object3D();
   holsterSocket.name = 'holsterSocket';
-  if (bones.hips) {
+  if (attachmentBones.hips) {
     holsterSocket.position.set(-0.120, -0.025, -0.112);
     holsterSocket.rotation.set(0.02, 0.46, 0.42);
-    bones.hips.add(holsterSocket);
+    attachmentBones.hips.add(holsterSocket);
   } else {
     holsterSocket.position.set(-0.16, -0.12, -0.055);
     root.add(holsterSocket);
@@ -256,7 +347,7 @@ function buildCharacterInterface({
 
   const headSocket = new THREE.Object3D();
   headSocket.name = 'headSocket';
-  if (bones.head) bones.head.add(headSocket);
+  if (attachmentBones.head) attachmentBones.head.add(headSocket);
   else root.add(headSocket);
 
   applyIdlePose(bones, baseRotations, 1);
@@ -267,6 +358,8 @@ function buildCharacterInterface({
     scene,
     vrm,
     bones,
+    rawBones,
+    attachmentBones,
     weaponSocket,
     fangSocket,
     holsterSocket,
@@ -328,7 +421,10 @@ function buildCharacterInterface({
     },
     setRightArmHidden() {},
     getHandWorldPosition(side = 'right', target = new THREE.Vector3()) {
-      const hand = side === 'left' ? bones.leftHand : bones.rightHand;
+      const hand =
+        side === 'left'
+          ? rawBones.leftHand
+          : rawBones.rightHand;
       if (!hand) return null;
       hand.getWorldPosition(target);
       return target;
