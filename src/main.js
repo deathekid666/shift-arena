@@ -1,10 +1,10 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { InputController } from './input.js';
 import { TestWorld } from './world.js';
-import { PlayerController } from './player.js?v=01022p-recovery-2';
+import { PlayerController } from './player.js';
 import { ThirdPersonCamera } from './camera.js';
 import { TargetRange } from './targets.js';
-import { WeaponSystem } from './weapon.js?v=01022p-recovery-2';
+import { WeaponSystem } from './weapon.js';
 import { PlayerHealth } from './health.js';
 import { CombatBot } from './bot.js';
 import { ShellArmorSystem } from './loadout.js';
