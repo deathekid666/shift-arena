@@ -23,6 +23,7 @@ export class ThirdPersonCamera {
     this.recoilMaxYaw = 0.12;
     this.lookX = 0;
     this.lookY = 0;
+    this.lookPrepared = false;
 
     this.raycaster = new THREE.Raycaster();
     this.target = new THREE.Vector3();
@@ -30,6 +31,142 @@ export class ThirdPersonCamera {
     this.compressed = false;
     this.resolvedDistance = GAME_CONFIG.camera.distance;
     this.aimFallbackSide = 1;
+  }
+
+  prepareLook(dt) {
+    const cfg = GAME_CONFIG.camera;
+
+    const look = this.input.consumeLook();
+    this.yaw -= look.yaw * cfg.sensitivity;
+    this.pitch -= look.pitch * cfg.sensitivity;
+    this.pitch = THREE.MathUtils.clamp(
+      this.pitch,
+      cfg.pitchMin,
+      cfg.pitchMax
+    );
+
+    this.lookX = THREE.MathUtils.damp(
+      this.lookX,
+      THREE.MathUtils.clamp(
+        look.yaw,
+        -28,
+        28
+      ),
+      20,
+      dt
+    );
+    this.lookY = THREE.MathUtils.damp(
+      this.lookY,
+      THREE.MathUtils.clamp(
+        look.pitch,
+        -28,
+        28
+      ),
+      20,
+      dt
+    );
+
+    // Resolve recoil BEFORE the character pose for this frame. The player
+    // skeleton, weapon transform and rendered camera must all consume the
+    // same yaw/pitch sample; otherwise shoulders lag the gun by one frame and
+    // the mismatch reads as constant weapon/upper-body vibration.
+    const aimStep =
+      1 - Math.exp(
+        -this.aimRecoilAttack * dt
+      );
+
+    const appliedPitch =
+      this.pendingAimRecoilPitch *
+      aimStep;
+    const appliedYaw =
+      this.pendingAimRecoilYaw *
+      aimStep;
+
+    this.pendingAimRecoilPitch -=
+      appliedPitch;
+    this.pendingAimRecoilYaw -=
+      appliedYaw;
+
+    this.pitch = THREE.MathUtils.clamp(
+      this.pitch + appliedPitch,
+      cfg.pitchMin,
+      cfg.pitchMax
+    );
+    this.yaw += appliedYaw;
+
+    if (
+      Math.abs(
+        this.pendingAimRecoilPitch
+      ) < 0.00002
+    ) {
+      this.pendingAimRecoilPitch = 0;
+    }
+
+    if (
+      Math.abs(
+        this.pendingAimRecoilYaw
+      ) < 0.00002
+    ) {
+      this.pendingAimRecoilYaw = 0;
+    }
+
+    this.recoilPitch =
+      THREE.MathUtils.damp(
+        this.recoilPitch,
+        this.recoilTargetPitch,
+        this.recoilAttack,
+        dt
+      );
+
+    this.recoilYaw =
+      THREE.MathUtils.damp(
+        this.recoilYaw,
+        this.recoilTargetYaw,
+        this.recoilAttack * 0.92,
+        dt
+      );
+
+    this.recoilTargetPitch =
+      THREE.MathUtils.damp(
+        this.recoilTargetPitch,
+        0,
+        this.recoilRecovery,
+        dt
+      );
+
+    this.recoilTargetYaw =
+      THREE.MathUtils.damp(
+        this.recoilTargetYaw,
+        0,
+        this.recoilRecovery * 1.12,
+        dt
+      );
+
+    if (
+      Math.abs(
+        this.recoilTargetPitch
+      ) < 0.00003 &&
+      Math.abs(
+        this.recoilPitch
+      ) < 0.00003
+    ) {
+      this.recoilTargetPitch = 0;
+      this.recoilPitch = 0;
+    }
+
+    if (
+      Math.abs(
+        this.recoilTargetYaw
+      ) < 0.00003 &&
+      Math.abs(
+        this.recoilYaw
+      ) < 0.00003
+    ) {
+      this.recoilTargetYaw = 0;
+      this.recoilYaw = 0;
+    }
+
+    this.lookPrepared = true;
   }
 
   update(dt, options = {}) {
@@ -46,99 +183,13 @@ export class ThirdPersonCamera {
       sliding = false
     } = options;
 
-    const look = this.input.consumeLook();
-    this.yaw -= look.yaw * cfg.sensitivity;
-    this.pitch -= look.pitch * cfg.sensitivity;
-    this.pitch = THREE.MathUtils.clamp(this.pitch, cfg.pitchMin, cfg.pitchMax);
-
-    this.lookX = THREE.MathUtils.damp(
-      this.lookX,
-      THREE.MathUtils.clamp(look.yaw, -28, 28),
-      20,
-      dt
-    );
-    this.lookY = THREE.MathUtils.damp(
-      this.lookY,
-      THREE.MathUtils.clamp(look.pitch, -28, 28),
-      20,
-      dt
-    );
-
-    // Deliver actual aim recoil over a very short weapon-specific response
-    // instead of teleporting the crosshair by the full amount in one frame.
-    // The delivered displacement stays in pitch/yaw, so the player still has
-    // to counter it manually; only the separate visual impulse recenters.
-    const aimStep =
-      1 - Math.exp(-this.aimRecoilAttack * dt);
-
-    const appliedPitch =
-      this.pendingAimRecoilPitch * aimStep;
-    const appliedYaw =
-      this.pendingAimRecoilYaw * aimStep;
-
-    this.pendingAimRecoilPitch -= appliedPitch;
-    this.pendingAimRecoilYaw -= appliedYaw;
-
-    this.pitch = THREE.MathUtils.clamp(
-      this.pitch + appliedPitch,
-      cfg.pitchMin,
-      cfg.pitchMax
-    );
-    this.yaw += appliedYaw;
-
-    if (Math.abs(this.pendingAimRecoilPitch) < 0.00002) {
-      this.pendingAimRecoilPitch = 0;
-    }
-    if (Math.abs(this.pendingAimRecoilYaw) < 0.00002) {
-      this.pendingAimRecoilYaw = 0;
+    if (!this.lookPrepared) {
+      this.prepareLook(dt);
     }
 
-    // Two-stage recoil envelope:
-    // 1) the visible camera catches the shot target quickly;
-    // 2) the target itself returns to zero more slowly.
-    // This gives a crisp shooter kick without the under-damped bounce that can
-    // make automatic weapons feel floaty or oscillatory.
-    this.recoilPitch = THREE.MathUtils.damp(
-      this.recoilPitch,
-      this.recoilTargetPitch,
-      this.recoilAttack,
-      dt
-    );
-    this.recoilYaw = THREE.MathUtils.damp(
-      this.recoilYaw,
-      this.recoilTargetYaw,
-      this.recoilAttack * 0.92,
-      dt
-    );
-
-    this.recoilTargetPitch = THREE.MathUtils.damp(
-      this.recoilTargetPitch,
-      0,
-      this.recoilRecovery,
-      dt
-    );
-    this.recoilTargetYaw = THREE.MathUtils.damp(
-      this.recoilTargetYaw,
-      0,
-      this.recoilRecovery * 1.12,
-      dt
-    );
-
-    if (
-      Math.abs(this.recoilTargetPitch) < 0.00003 &&
-      Math.abs(this.recoilPitch) < 0.00003
-    ) {
-      this.recoilTargetPitch = 0;
-      this.recoilPitch = 0;
-    }
-
-    if (
-      Math.abs(this.recoilTargetYaw) < 0.00003 &&
-      Math.abs(this.recoilYaw) < 0.00003
-    ) {
-      this.recoilTargetYaw = 0;
-      this.recoilYaw = 0;
-    }
+    // consume the prepared sample exactly once; next frame must prepare a new
+    // mouse/recoil state before character animation.
+    this.lookPrepared = false;
 
     const movementBlend = aiming || scoped
       ? 0
