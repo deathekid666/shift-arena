@@ -597,7 +597,7 @@ export class PlayerController {
       // block the game itself from booting and rendering.
       const avatar = await withTimeout(
         (async () => {
-          const { loadRoachScoutVrmBase } = await import('./vrm-character.js');
+          const { loadRoachScoutVrmBase } = await import('./vrm-character.js?v=01022p-recovery-2');
           return loadRoachScoutVrmBase();
         })(),
         12000,
