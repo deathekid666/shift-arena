@@ -49,6 +49,7 @@ export class WeaponSystem {
     this.tmpHandWorld = new THREE.Vector3();
     this.tmpHandLocal = new THREE.Vector3();
     this.tmpShoulderWorld = new THREE.Vector3();
+    this.tmpChestWorld = new THREE.Vector3();
     this.tmpAimForward = new THREE.Vector3();
     this.tmpAimRight = new THREE.Vector3();
     this.tmpAimUp = new THREE.Vector3();
@@ -644,125 +645,194 @@ export class WeaponSystem {
       0.020
     );
 
-    // Standard shooter hierarchy for long weapons:
-    // Right hand is the FK/master hand. The weapon is rigid to that hand,
-    // while only the left/support hand is solved to the foregrip.
+    // Fortnite-like weapon stack:
+    // body/chest defines a stable rifle-ready grip target,
+    // aim direction rotates that target toward the crosshair,
+    // then BOTH hands are solved to the weapon as a final IK layer.
+    // The target never comes from either hand, so there is no feedback loop.
     if (
       cfg.masterHandCarry &&
-      this.handMounted &&
-      shoulderBlend <= 0.015
-    ) {
-      const handWorld =
-        this.player.getHandWorldPosition?.(
-          'right',
-          this.tmpHandWorld
-        ) ?? null;
-
-      if (handWorld) {
-        this.tmpGripLocal.copy(handWorld);
-        this.player.group.worldToLocal(this.tmpGripLocal);
-
-        // Fixed weapon orientation relative to the character.
-        // No hand-relative bob/sway/lag is allowed here because that would
-        // separate the pistol grip from the master hand.
-        const recoilPose =
-          cfg.recoilPoseScale
-            ? Math.max(0, state.visualKick) * cfg.recoilPoseScale
-            : 0;
-
-        this.tmpDesiredLocalQ.setFromEuler(
-          new THREE.Euler(
-            (cfg.carryPitch ?? -0.11) +
-              recoilPose +
-              state.recoilPitch,
-            (cfg.carryYaw ?? 0) + state.recoilYaw,
-            (cfg.carryRoll ?? -0.055) + state.recoilRoll,
-            'YXZ'
-          )
-        );
-
-        this.tmpGripOffset
-          .copy(modelData.rightGrip.position)
-          .multiply(model.scale)
-          .applyQuaternion(this.tmpDesiredLocalQ);
-
-        const targetPosition = this.tmpGripLocal
-          .clone()
-          .sub(this.tmpGripOffset);
-
-        // Rigid master-hand mount: zero damped chase, zero feedback jitter.
-        model.position.copy(targetPosition);
-        model.quaternion.copy(this.tmpDesiredLocalQ);
-
-        model.updateWorldMatrix(true, true);
-        this.updateGripPose(
-          false,
-          false,
-          cfg.supportHandIKLambda ?? 150
-        );
-        return;
-      }
-    }
-
-    if (
-      shoulderBlend > 0.015 &&
       this.handMounted
     ) {
-      const poseSocket =
-        this.player.getWeaponPoseSocket?.() ??
-        null;
-
-      if (poseSocket) {
-        // Same-frame master-hand architecture:
-        // normalized FK arm -> normalized hand socket -> rigid weapon.
-        // No camera-owned weapon target and no right-hand IK are involved.
-        poseSocket.getWorldPosition(
-          this.tmpGripWorld
+      const chest =
+        this.player.getBoneWorldPosition?.(
+          'upperChest',
+          this.tmpChestWorld
+        ) ??
+        this.player.getBoneWorldPosition?.(
+          'chest',
+          this.tmpChestWorld
         );
 
-        // Position is owned by the master hand, but weapon orientation follows
-        // the actual aim direction. Because placement is solved around the
-        // rightGrip pivot below, the gun rotates AT the hand instead of
-        // detaching from it or inheriting the hand socket's vertical twist.
-        this.tmpDesiredWorldQ.copy(
-          this.camera.quaternion
+      const shoulder =
+        this.player.getBoneWorldPosition?.(
+          'rightShoulder',
+          this.tmpShoulderWorld
+        ) ??
+        chest;
+
+      if (chest && shoulder) {
+        const readyToAim =
+          THREE.MathUtils.smoothstep(
+            shoulderBlend,
+            0,
+            1
+          );
+
+        // Ready pose follows character facing. Firing/ADS progressively align
+        // the whole weapon with the camera aim instead of rotating only an arm.
+        this.player.group.getWorldQuaternion(
+          this.tmpParentWorldQ
         );
 
-        const stableGripAimQ =
+        this.tmpDesiredWorldQ
+          .copy(this.tmpParentWorldQ)
+          .slerp(
+            this.camera.quaternion,
+            readyToAim
+          );
+
+        const posePitch =
+          THREE.MathUtils.lerp(
+            -0.105,
+            THREE.MathUtils.lerp(
+              cfg.hipFireAimPitch ?? -0.045,
+              cfg.adsAimPitch ?? -0.012,
+              adsBlend
+            ),
+            readyToAim
+          );
+
+        const poseRoll =
+          THREE.MathUtils.lerp(
+            -0.055,
+            THREE.MathUtils.lerp(
+              cfg.hipFireAimRoll ?? -0.030,
+              cfg.adsAimRoll ?? -0.006,
+              adsBlend
+            ),
+            readyToAim
+          );
+
+        const aimCorrection =
           new THREE.Quaternion().setFromEuler(
             new THREE.Euler(
-              THREE.MathUtils.lerp(
-                cfg.hipFireAimPitch ?? -0.045,
-                cfg.adsAimPitch ?? -0.012,
-                adsBlend
-              ) -
-                state.visualKick * 0.16 -
-                state.recoilPitch * 0.18,
-              state.recoilYaw * 0.16,
-              THREE.MathUtils.lerp(
-                cfg.hipFireAimRoll ?? -0.030,
-                cfg.adsAimRoll ?? -0.006,
-                adsBlend
-              ) +
-                state.recoilRoll * 0.14,
+              posePitch -
+                state.visualKick * 0.18 -
+                state.recoilPitch * 0.20,
+              state.recoilYaw * 0.18,
+              poseRoll +
+                state.recoilRoll * 0.16,
               'YXZ'
             )
           );
 
         this.tmpDesiredWorldQ.multiply(
-          stableGripAimQ
+          aimCorrection
         );
 
-        this.player.group.getWorldQuaternion(
-          this.tmpParentWorldQ
-        );
+        // Build a grip anchor BETWEEN upper chest and right shoulder. This is
+        // the silhouette missing from the current build: the pistol grip stays
+        // close to the chest instead of hanging at arm's length.
+        const shoulderSeat =
+          THREE.MathUtils.lerp(
+            0.46,
+            THREE.MathUtils.lerp(
+              0.56,
+              0.62,
+              adsBlend
+            ),
+            readyToAim
+          );
+
+        this.tmpGripWorld
+          .copy(chest)
+          .lerp(
+            shoulder,
+            shoulderSeat
+          );
+
+        this.tmpAimForward
+          .set(0, 0, -1)
+          .applyQuaternion(
+            this.tmpDesiredWorldQ
+          )
+          .normalize();
+
+        this.tmpAimRight
+          .set(1, 0, 0)
+          .applyQuaternion(
+            this.tmpDesiredWorldQ
+          )
+          .normalize();
+
+        this.tmpAimUp
+          .set(0, 1, 0)
+          .applyQuaternion(
+            this.tmpDesiredWorldQ
+          )
+          .normalize();
+
+        const gripForward =
+          THREE.MathUtils.lerp(
+            0.135,
+            THREE.MathUtils.lerp(
+              0.175,
+              0.195,
+              adsBlend
+            ),
+            readyToAim
+          );
+
+        const gripRight =
+          THREE.MathUtils.lerp(
+            0.020,
+            THREE.MathUtils.lerp(
+              0.012,
+              -0.004,
+              adsBlend
+            ),
+            readyToAim
+          );
+
+        const gripUp =
+          THREE.MathUtils.lerp(
+            -0.115,
+            THREE.MathUtils.lerp(
+              -0.075,
+              -0.045,
+              adsBlend
+            ),
+            readyToAim
+          );
+
+        this.tmpGripWorld
+          .addScaledVector(
+            this.tmpAimForward,
+            gripForward
+          )
+          .addScaledVector(
+            this.tmpAimRight,
+            gripRight
+          )
+          .addScaledVector(
+            this.tmpAimUp,
+            gripUp
+          );
+
+        // Convert the independent grip target into the weapon group's local
+        // transform. rightGrip is the exact modeled pistol-grip pivot.
         this.tmpParentWorldQInv
           .copy(this.tmpParentWorldQ)
           .invert();
 
         this.tmpDesiredLocalQ
-          .copy(this.tmpParentWorldQInv)
-          .multiply(this.tmpDesiredWorldQ);
+          .copy(
+            this.tmpParentWorldQInv
+          )
+          .multiply(
+            this.tmpDesiredWorldQ
+          );
 
         this.tmpGripLocal.copy(
           this.tmpGripWorld
@@ -772,7 +842,9 @@ export class WeaponSystem {
         );
 
         this.tmpGripOffset
-          .copy(modelData.rightGrip.position)
+          .copy(
+            modelData.rightGrip.position
+          )
           .multiply(model.scale)
           .applyQuaternion(
             this.tmpDesiredLocalQ
@@ -781,10 +853,12 @@ export class WeaponSystem {
         const targetPosition =
           this.tmpGripLocal
             .clone()
-            .sub(this.tmpGripOffset);
+            .sub(
+              this.tmpGripOffset
+            );
 
-        // Rigid mount: damping here would make the weapon lag behind the hand
-        // and reintroduce visible micro-separation at close ADS.
+        // Weapon target is already stabilized by the chest/aim layers. Use a
+        // rigid transform so there is no extra weapon lag between the hands.
         model.position.copy(
           targetPosition
         );
@@ -798,17 +872,21 @@ export class WeaponSystem {
         );
 
         this.updateGripPose(
-          false,
+          true,
           false,
           THREE.MathUtils.lerp(
-            cfg.supportHandIKLambda ?? 90,
-            cfg.shoulderSupportIKLambda ?? 150,
-            shoulderBlend
+            72,
+            86,
+            adsBlend
           ),
           adsBlend,
-          shoulderBlend,
-          0
+          Math.max(
+            0.42,
+            shoulderBlend
+          ),
+          1
         );
+
         return;
       }
     }

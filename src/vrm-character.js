@@ -2060,10 +2060,11 @@ function applyWeaponAimPose(
     -0.68,
     0.86
   );
+
   const yaw = THREE.MathUtils.clamp(
     state.aimYawOffset ?? 0,
-    -1.18,
-    1.18
+    -0.78,
+    0.78
   );
 
   const ads = THREE.MathUtils.clamp(
@@ -2079,80 +2080,235 @@ function applyWeaponAimPose(
     1
   );
 
-  // Hip-fire already uses the camera direction, but ADS pulls the rifle
-  // tighter into the shoulder and distributes more of the aim through the
-  // chest/upper chest. This behaves like a small additive aim-space layered
-  // over authored locomotion rather than replacing the lower body.
-  const spinePitch =
-    THREE.MathUtils.lerp(0.13, 0.20, ads);
-  const spineYaw =
-    THREE.MathUtils.lerp(0.19, 0.24, ads);
-  const chestPitch =
-    THREE.MathUtils.lerp(0.19, 0.28, ads);
-  const chestYaw =
-    THREE.MathUtils.lerp(0.27, 0.34, ads);
-  const upperPitch =
-    THREE.MathUtils.lerp(0.15, 0.23, ads);
-  const upperYaw =
-    THREE.MathUtils.lerp(0.20, 0.28, ads);
-
+  // Additive aim-offset layer. Horizontal extremes stay deliberately limited;
+  // player root rotation handles most yaw while moving, matching Epic's
+  // guidance for weapon aim offsets.
   stableWeaponBoneEuler(
     bones.spine,
     baseRotations,
-    -pitch * spinePitch * shoulder,
-    yaw * spineYaw * shoulder,
-    -yaw * 0.018 * shoulder,
-    18,
-    dt
-  );
-  stableWeaponBoneEuler(
-    bones.chest,
-    baseRotations,
-    -pitch * chestPitch * shoulder,
-    yaw * chestYaw * shoulder,
-    -yaw * 0.026 * shoulder,
-    20,
-    dt
-  );
-  stableWeaponBoneEuler(
-    bones.upperChest,
-    baseRotations,
-    -pitch * upperPitch * shoulder,
-    yaw * upperYaw * shoulder,
-    -yaw * 0.010 * shoulder,
+    -pitch *
+      THREE.MathUtils.lerp(
+        0.12,
+        0.18,
+        ads
+      ) *
+      shoulder,
+    yaw *
+      THREE.MathUtils.lerp(
+        0.12,
+        0.18,
+        ads
+      ) *
+      shoulder,
+    -yaw * 0.012 * shoulder,
     22,
     dt
   );
+
   stableWeaponBoneEuler(
-    bones.neck,
+    bones.chest,
     baseRotations,
     -pitch *
-      THREE.MathUtils.lerp(0.06, 0.09, ads) *
+      THREE.MathUtils.lerp(
+        0.18,
+        0.25,
+        ads
+      ) *
       shoulder,
     yaw *
-      THREE.MathUtils.lerp(0.045, 0.07, ads) *
+      THREE.MathUtils.lerp(
+        0.18,
+        0.24,
+        ads
+      ) *
       shoulder,
-    0,
-    29,
-    dt
-  );
-  stableWeaponBoneEuler(
-    bones.head,
-    baseRotations,
-    -pitch *
-      THREE.MathUtils.lerp(0.045, 0.07, ads) *
-      shoulder,
-    yaw *
-      THREE.MathUtils.lerp(0.035, 0.05, ads) *
-      shoulder,
-    0,
-    34,
+    -yaw * 0.018 * shoulder,
+    24,
     dt
   );
 
-  // Grip sockets define positions only. Keep the hands on a stable local
-  // wrist pose and let arm IK solve the grip positions; do not invent a
-  // weapon-space hand quaternion.
+  stableWeaponBoneEuler(
+    bones.upperChest,
+    baseRotations,
+    -pitch *
+      THREE.MathUtils.lerp(
+        0.16,
+        0.22,
+        ads
+      ) *
+      shoulder,
+    yaw *
+      THREE.MathUtils.lerp(
+        0.16,
+        0.22,
+        ads
+      ) *
+      shoulder,
+    0,
+    25,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.neck,
+    baseRotations,
+    -pitch * 0.07 * shoulder,
+    yaw * 0.045 * shoulder,
+    0,
+    28,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.head,
+    baseRotations,
+    -pitch * 0.055 * shoulder,
+    yaw * 0.035 * shoulder,
+    0,
+    30,
+    dt
+  );
+
+  // Stable rifle-ready BASE pose. IK runs after this and only performs the
+  // final hand placement; authored locomotion cannot leave either arm hanging.
+  stableWeaponBoneEuler(
+    bones.rightShoulder,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.045,
+      -0.070,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      -0.030,
+      -0.045,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      0.095,
+      0.120,
+      ads
+    ),
+    26,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.leftShoulder,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.050,
+      -0.080,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      0.035,
+      0.055,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      -0.100,
+      -0.130,
+      ads
+    ),
+    26,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.rightUpperArm,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.58,
+      -0.64,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      -0.08,
+      -0.10,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      0.66,
+      0.72,
+      ads
+    ),
+    28,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.rightLowerArm,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.82,
+      -0.90,
+      ads
+    ),
+    0.03,
+    THREE.MathUtils.lerp(
+      0.14,
+      0.17,
+      ads
+    ),
+    30,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.leftUpperArm,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.70,
+      -0.76,
+      ads
+    ),
+    0.11,
+    THREE.MathUtils.lerp(
+      -0.64,
+      -0.70,
+      ads
+    ),
+    28,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.leftLowerArm,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.84,
+      -0.92,
+      ads
+    ),
+    -0.04,
+    THREE.MathUtils.lerp(
+      -0.16,
+      -0.18,
+      ads
+    ),
+    30,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.rightHand,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.06,
+      -0.10,
+      ads
+    ),
+    -0.02,
+    THREE.MathUtils.lerp(
+      0.03,
+      0.05,
+      ads
+    ),
+    30,
+    dt
+  );
+
   stableWeaponBoneEuler(
     bones.leftHand,
     baseRotations,
@@ -2161,137 +2317,10 @@ function applyWeaponAimPose(
       -0.07,
       ads
     ),
+    0.012,
     THREE.MathUtils.lerp(
-      0.010,
-      0.018,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      -0.020,
-      -0.030,
-      ads
-    ),
-    28,
-    dt
-  );
-
-  // Narrower shoulder pocket in ADS; hip-fire remains athletic but relaxed.
-  stableWeaponBoneEuler(
-    bones.leftShoulder,
-    baseRotations,
-    THREE.MathUtils.lerp(-0.045, -0.078, ads),
-    THREE.MathUtils.lerp(0.035, 0.052, ads),
-    THREE.MathUtils.lerp(-0.095, -0.122, ads),
-    24,
-    dt
-  );
-  stableWeaponBoneEuler(
-    bones.rightShoulder,
-    baseRotations,
-    THREE.MathUtils.lerp(-0.040, -0.068, ads),
-    THREE.MathUtils.lerp(-0.030, -0.044, ads),
-    THREE.MathUtils.lerp(0.090, 0.108, ads),
-    24,
-    dt
-  );
-
-  // The right arm is the master/FK chain. Never solve it back toward the gun.
-  // This removes the camera-owned gun <-> right-arm IK feedback loop entirely.
-  const masterArmBlend =
-    THREE.MathUtils.smoothstep(
-      shoulder,
-      0,
-      1
-    );
-
-  stableWeaponBoneEuler(
-    bones.rightUpperArm,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.40,
-      THREE.MathUtils.lerp(
-        -0.54,
-        -0.61,
-        ads
-      ),
-      masterArmBlend
-    ) -
-      pitch * 0.06 * masterArmBlend,
-    THREE.MathUtils.lerp(
-      -0.06,
-      THREE.MathUtils.lerp(
-        -0.20,
-        -0.25,
-        ads
-      ),
-      masterArmBlend
-    ),
-    THREE.MathUtils.lerp(
-      0.60,
-      THREE.MathUtils.lerp(
-        0.94,
-        1.02,
-        ads
-      ),
-      masterArmBlend
-    ),
-    26,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.rightLowerArm,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.66,
-      THREE.MathUtils.lerp(
-        -1.10,
-        -1.20,
-        ads
-      ),
-      masterArmBlend
-    ),
-    THREE.MathUtils.lerp(
-      0.025,
-      THREE.MathUtils.lerp(
-        0.07,
-        0.09,
-        ads
-      ),
-      masterArmBlend
-    ),
-    THREE.MathUtils.lerp(
-      0.15,
-      THREE.MathUtils.lerp(
-        0.08,
-        0.10,
-        ads
-      ),
-      masterArmBlend
-    ),
-    28,
-    dt
-  );
-
-  // Final wrist angle is deliberately modest; the weapon itself now rotates
-  // around the grip pivot, so the wrist no longer has to compensate for a
-  // vertical gun socket.
-  stableWeaponBoneEuler(
-    bones.rightHand,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.10,
-      -0.16,
-      ads
-    ),
-    THREE.MathUtils.lerp(
+      -0.02,
       -0.03,
-      -0.05,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      0.07,
-      0.11,
       ads
     ),
     30,
@@ -2310,57 +2339,53 @@ function applyWeaponCarryPose(
     state?.speed ?? 0
   );
 
-  const moving = THREE.MathUtils.clamp(
-    speed / 5.2,
-    0,
-    1
-  );
+  const moving =
+    THREE.MathUtils.clamp(
+      speed / 5.2,
+      0,
+      1
+    );
 
-  // Keep a small intentional athletic posture while moving, but never inherit
-  // the authored clip's upper-body noise. This is a deterministic pose target,
-  // so standing still cannot produce alternating-frame vibration.
   const moveLean =
-    moving * 0.020;
+    moving * 0.016;
 
   stableWeaponBoneEuler(
     bones.spine,
     baseRotations,
-    -0.025 - moveLean * 0.35,
+    -0.025 - moveLean * 0.25,
     0,
     0,
-    15,
+    18,
     dt
   );
 
   stableWeaponBoneEuler(
     bones.chest,
     baseRotations,
-    -0.045 - moveLean * 0.45,
+    -0.045 - moveLean * 0.35,
     0,
     0,
-    16,
+    20,
     dt
   );
 
   stableWeaponBoneEuler(
     bones.upperChest,
     baseRotations,
-    -0.025 - moveLean * 0.20,
+    -0.030,
     0,
     0,
-    17,
+    21,
     dt
   );
 
-  // Head/neck were previously left entirely to the authored idle/run clip,
-  // which is exactly where the uploaded video shows the largest shake.
   stableWeaponBoneEuler(
     bones.neck,
     baseRotations,
-    -0.010,
+    -0.008,
     0,
     0,
-    18,
+    20,
     dt
   );
 
@@ -2370,67 +2395,68 @@ function applyWeaponCarryPose(
     0,
     0,
     0,
-    20,
+    22,
+    dt
+  );
+
+  // Chest-ready two-hand rifle pose, intentionally close to the hip-fire base.
+  stableWeaponBoneEuler(
+    bones.rightShoulder,
+    baseRotations,
+    -0.040,
+    -0.025,
+    0.090,
+    24,
     dt
   );
 
   stableWeaponBoneEuler(
     bones.leftShoulder,
     baseRotations,
-    -0.035,
-    0.035,
-    -0.08,
-    18,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.rightShoulder,
-    baseRotations,
-    -0.03,
-    -0.03,
-    0.08,
-    18,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftUpperArm,
-    baseRotations,
-    -0.50,
-    0.10,
-    -0.60,
-    20,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftLowerArm,
-    baseRotations,
-    -0.68,
-    -0.035,
-    -0.16,
-    20,
+    -0.045,
+    0.030,
+    -0.095,
+    24,
     dt
   );
 
   stableWeaponBoneEuler(
     bones.rightUpperArm,
     baseRotations,
-    -0.40,
-    -0.06,
-    0.60,
-    20,
+    -0.54,
+    -0.07,
+    0.62,
+    26,
     dt
   );
 
   stableWeaponBoneEuler(
     bones.rightLowerArm,
     baseRotations,
+    -0.78,
+    0.03,
+    0.13,
+    28,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.leftUpperArm,
+    baseRotations,
     -0.66,
-    0.025,
-    0.15,
-    20,
+    0.10,
+    -0.60,
+    26,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.leftLowerArm,
+    baseRotations,
+    -0.80,
+    -0.04,
+    -0.15,
+    28,
     dt
   );
 
@@ -2439,8 +2465,8 @@ function applyWeaponCarryPose(
     baseRotations,
     -0.055,
     -0.012,
-    0.022,
-    24,
+    0.025,
+    28,
     dt
   );
 
@@ -2448,9 +2474,9 @@ function applyWeaponCarryPose(
     bones.leftHand,
     baseRotations,
     -0.035,
-    0.008,
+    0.010,
     -0.018,
-    24,
+    28,
     dt
   );
 }
@@ -2542,18 +2568,29 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
 
   if (
     !gripPose?.aiming ||
+    !bones.rightUpperArm ||
+    !bones.rightLowerArm ||
+    !bones.rightHand ||
     !bones.leftUpperArm ||
     !bones.leftLowerArm ||
     !bones.leftHand
   ) {
     const filter =
-      WEAPON_IK_TARGET_FILTER.get(character);
+      WEAPON_IK_TARGET_FILTER.get(
+        character
+      );
     if (filter) filter.initialized = false;
     return;
   }
 
-  character.root.updateWorldMatrix(true, true);
-  character.root.getWorldQuaternion(IK_TMP.rootQ);
+  character.root.updateWorldMatrix(
+    true,
+    true
+  );
+
+  character.root.getWorldQuaternion(
+    IK_TMP.rootQ
+  );
 
   IK_TMP.right
     .set(1, 0, 0)
@@ -2565,21 +2602,47 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     .applyQuaternion(IK_TMP.rootQ)
     .normalize();
 
-  const ads = THREE.MathUtils.clamp(
-    gripPose.adsBlend ?? 0,
-    0,
-    1
-  );
+  const ads =
+    THREE.MathUtils.clamp(
+      gripPose.adsBlend ?? 0,
+      0,
+      1
+    );
 
   const targetFilter =
-    getWeaponIkTargetFilter(character);
+    getWeaponIkTargetFilter(
+      character
+    );
 
   if (!targetFilter.initialized) {
+    targetFilter.right.copy(
+      gripPose.rightGrip
+    );
     targetFilter.left.copy(
       gripPose.leftGrip
     );
     targetFilter.initialized = true;
   }
+
+  filterWeaponIkTarget(
+    targetFilter.right,
+    gripPose.rightGrip,
+    dt,
+    {
+      lambda:
+        THREE.MathUtils.lerp(
+          72,
+          88,
+          ads
+        ),
+      deadzone:
+        THREE.MathUtils.lerp(
+          0.0012,
+          0.0018,
+          ads
+        )
+    }
+  );
 
   filterWeaponIkTarget(
     targetFilter.left,
@@ -2588,21 +2651,73 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     {
       lambda:
         THREE.MathUtils.lerp(
-          46,
-          58,
+          68,
+          84,
           ads
         ),
       deadzone:
         THREE.MathUtils.lerp(
+          0.0012,
           0.0018,
-          0.0032,
           ads
         )
     }
   );
 
-  // Only the support/left arm follows the weapon. The master/right arm is FK
-  // and the weapon is mounted to that hand, so there is no circular solver.
+  // Trigger/master hand: elbow stays bent and tucked instead of extending
+  // sideways. Target is independent from the arm, so this is not feedback.
+  bones.rightUpperArm.getWorldPosition(
+    IK_TMP.shoulder
+  );
+
+  IK_TMP.pole
+    .copy(IK_TMP.shoulder)
+    .addScaledVector(
+      IK_TMP.right,
+      THREE.MathUtils.lerp(
+        0.17,
+        0.12,
+        ads
+      )
+    )
+    .addScaledVector(
+      IK_TMP.down,
+      THREE.MathUtils.lerp(
+        0.16,
+        0.13,
+        ads
+      )
+    )
+    .addScaledVector(
+      IK_TMP.forward,
+      THREE.MathUtils.lerp(
+        0.055,
+        0.040,
+        ads
+      )
+    );
+
+  solveTwoBoneIK(
+    character.root,
+    bones.rightUpperArm,
+    bones.rightLowerArm,
+    bones.rightHand,
+    targetFilter.right,
+    IK_TMP.pole,
+    THREE.MathUtils.lerp(
+      74,
+      88,
+      ads
+    ),
+    dt
+  );
+
+  character.root.updateWorldMatrix(
+    true,
+    true
+  );
+
+  // Support hand reaches forward under the weapon and stays slightly lower.
   bones.leftUpperArm.getWorldPosition(
     IK_TMP.shoulder
   );
@@ -2612,8 +2727,8 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     .addScaledVector(
       IK_TMP.right,
       THREE.MathUtils.lerp(
-        -0.225,
-        -0.155,
+        -0.20,
+        -0.14,
         ads
       )
     )
@@ -2621,14 +2736,14 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       IK_TMP.down,
       THREE.MathUtils.lerp(
         0.18,
-        0.230,
+        0.22,
         ads
       )
     )
     .addScaledVector(
       IK_TMP.forward,
       THREE.MathUtils.lerp(
-        0.074,
+        0.080,
         0.105,
         ads
       )
@@ -2641,13 +2756,10 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     bones.leftHand,
     targetFilter.left,
     IK_TMP.pole,
-    Math.max(
-      gripPose.leftHandLambda ?? 30,
-      THREE.MathUtils.lerp(
-        54,
-        66,
-        ads
-      )
+    THREE.MathUtils.lerp(
+      70,
+      86,
+      ads
     ),
     dt
   );
