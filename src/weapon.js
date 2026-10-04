@@ -274,6 +274,15 @@ export class WeaponSystem {
         dt
       );
 
+      if (
+        s.sinceShot >
+          (entry.cfg.bloomSettleDelay ?? 0.24) &&
+        s.dynamicBloom <
+          (entry.cfg.bloomSettleSnap ?? 0.00018)
+      ) {
+        s.dynamicBloom = 0;
+      }
+
       // Critically damped-ish weapon recoil spring. The gun physically kicks
       // rearward then settles instead of teleporting to a Z offset.
       const kickStiffness = 92 / Math.max(0.55, entry.cfg.mass);
@@ -984,7 +993,8 @@ export class WeaponSystem {
     if (this.player.crouching && this.player.grounded) spread *= cfg.crouchSpreadMult;
 
     if (this.isFirstShotReady()) {
-      spread *= this.cfg.firstShotAccuracyScale ?? 0.04;
+      spread =
+        this.cfg.firstShotAccuracySpread ?? 0;
     }
     return spread;
   }
@@ -1425,7 +1435,11 @@ export class WeaponSystem {
     };
   }}
 
-function getFortniteStyleRecoil(cfg, shotNumber, burstShots = 0) {
+function getFortniteStyleRecoil(
+  cfg,
+  shotNumber,
+  burstShots = 0
+) {
   const profile = cfg.fortniteRecoil;
 
   if (!profile) {
@@ -1439,19 +1453,13 @@ function getFortniteStyleRecoil(cfg, shotNumber, burstShots = 0) {
     };
   }
 
-  // Treat the public recoil magnitudes as angular-class values and preserve
-  // their class-to-class ratios. The camera splits each impulse into persistent
-  // player-controllable aim displacement plus a smaller recovering visual kick.
   const cameraScale = profile.cameraScale ?? 1;
-  const horizontalPattern =
-    profile.horizontalPattern ?? [-1, 1];
-  const side =
-    horizontalPattern[
-      shotNumber % horizontalPattern.length
-    ] ?? 0;
 
-  const earlyRampShots = profile.earlyRampShots ?? 0;
-  const earlyRampPerShot = profile.earlyRampPerShot ?? 0;
+  const earlyRampShots =
+    profile.earlyRampShots ?? 0;
+  const earlyRampPerShot =
+    profile.earlyRampPerShot ?? 0;
+
   const ramp =
     1 +
     Math.min(burstShots, earlyRampShots) *
@@ -1459,22 +1467,67 @@ function getFortniteStyleRecoil(cfg, shotNumber, burstShots = 0) {
 
   const verticalPattern =
     profile.verticalPattern ?? [1];
+
   const verticalStep =
     verticalPattern[
       shotNumber % verticalPattern.length
     ] ?? 1;
 
+  // Fortnite-style spray should not feel like a memorized left/right recoil
+  // ladder. Use a deterministic pseudo-random sample so each weapon has
+  // bounded lateral deviation without producing a mechanical zig-zag.
+  const seed =
+    (profile.seed ?? 17) +
+    shotNumber * 12.9898 +
+    burstShots * 78.233;
+
+  const random01 =
+    fract(
+      Math.sin(seed) * 43758.5453
+    );
+
+  const randomSigned =
+    random01 * 2 - 1;
+
+  const horizontalBias =
+    profile.horizontalBias ?? 0;
+
+  const horizontalSample =
+    THREE.MathUtils.clamp(
+      randomSigned +
+        horizontalBias,
+      -1,
+      1
+    );
+
+  const burstSideScale =
+    1 +
+    Math.min(
+      burstShots,
+      profile.horizontalRampShots ?? 0
+    ) *
+      (profile.horizontalRampPerShot ?? 0);
+
   return {
     pitch:
-      THREE.MathUtils.degToRad(profile.vertical) *
+      THREE.MathUtils.degToRad(
+        profile.vertical
+      ) *
       cameraScale *
       ramp *
       verticalStep,
     yaw:
-      THREE.MathUtils.degToRad(profile.horizontal) *
+      THREE.MathUtils.degToRad(
+        profile.horizontal
+      ) *
       cameraScale *
-      side
+      horizontalSample *
+      burstSideScale
   };
+}
+
+function fract(value) {
+  return value - Math.floor(value);
 }
 
 function buildMuzzleFx(cfg) {
