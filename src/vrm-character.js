@@ -323,6 +323,19 @@ function buildCharacterInterface({
     root.add(weaponSocket);
   }
 
+  // Gameplay/FK socket lives on the normalized right hand. Weapon positioning
+  // happens before humanoid.update(), so using this same-frame socket avoids
+  // the one-frame raw-skeleton lag that can look like constant vibration.
+  const weaponPoseSocket = new THREE.Object3D();
+  weaponPoseSocket.name = 'weaponPoseSocket';
+  weaponPoseSocket.position.set(0, 0.025, 0.08);
+  weaponPoseSocket.rotation.set(-0.18, Math.PI, 0.12);
+  if (bones.rightHand) {
+    bones.rightHand.add(weaponPoseSocket);
+  } else {
+    root.add(weaponPoseSocket);
+  }
+
   const fangSocket = new THREE.Object3D();
   fangSocket.name = 'fangSocket';
   if (attachmentBones.rightHand) {
@@ -361,6 +374,7 @@ function buildCharacterInterface({
     rawBones,
     attachmentBones,
     weaponSocket,
+    weaponPoseSocket,
     fangSocket,
     holsterSocket,
     headSocket,
@@ -2202,6 +2216,59 @@ function applyWeaponAimPose(
     24,
     dt
   );
+
+  // The right arm is the master/FK chain. Never solve it back toward the gun.
+  // This removes the camera-owned gun <-> right-arm IK feedback loop entirely.
+  const masterArmBlend =
+    THREE.MathUtils.smoothstep(
+      shoulder,
+      0,
+      1
+    );
+
+  stableWeaponBoneEuler(
+    bones.rightUpperArm,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.40,
+      THREE.MathUtils.lerp(-0.62, -0.68, ads),
+      masterArmBlend
+    ) - pitch * 0.08 * masterArmBlend,
+    THREE.MathUtils.lerp(
+      -0.06,
+      THREE.MathUtils.lerp(-0.08, -0.10, ads),
+      masterArmBlend
+    ),
+    THREE.MathUtils.lerp(
+      0.60,
+      THREE.MathUtils.lerp(0.68, 0.72, ads),
+      masterArmBlend
+    ),
+    24,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.rightLowerArm,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.66,
+      THREE.MathUtils.lerp(-0.80, -0.86, ads),
+      masterArmBlend
+    ),
+    THREE.MathUtils.lerp(
+      0.025,
+      0.03,
+      masterArmBlend
+    ),
+    THREE.MathUtils.lerp(
+      0.15,
+      THREE.MathUtils.lerp(0.16, 0.18, ads),
+      masterArmBlend
+    ),
+    26,
+    dt
+  );
 }
 
 function applyWeaponCarryPose(
@@ -2464,6 +2531,7 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     .set(1, 0, 0)
     .applyQuaternion(IK_TMP.rootQ)
     .normalize();
+
   IK_TMP.forward
     .set(0, 0, -1)
     .applyQuaternion(IK_TMP.rootQ)
@@ -2475,96 +2543,67 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     1
   );
 
-  const rightIKBlend = THREE.MathUtils.clamp(
-    gripPose.rightHandIKBlend ??
-      (gripPose.rightHandIK ? 1 : 0),
-    0,
-    1
-  );
-
   const targetFilter =
     getWeaponIkTargetFilter(character);
 
   if (!targetFilter.initialized) {
-    targetFilter.right.copy(gripPose.rightGrip);
-    targetFilter.left.copy(gripPose.leftGrip);
+    targetFilter.left.copy(
+      gripPose.leftGrip
+    );
     targetFilter.initialized = true;
   }
-
-  filterWeaponIkTarget(
-    targetFilter.right,
-    gripPose.rightGrip,
-    dt,
-    {
-      lambda: THREE.MathUtils.lerp(52, 66, ads),
-      deadzone: THREE.MathUtils.lerp(0.0012, 0.0028, ads)
-    }
-  );
 
   filterWeaponIkTarget(
     targetFilter.left,
     gripPose.leftGrip,
     dt,
     {
-      lambda: THREE.MathUtils.lerp(50, 64, ads),
-      deadzone: THREE.MathUtils.lerp(0.0012, 0.0028, ads)
+      lambda:
+        THREE.MathUtils.lerp(
+          46,
+          58,
+          ads
+        ),
+      deadzone:
+        THREE.MathUtils.lerp(
+          0.0018,
+          0.0032,
+          ads
+        )
     }
   );
 
-  if (
-    rightIKBlend > 0.001 &&
-    bones.rightUpperArm &&
-    bones.rightLowerArm &&
-    bones.rightHand
-  ) {
-    bones.rightUpperArm.getWorldPosition(IK_TMP.shoulder);
-    IK_TMP.pole
-      .copy(IK_TMP.shoulder)
-      .addScaledVector(
-        IK_TMP.right,
-        THREE.MathUtils.lerp(0.235, 0.145, ads)
-      )
-      .addScaledVector(
-        IK_TMP.down,
-        THREE.MathUtils.lerp(0.185, 0.135, ads)
-      )
-      .addScaledVector(
-        IK_TMP.forward,
-        THREE.MathUtils.lerp(0.046, 0.025, ads)
-      );
+  // Only the support/left arm follows the weapon. The master/right arm is FK
+  // and the weapon is mounted to that hand, so there is no circular solver.
+  bones.leftUpperArm.getWorldPosition(
+    IK_TMP.shoulder
+  );
 
-    solveTwoBoneIK(
-      character.root,
-      bones.rightUpperArm,
-      bones.rightLowerArm,
-      bones.rightHand,
-      targetFilter.right,
-      IK_TMP.pole,
-      THREE.MathUtils.lerp(
-        12,
-        THREE.MathUtils.lerp(46, 56, ads),
-        rightIKBlend
-      ),
-      dt
-    );
-
-    character.root.updateWorldMatrix(true, true);
-  }
-
-  bones.leftUpperArm.getWorldPosition(IK_TMP.shoulder);
   IK_TMP.pole
     .copy(IK_TMP.shoulder)
     .addScaledVector(
       IK_TMP.right,
-      THREE.MathUtils.lerp(-0.225, -0.155, ads)
+      THREE.MathUtils.lerp(
+        -0.225,
+        -0.155,
+        ads
+      )
     )
     .addScaledVector(
       IK_TMP.down,
-      THREE.MathUtils.lerp(0.18, 0.230, ads)
+      THREE.MathUtils.lerp(
+        0.18,
+        0.230,
+        ads
+      )
     )
     .addScaledVector(
       IK_TMP.forward,
-      THREE.MathUtils.lerp(0.074, 0.105, ads)
+      THREE.MathUtils.lerp(
+        0.074,
+        0.105,
+        ads
+      )
     );
 
   solveTwoBoneIK(
@@ -2576,12 +2615,15 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     IK_TMP.pole,
     Math.max(
       gripPose.leftHandLambda ?? 30,
-      THREE.MathUtils.lerp(66, 84, ads)
+      THREE.MathUtils.lerp(
+        54,
+        66,
+        ads
+      )
     ),
     dt
   );
 }
-
 
 function solveTwoBoneIK(
   root,

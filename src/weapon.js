@@ -708,84 +708,24 @@ export class WeaponSystem {
       shoulderBlend > 0.015 &&
       this.handMounted
     ) {
-      // Shooter architecture: crosshair/camera owns the weapon transform.
-      // Hands follow the weapon sockets via IK after this pose is resolved.
-      const shoulder =
-        this.player.getBoneWorldPosition?.('rightShoulder', this.tmpShoulderWorld) ??
-        this.player.getBoneWorldPosition?.('upperChest', this.tmpShoulderWorld);
+      const poseSocket =
+        this.player.getWeaponPoseSocket?.() ??
+        null;
 
-      if (shoulder) {
-        this.tmpAimForward
-          .set(0, 0, -1)
-          .applyQuaternion(this.camera.quaternion)
-          .normalize();
-        this.tmpAimRight
-          .set(1, 0, 0)
-          .applyQuaternion(this.camera.quaternion)
-          .normalize();
-        this.tmpAimUp
-          .set(0, 1, 0)
-          .applyQuaternion(this.camera.quaternion)
-          .normalize();
-
-        // Fit the actual pistol grip near the firing shoulder. Different
-        // weapon families get small offsets instead of sharing one giant pose.
-        const gripForward =
-          (cfg.combatGripForward ?? 0.17) +
-          (cfg.adsGripForwardAdd ?? 0.035) *
-            adsBlend;
-        const gripRight =
-          (cfg.combatGripRight ?? 0.0) +
-          (cfg.adsGripRightAdd ?? -0.030) *
-            adsBlend;
-        const gripUp =
-          (cfg.combatGripUp ?? -0.060) +
-          (cfg.adsGripUpAdd ?? 0.030) *
-            adsBlend;
-
-        this.tmpGripWorld
-          .copy(shoulder)
-          .addScaledVector(this.tmpAimForward, gripForward)
-          .addScaledVector(
-            this.tmpAimRight,
-            gripRight + bobX + swayX
-          )
-          .addScaledVector(
-            this.tmpAimUp,
-            gripUp + bobY + swayY
-          );
-
-        this.tmpDesiredWorldQ.copy(this.camera.quaternion);
-
-        // Small visual recoil around the camera-aligned aim axis.
-        const aimPitchBase =
-          THREE.MathUtils.lerp(
-            cfg.hipFireAimPitch ?? -0.050,
-            cfg.adsAimPitch ?? -0.016,
-            adsBlend
-          );
-        const aimRollBase =
-          THREE.MathUtils.lerp(
-            cfg.hipFireAimRoll ?? -0.040,
-            cfg.adsAimRoll ?? -0.010,
-            adsBlend
-          );
-
-        const recoilQ = new THREE.Quaternion().setFromEuler(
-          new THREE.Euler(
-            aimPitchBase -
-              state.visualKick * 0.72 -
-              state.recoilPitch,
-            state.recoilYaw,
-            aimRollBase -
-              swayX * 0.45 +
-              state.recoilRoll,
-            'YXZ'
-          )
+      if (poseSocket) {
+        // Same-frame master-hand architecture:
+        // normalized FK arm -> normalized hand socket -> rigid weapon.
+        // No camera-owned weapon target and no right-hand IK are involved.
+        poseSocket.getWorldPosition(
+          this.tmpGripWorld
         );
-        this.tmpDesiredWorldQ.multiply(recoilQ);
+        poseSocket.getWorldQuaternion(
+          this.tmpDesiredWorldQ
+        );
 
-        this.player.group.getWorldQuaternion(this.tmpParentWorldQ);
+        this.player.group.getWorldQuaternion(
+          this.tmpParentWorldQ
+        );
         this.tmpParentWorldQInv
           .copy(this.tmpParentWorldQ)
           .invert();
@@ -794,166 +734,50 @@ export class WeaponSystem {
           .copy(this.tmpParentWorldQInv)
           .multiply(this.tmpDesiredWorldQ);
 
-        this.tmpGripLocal.copy(this.tmpGripWorld);
-        this.player.group.worldToLocal(this.tmpGripLocal);
+        this.tmpGripLocal.copy(
+          this.tmpGripWorld
+        );
+        this.player.group.worldToLocal(
+          this.tmpGripLocal
+        );
 
         this.tmpGripOffset
           .copy(modelData.rightGrip.position)
           .multiply(model.scale)
-          .applyQuaternion(this.tmpDesiredLocalQ);
+          .applyQuaternion(
+            this.tmpDesiredLocalQ
+          );
 
-        const shoulderTargetPosition = this.tmpGripLocal
-          .clone()
-          .sub(this.tmpGripOffset);
-        const shoulderTargetQuaternion =
-          this.tmpDesiredLocalQ.clone();
+        const targetPosition =
+          this.tmpGripLocal
+            .clone()
+            .sub(this.tmpGripOffset);
 
-        let finalTargetPosition =
-          shoulderTargetPosition;
-        let finalTargetQuaternion =
-          shoulderTargetQuaternion;
-
-        // Stable ownership handoff for master-hand weapons:
-        // RAISE  = frozen carry pose -> camera/shoulder pose.
-        // LOWER  = camera/shoulder pose -> live hand carry, with right-arm IK
-        //          already disabled so there is no weapon<->hand feedback.
-        if (cfg.masterHandCarry) {
-          if (
-            shoulderRequested &&
-            state.raiseAnchorActive
-          ) {
-            finalTargetPosition =
-              state.raiseAnchorPosition
-                .clone()
-                .lerp(
-                  shoulderTargetPosition,
-                  shoulderBlend
-                );
-
-            finalTargetQuaternion =
-              state.raiseAnchorQuaternion
-                .clone()
-                .slerp(
-                  shoulderTargetQuaternion,
-                  shoulderBlend
-                );
-
-            if (shoulderBlend >= 0.995) {
-              state.raiseAnchorActive = false;
-            }
-          } else if (!shoulderRequested) {
-            const carryHandWorld =
-              this.player.getHandWorldPosition?.(
-                'right',
-                this.tmpHandWorld
-              ) ?? null;
-
-            if (carryHandWorld) {
-              const carryGripLocal =
-                carryHandWorld.clone();
-              this.player.group.worldToLocal(
-                carryGripLocal
-              );
-
-              const carryQuaternion =
-                new THREE.Quaternion().setFromEuler(
-                  new THREE.Euler(
-                    cfg.carryPitch ?? -0.11,
-                    cfg.carryYaw ?? 0,
-                    cfg.carryRoll ?? -0.055,
-                    'YXZ'
-                  )
-                );
-
-              const carryGripOffset =
-                modelData.rightGrip.position
-                  .clone()
-                  .multiply(model.scale)
-                  .applyQuaternion(
-                    carryQuaternion
-                  );
-
-              const carryTargetPosition =
-                carryGripLocal
-                  .clone()
-                  .sub(carryGripOffset);
-
-              finalTargetPosition =
-                carryTargetPosition
-                  .clone()
-                  .lerp(
-                    shoulderTargetPosition,
-                    shoulderBlend
-                  );
-
-              finalTargetQuaternion =
-                carryQuaternion
-                  .clone()
-                  .slerp(
-                    shoulderTargetQuaternion,
-                    shoulderBlend
-                  );
-            }
-          }
-        }
-
-        const poseLambda =
-          shoulderRequested
-            ? (cfg.shoulderPoseSpeed ?? 34)
-            : (cfg.shoulderLowerPoseSpeed ?? 20);
-
-        model.position.x = THREE.MathUtils.damp(
-          model.position.x,
-          finalTargetPosition.x,
-          poseLambda / cfg.mass,
-          dt
+        // Rigid mount: damping here would make the weapon lag behind the hand
+        // and reintroduce visible micro-separation at close ADS.
+        model.position.copy(
+          targetPosition
         );
-        model.position.y = THREE.MathUtils.damp(
-          model.position.y,
-          finalTargetPosition.y,
-          poseLambda / cfg.mass,
-          dt
-        );
-        model.position.z = THREE.MathUtils.damp(
-          model.position.z,
-          finalTargetPosition.z,
-          (poseLambda + 2) / cfg.mass,
-          dt
+        model.quaternion.copy(
+          this.tmpDesiredLocalQ
         );
 
-        model.quaternion.slerp(
-          finalTargetQuaternion,
-          1 -
-            Math.exp(
-              -(poseLambda / cfg.mass) * dt
-            )
+        model.updateWorldMatrix(
+          true,
+          true
         );
-
-        model.updateWorldMatrix(true, true);
-
-        const shoulderIKBlend =
-          shoulderRequested
-            ? THREE.MathUtils.smoothstep(
-                shoulderBlend,
-                0.08,
-                0.78
-              )
-            : 0;
-
-        const shoulderIK =
-          shoulderIKBlend > 0.01;
 
         this.updateGripPose(
-          shoulderIK,
+          false,
           false,
           THREE.MathUtils.lerp(
             cfg.supportHandIKLambda ?? 90,
             cfg.shoulderSupportIKLambda ?? 150,
-            shoulderIKBlend
+            shoulderBlend
           ),
           adsBlend,
           shoulderBlend,
-          shoulderIKBlend
+          0
         );
         return;
       }
@@ -1047,7 +871,7 @@ export class WeaponSystem {
         );
 
         model.updateWorldMatrix(true, true);
-        this.updateGripPose(true, false);
+        this.updateGripPose(false, false);
         return;
       }
     }

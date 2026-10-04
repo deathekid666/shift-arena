@@ -968,6 +968,14 @@ export class PlayerController {
     return this.vrmCharacter?.weaponSocket ?? null;
   }
 
+  getWeaponPoseSocket() {
+    return (
+      this.vrmCharacter?.weaponPoseSocket ??
+      this.vrmCharacter?.weaponSocket ??
+      null
+    );
+  }
+
   getFangSocket() {
     return this.vrmCharacter?.fangSocket ?? null;
   }
