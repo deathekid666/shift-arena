@@ -19,8 +19,6 @@ export class PlayerController {
     this.sprintBlend = 0;
     this.braking = false;
     this.turnLean = 0;
-    this.groundHeightAtForFeet = (x, z) =>
-      this.supportHeightAt(x, z);
 
     // The gameplay capsule remains implicit in movement/collision values.
     // This pivot contains only the visible character and animation attachments.
@@ -471,7 +469,6 @@ export class PlayerController {
       crouching: this.crouching,
       crouchBlend: this.crouchVisual,
       grounded: this.grounded,
-      groundHeightAt: this.groundHeightAtForFeet,
       rightArmOverride: this.fangArmOverride,
       fangAnimation: this.fangAnimation
     };

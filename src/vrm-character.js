@@ -6,7 +6,6 @@ import { createFangPoseLayer } from './fang-pose.js';
 import { createCrouchPoseLayer } from './crouch-pose.js';
 import { createSlidePoseLayer } from './slide-pose.js';
 import { createJumpPoseLayer } from './jump-pose.js';
-import { createFootGroundingLayer } from './foot-grounding.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -390,7 +389,6 @@ function buildCharacterInterface({
       this.jumpPoseLayer?.restore();
       this.slidePoseLayer?.restore();
       this.crouchPoseLayer?.restore();
-      this.footGroundingLayer?.restore();
 
       if (!this.debugFreezeAuthored) {
         this.authoredLocomotion?.update(dt, state);
@@ -441,9 +439,6 @@ function buildCharacterInterface({
 
       this.jumpPoseLayer ??= createJumpPoseLayer(this);
       this.jumpPoseLayer.apply(state, dt);
-
-      this.footGroundingLayer ??= createFootGroundingLayer(this);
-      this.footGroundingLayer.apply(state, dt);
     },
     setVisible(visible) {
       root.visible = Boolean(visible);
