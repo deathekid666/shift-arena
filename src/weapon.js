@@ -719,8 +719,38 @@ export class WeaponSystem {
         poseSocket.getWorldPosition(
           this.tmpGripWorld
         );
-        poseSocket.getWorldQuaternion(
-          this.tmpDesiredWorldQ
+
+        // Position is owned by the master hand, but weapon orientation follows
+        // the actual aim direction. Because placement is solved around the
+        // rightGrip pivot below, the gun rotates AT the hand instead of
+        // detaching from it or inheriting the hand socket's vertical twist.
+        this.tmpDesiredWorldQ.copy(
+          this.camera.quaternion
+        );
+
+        const stableGripAimQ =
+          new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(
+              THREE.MathUtils.lerp(
+                cfg.hipFireAimPitch ?? -0.045,
+                cfg.adsAimPitch ?? -0.012,
+                adsBlend
+              ) -
+                state.visualKick * 0.16 -
+                state.recoilPitch * 0.18,
+              state.recoilYaw * 0.16,
+              THREE.MathUtils.lerp(
+                cfg.hipFireAimRoll ?? -0.030,
+                cfg.adsAimRoll ?? -0.006,
+                adsBlend
+              ) +
+                state.recoilRoll * 0.14,
+              'YXZ'
+            )
+          );
+
+        this.tmpDesiredWorldQ.multiply(
+          stableGripAimQ
         );
 
         this.player.group.getWorldQuaternion(

@@ -2154,28 +2154,6 @@ function applyWeaponAimPose(
   // wrist pose and let arm IK solve the grip positions; do not invent a
   // weapon-space hand quaternion.
   stableWeaponBoneEuler(
-    bones.rightHand,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.06,
-      -0.10,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      -0.015,
-      -0.025,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      0.025,
-      0.040,
-      ads
-    ),
-    28,
-    dt
-  );
-
-  stableWeaponBoneEuler(
     bones.leftHand,
     baseRotations,
     THREE.MathUtils.lerp(
@@ -2231,20 +2209,33 @@ function applyWeaponAimPose(
     baseRotations,
     THREE.MathUtils.lerp(
       -0.40,
-      THREE.MathUtils.lerp(-0.62, -0.68, ads),
+      THREE.MathUtils.lerp(
+        -0.54,
+        -0.61,
+        ads
+      ),
       masterArmBlend
-    ) - pitch * 0.08 * masterArmBlend,
+    ) -
+      pitch * 0.06 * masterArmBlend,
     THREE.MathUtils.lerp(
       -0.06,
-      THREE.MathUtils.lerp(-0.08, -0.10, ads),
+      THREE.MathUtils.lerp(
+        -0.20,
+        -0.25,
+        ads
+      ),
       masterArmBlend
     ),
     THREE.MathUtils.lerp(
       0.60,
-      THREE.MathUtils.lerp(0.68, 0.72, ads),
+      THREE.MathUtils.lerp(
+        0.94,
+        1.02,
+        ads
+      ),
       masterArmBlend
     ),
-    24,
+    26,
     dt
   );
 
@@ -2253,20 +2244,57 @@ function applyWeaponAimPose(
     baseRotations,
     THREE.MathUtils.lerp(
       -0.66,
-      THREE.MathUtils.lerp(-0.80, -0.86, ads),
+      THREE.MathUtils.lerp(
+        -1.10,
+        -1.20,
+        ads
+      ),
       masterArmBlend
     ),
     THREE.MathUtils.lerp(
       0.025,
-      0.03,
+      THREE.MathUtils.lerp(
+        0.07,
+        0.09,
+        ads
+      ),
       masterArmBlend
     ),
     THREE.MathUtils.lerp(
       0.15,
-      THREE.MathUtils.lerp(0.16, 0.18, ads),
+      THREE.MathUtils.lerp(
+        0.08,
+        0.10,
+        ads
+      ),
       masterArmBlend
     ),
-    26,
+    28,
+    dt
+  );
+
+  // Final wrist angle is deliberately modest; the weapon itself now rotates
+  // around the grip pivot, so the wrist no longer has to compensate for a
+  // vertical gun socket.
+  stableWeaponBoneEuler(
+    bones.rightHand,
+    baseRotations,
+    THREE.MathUtils.lerp(
+      -0.10,
+      -0.16,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      -0.03,
+      -0.05,
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      0.07,
+      0.11,
+      ads
+    ),
+    30,
     dt
   );
 }
