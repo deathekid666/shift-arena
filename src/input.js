@@ -5,7 +5,7 @@ const ACTION_CODES = {
   right: ['KeyD', 'ArrowRight'],
   jump: ['Space'],
   sprint: ['ShiftLeft', 'ShiftRight'],
-  crouch: ['ControlLeft', 'ControlRight'],
+  crouch: ['KeyC'],
   reload: ['KeyR'],
   interact: ['KeyE'],
   armor: ['Digit3'],
@@ -94,7 +94,26 @@ export class InputController {
   }
 
   onKeyDown = (event) => {
-    if (!this.keys.has(event.code)) this.pressed.add(event.code);
+    const playing =
+      this.pointerLocked &&
+      document.pointerLockElement === this.canvas;
+
+    // Ctrl+W is a browser tab-close shortcut, not a safe web-game chord.
+    // C is the crouch/slide key. Prevent the browser default where the browser
+    // allows it, and never feed this chord into gameplay input state.
+    if (
+      playing &&
+      event.ctrlKey &&
+      event.code === 'KeyW'
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    if (!this.keys.has(event.code)) {
+      this.pressed.add(event.code);
+    }
     this.keys.add(event.code);
   };
 
