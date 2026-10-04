@@ -1469,10 +1469,18 @@ function updatePose(character, dt, state) {
   const breathe = Math.sin(time * 2.4) * 0.025;
 
   // Fortnite-like upper-body weapon state:
-  // - equipped but not fighting: stable low-ready two-hand carry
-  // - firing OR ADS: same shouldered aim architecture
-  // Lower-body locomotion remains authored underneath.
-  if (combat && !fang) {
+  // weapon carry/aim owns the upper body with its own persistent filter while
+  // authored locomotion continues to own the lower body. The authored slide
+  // remains fully intact and is never overwritten by this layer.
+  const stableWeaponUpperBody =
+    state.weaponEquipped &&
+    !state.sliding &&
+    !fang;
+
+  if (
+    combat &&
+    stableWeaponUpperBody
+  ) {
     applyWeaponAimPose(
       bones,
       baseRotations,
@@ -1480,15 +1488,18 @@ function updatePose(character, dt, state) {
       dt
     );
   } else if (
-    state.weaponEquipped &&
-    !fang
+    stableWeaponUpperBody
   ) {
     applyWeaponCarryPose(
       bones,
       baseRotations,
+      state,
       dt
     );
-  } else if (!fang && !authored) {
+  } else {
+    clearStableWeaponPose(bones);
+
+    if (!fang && !authored) {
     const armAmplitude =
       stateName === 'RUN' ? 0.58 :
       stateName === 'WALK' ? 0.36 :
@@ -1518,6 +1529,7 @@ function updatePose(character, dt, state) {
     dampBoneEuler(bones.leftLowerArm, baseRotations, 0.10, 0, -0.12, 11, dt);
     dampBoneEuler(bones.rightLowerArm, baseRotations, 0.10, 0, 0.12, 11, dt);
     dampBoneEuler(bones.rightHand, baseRotations, 0, 0, 0, 10, dt);
+    }
   }
 
   if (fang) applyRealFangPose(bones, baseRotations, fang, dt);
@@ -1972,7 +1984,7 @@ function applyWeaponAimPose(
   const upperYaw =
     THREE.MathUtils.lerp(0.20, 0.28, ads);
 
-  dampBoneEuler(
+  stableWeaponBoneEuler(
     bones.spine,
     baseRotations,
     -pitch * spinePitch * shoulder,
@@ -1981,7 +1993,7 @@ function applyWeaponAimPose(
     18,
     dt
   );
-  dampBoneEuler(
+  stableWeaponBoneEuler(
     bones.chest,
     baseRotations,
     -pitch * chestPitch * shoulder,
@@ -1990,7 +2002,7 @@ function applyWeaponAimPose(
     20,
     dt
   );
-  dampBoneEuler(
+  stableWeaponBoneEuler(
     bones.upperChest,
     baseRotations,
     -pitch * upperPitch * shoulder,
@@ -1999,7 +2011,7 @@ function applyWeaponAimPose(
     22,
     dt
   );
-  dampBoneEuler(
+  stableWeaponBoneEuler(
     bones.neck,
     baseRotations,
     -pitch *
@@ -2012,7 +2024,7 @@ function applyWeaponAimPose(
     29,
     dt
   );
-  dampBoneEuler(
+  stableWeaponBoneEuler(
     bones.head,
     baseRotations,
     -pitch *
@@ -2027,7 +2039,7 @@ function applyWeaponAimPose(
   );
 
   // Narrower shoulder pocket in ADS; hip-fire remains athletic but relaxed.
-  dampBoneEuler(
+  stableWeaponBoneEuler(
     bones.leftShoulder,
     baseRotations,
     THREE.MathUtils.lerp(-0.045, -0.078, ads),
@@ -2036,7 +2048,7 @@ function applyWeaponAimPose(
     24,
     dt
   );
-  dampBoneEuler(
+  stableWeaponBoneEuler(
     bones.rightShoulder,
     baseRotations,
     THREE.MathUtils.lerp(-0.040, -0.068, ads),
@@ -2050,39 +2062,79 @@ function applyWeaponAimPose(
 function applyWeaponCarryPose(
   bones,
   baseRotations,
+  state,
   dt
 ) {
-  // Low-ready Fortnite-style carry: both hands stay on the weapon and the
-  // upper body remains stable while locomotion continues underneath.
-  dampBoneEuler(
+  const speed = Math.max(
+    0,
+    state?.speed ?? 0
+  );
+
+  const moving = THREE.MathUtils.clamp(
+    speed / 5.2,
+    0,
+    1
+  );
+
+  // Keep a small intentional athletic posture while moving, but never inherit
+  // the authored clip's upper-body noise. This is a deterministic pose target,
+  // so standing still cannot produce alternating-frame vibration.
+  const moveLean =
+    moving * 0.020;
+
+  stableWeaponBoneEuler(
     bones.spine,
     baseRotations,
-    -0.025,
+    -0.025 - moveLean * 0.35,
+    0,
+    0,
+    15,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.chest,
+    baseRotations,
+    -0.045 - moveLean * 0.45,
     0,
     0,
     16,
     dt
   );
-  dampBoneEuler(
-    bones.chest,
-    baseRotations,
-    -0.045,
-    0,
-    0,
-    17,
-    dt
-  );
-  dampBoneEuler(
+
+  stableWeaponBoneEuler(
     bones.upperChest,
     baseRotations,
-    -0.025,
+    -0.025 - moveLean * 0.20,
     0,
     0,
     17,
     dt
   );
 
-  dampBoneEuler(
+  // Head/neck were previously left entirely to the authored idle/run clip,
+  // which is exactly where the uploaded video shows the largest shake.
+  stableWeaponBoneEuler(
+    bones.neck,
+    baseRotations,
+    -0.010,
+    0,
+    0,
+    18,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones.head,
+    baseRotations,
+    0,
+    0,
+    0,
+    20,
+    dt
+  );
+
+  stableWeaponBoneEuler(
     bones.leftShoulder,
     baseRotations,
     -0.035,
@@ -2091,7 +2143,8 @@ function applyWeaponCarryPose(
     18,
     dt
   );
-  dampBoneEuler(
+
+  stableWeaponBoneEuler(
     bones.rightShoulder,
     baseRotations,
     -0.03,
@@ -2101,40 +2154,43 @@ function applyWeaponCarryPose(
     dt
   );
 
-  dampBoneEuler(
+  stableWeaponBoneEuler(
     bones.leftUpperArm,
     baseRotations,
     -0.50,
     0.10,
     -0.60,
-    19,
+    20,
     dt
   );
-  dampBoneEuler(
+
+  stableWeaponBoneEuler(
     bones.leftLowerArm,
     baseRotations,
     -0.68,
     -0.035,
     -0.16,
-    19,
+    20,
     dt
   );
-  dampBoneEuler(
+
+  stableWeaponBoneEuler(
     bones.rightUpperArm,
     baseRotations,
     -0.40,
     -0.06,
     0.60,
-    19,
+    20,
     dt
   );
-  dampBoneEuler(
+
+  stableWeaponBoneEuler(
     bones.rightLowerArm,
     baseRotations,
     -0.66,
     0.025,
     0.15,
-    19,
+    20,
     dt
   );
 }
@@ -2609,4 +2665,86 @@ function dampBoneEuler(node, baseRotations, x, y, z, lambda, dt) {
   const offset = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, 'XYZ'));
   const target = base.clone().multiply(offset);
   node.quaternion.slerp(target, 1 - Math.exp(-lambda * dt));
+}
+
+// Weapon upper-body filtering must be independent from the authored mixer.
+// The mixer rewrites bones every frame, so damping from node.quaternion leaks
+// authored idle/run noise back into the carry/aim pose forever. Persist the
+// filtered quaternion separately and copy it onto the bone after animation.
+const WEAPON_POSE_FILTER = new WeakMap();
+
+function stableWeaponBoneEuler(
+  node,
+  baseRotations,
+  x,
+  y,
+  z,
+  lambda,
+  dt
+) {
+  if (!node) return;
+
+  const base =
+    baseRotations.get(node) ??
+    new THREE.Quaternion();
+
+  const offset =
+    new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        x,
+        y,
+        z,
+        'XYZ'
+      )
+    );
+
+  const target =
+    base.clone().multiply(offset);
+
+  let filtered =
+    WEAPON_POSE_FILTER.get(node);
+
+  if (!filtered) {
+    filtered = node.quaternion.clone();
+    WEAPON_POSE_FILTER.set(
+      node,
+      filtered
+    );
+  }
+
+  filtered.slerp(
+    target,
+    1 - Math.exp(-lambda * dt)
+  );
+
+  if (
+    filtered.angleTo(target) <
+    0.00005
+  ) {
+    filtered.copy(target);
+  }
+
+  node.quaternion.copy(filtered);
+}
+
+function clearStableWeaponPose(bones) {
+  for (const node of [
+    bones.spine,
+    bones.chest,
+    bones.upperChest,
+    bones.neck,
+    bones.head,
+    bones.leftShoulder,
+    bones.rightShoulder,
+    bones.leftUpperArm,
+    bones.leftLowerArm,
+    bones.leftHand,
+    bones.rightUpperArm,
+    bones.rightLowerArm,
+    bones.rightHand
+  ]) {
+    if (node) {
+      WEAPON_POSE_FILTER.delete(node);
+    }
+  }
 }
