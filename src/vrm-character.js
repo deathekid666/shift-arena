@@ -1925,76 +1925,124 @@ function animateScoutAccessories(character, locomotion, dt) {
   }
 }
 
-function applyWeaponAimPose(bones, baseRotations, state, dt) {
-  const pitch = THREE.MathUtils.clamp(state.aimPitch ?? 0, -0.68, 0.86);
-  const yaw = THREE.MathUtils.clamp(state.aimYawOffset ?? 0, -1.18, 1.18);
+function applyWeaponAimPose(
+  bones,
+  baseRotations,
+  state,
+  dt
+) {
+  const pitch = THREE.MathUtils.clamp(
+    state.aimPitch ?? 0,
+    -0.68,
+    0.86
+  );
+  const yaw = THREE.MathUtils.clamp(
+    state.aimYawOffset ?? 0,
+    -1.18,
+    1.18
+  );
 
-  // Mesh-space-like aim offset. Locomotion owns the lower body; torso bones
-  // progressively turn toward the camera aim before the hands are solved by IK.
+  const ads = THREE.MathUtils.clamp(
+    state.weaponAimBlend ??
+      (state.aiming ? 1 : 0),
+    0,
+    1
+  );
+
+  const shoulder = THREE.MathUtils.clamp(
+    state.weaponShoulderBlend ?? 1,
+    0,
+    1
+  );
+
+  // Hip-fire already uses the camera direction, but ADS pulls the rifle
+  // tighter into the shoulder and distributes more of the aim through the
+  // chest/upper chest. This behaves like a small additive aim-space layered
+  // over authored locomotion rather than replacing the lower body.
+  const spinePitch =
+    THREE.MathUtils.lerp(0.13, 0.20, ads);
+  const spineYaw =
+    THREE.MathUtils.lerp(0.19, 0.24, ads);
+  const chestPitch =
+    THREE.MathUtils.lerp(0.19, 0.28, ads);
+  const chestYaw =
+    THREE.MathUtils.lerp(0.27, 0.34, ads);
+  const upperPitch =
+    THREE.MathUtils.lerp(0.15, 0.23, ads);
+  const upperYaw =
+    THREE.MathUtils.lerp(0.20, 0.28, ads);
+
   dampBoneEuler(
     bones.spine,
     baseRotations,
-    -pitch * 0.20,
-    yaw * 0.24,
-    -yaw * 0.020,
-    20,
+    -pitch * spinePitch * shoulder,
+    yaw * spineYaw * shoulder,
+    -yaw * 0.018 * shoulder,
+    21,
     dt
   );
   dampBoneEuler(
     bones.chest,
     baseRotations,
-    -pitch * 0.27,
-    yaw * 0.34,
-    -yaw * 0.030,
-    22,
+    -pitch * chestPitch * shoulder,
+    yaw * chestYaw * shoulder,
+    -yaw * 0.026 * shoulder,
+    23,
     dt
   );
   dampBoneEuler(
     bones.upperChest,
     baseRotations,
-    -pitch * 0.23,
-    yaw * 0.28,
-    0,
-    22,
+    -pitch * upperPitch * shoulder,
+    yaw * upperYaw * shoulder,
+    -yaw * 0.010 * shoulder,
+    24,
     dt
   );
   dampBoneEuler(
     bones.neck,
     baseRotations,
-    -pitch * 0.09,
-    yaw * 0.07,
+    -pitch *
+      THREE.MathUtils.lerp(0.06, 0.09, ads) *
+      shoulder,
+    yaw *
+      THREE.MathUtils.lerp(0.045, 0.07, ads) *
+      shoulder,
     0,
-    18,
+    20,
     dt
   );
   dampBoneEuler(
     bones.head,
     baseRotations,
-    -pitch * 0.07,
-    yaw * 0.05,
+    -pitch *
+      THREE.MathUtils.lerp(0.045, 0.07, ads) *
+      shoulder,
+    yaw *
+      THREE.MathUtils.lerp(0.035, 0.05, ads) *
+      shoulder,
     0,
-    18,
+    20,
     dt
   );
 
-  // Shoulders rise a little under ADS, but the two-bone solver owns upper arm,
-  // forearm and hand placement from here.
+  // Narrower shoulder pocket in ADS; hip-fire remains athletic but relaxed.
   dampBoneEuler(
     bones.leftShoulder,
     baseRotations,
-    -0.08,
-    0.06,
-    -0.14,
-    24,
+    THREE.MathUtils.lerp(-0.045, -0.085, ads),
+    THREE.MathUtils.lerp(0.035, 0.060, ads),
+    THREE.MathUtils.lerp(-0.095, -0.135, ads),
+    26,
     dt
   );
   dampBoneEuler(
     bones.rightShoulder,
     baseRotations,
-    -0.07,
-    -0.05,
-    0.13,
-    24,
+    THREE.MathUtils.lerp(-0.040, -0.075, ads),
+    THREE.MathUtils.lerp(-0.030, -0.050, ads),
+    THREE.MathUtils.lerp(0.090, 0.120, ads),
+    26,
     dt
   );
 }
@@ -2148,12 +2196,27 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     bones.rightLowerArm &&
     bones.rightHand
   ) {
+    const ads = THREE.MathUtils.clamp(
+      gripPose.adsBlend ?? 0,
+      0,
+      1
+    );
+
     bones.rightUpperArm.getWorldPosition(IK_TMP.shoulder);
     IK_TMP.pole
       .copy(IK_TMP.shoulder)
-      .addScaledVector(IK_TMP.right, 0.27)
-      .addScaledVector(IK_TMP.down, 0.18)
-      .addScaledVector(IK_TMP.forward, 0.04);
+      .addScaledVector(
+        IK_TMP.right,
+        THREE.MathUtils.lerp(0.25, 0.18, ads)
+      )
+      .addScaledVector(
+        IK_TMP.down,
+        THREE.MathUtils.lerp(0.20, 0.16, ads)
+      )
+      .addScaledVector(
+        IK_TMP.forward,
+        THREE.MathUtils.lerp(0.050, 0.030, ads)
+      );
 
     solveTwoBoneIK(
       character.root,
@@ -2162,7 +2225,7 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       bones.rightHand,
       gripPose.rightGrip,
       IK_TMP.pole,
-      32,
+      THREE.MathUtils.lerp(40, 50, ads),
       dt
     );
 
@@ -2183,13 +2246,29 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     character.root.updateWorldMatrix(true, true);
   }
 
-  // The left hand is always the follower/support hand.
+  // The support elbow drops slightly and tucks inward as ADS tightens,
+  // matching a shouldered rifle silhouette instead of a wide T-pose bend.
+  const supportAds = THREE.MathUtils.clamp(
+    gripPose.adsBlend ?? 0,
+    0,
+    1
+  );
+
   bones.leftUpperArm.getWorldPosition(IK_TMP.shoulder);
   IK_TMP.pole
     .copy(IK_TMP.shoulder)
-    .addScaledVector(IK_TMP.right, -0.25)
-    .addScaledVector(IK_TMP.down, 0.16)
-    .addScaledVector(IK_TMP.forward, 0.065);
+    .addScaledVector(
+      IK_TMP.right,
+      THREE.MathUtils.lerp(-0.24, -0.19, supportAds)
+    )
+    .addScaledVector(
+      IK_TMP.down,
+      THREE.MathUtils.lerp(0.18, 0.22, supportAds)
+    )
+    .addScaledVector(
+      IK_TMP.forward,
+      THREE.MathUtils.lerp(0.070, 0.090, supportAds)
+    );
 
   solveTwoBoneIK(
     character.root,
@@ -2198,7 +2277,10 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     bones.leftHand,
     gripPose.leftGrip,
     IK_TMP.pole,
-    gripPose.leftHandLambda ?? 30,
+    Math.max(
+      gripPose.leftHandLambda ?? 30,
+      THREE.MathUtils.lerp(42, 54, supportAds)
+    ),
     dt
   );
 }

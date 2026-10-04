@@ -79,7 +79,15 @@ export class PlayerController {
     this.fangArmOverride = false;
   }
 
-  update(dt, cameraYaw, combatFacing = false, aimPitch = 0, weaponAiming = false) {
+  update(
+    dt,
+    cameraYaw,
+    combatFacing = false,
+    aimPitch = 0,
+    weaponAiming = false,
+    weaponAimBlend = 0,
+    weaponShoulderBlend = 0
+  ) {
     const cfg = GAME_CONFIG.movement;
     const wasGrounded = this.grounded;
     this.jump.landingTime += dt;
@@ -465,6 +473,14 @@ export class PlayerController {
       weaponEquipped: this.weaponVisualActive,
       combat: this.weaponVisualActive && combatFacing,
       aiming: this.weaponVisualActive && this.weaponAiming,
+      weaponAimBlend:
+        this.weaponVisualActive
+          ? THREE.MathUtils.clamp(weaponAimBlend, 0, 1)
+          : 0,
+      weaponShoulderBlend:
+        this.weaponVisualActive
+          ? THREE.MathUtils.clamp(weaponShoulderBlend, 0, 1)
+          : 0,
       aimPitch: this.aimPitch,
       aimYawOffset: this.aimYawOffset,
       crouching: this.crouching,

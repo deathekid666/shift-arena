@@ -69,7 +69,9 @@ export class WeaponSystem {
       weaponQuaternion: new THREE.Quaternion(),
       rightHandIK: false,
       rightHandOrient: false,
-      leftHandLambda: 30
+      leftHandLambda: 30,
+      adsBlend: 0,
+      shoulderBlend: 0
     };
 
     this.entries = WEAPON_ORDER.map((key) => {
@@ -92,6 +94,7 @@ export class WeaponSystem {
         sinceShot: 999,
         burstShots: 0,
         shoulderBlend: 0,
+        adsBlend: 0,
         bobTime: 0,
         pumpSoundPlayed: true
       };
@@ -166,6 +169,22 @@ export class WeaponSystem {
     return (
       this.shoulderRequested ||
       (this.state.shoulderBlend ?? 0) > 0.06
+    );
+  }
+
+  get shoulderPoseBlend() {
+    return THREE.MathUtils.clamp(
+      this.state.shoulderBlend ?? 0,
+      0,
+      1
+    );
+  }
+
+  get aimPoseBlend() {
+    return THREE.MathUtils.clamp(
+      this.state.adsBlend ?? 0,
+      0,
+      1
     );
   }
 
@@ -493,9 +512,35 @@ export class WeaponSystem {
       state.shoulderBlend = shoulderTarget;
     }
 
+    const adsTarget = this.aiming ? 1 : 0;
+    const adsResponse = this.aiming
+      ? (cfg.adsPoseInSpeed ?? 28)
+      : (cfg.adsPoseOutSpeed ?? 20);
+
+    state.adsBlend = THREE.MathUtils.damp(
+      state.adsBlend ?? 0,
+      adsTarget,
+      adsResponse,
+      dt
+    );
+
+    if (
+      Math.abs(state.adsBlend - adsTarget) <
+      0.004
+    ) {
+      state.adsBlend = adsTarget;
+    }
+
     const shoulderBlend =
       THREE.MathUtils.smoothstep(
         state.shoulderBlend,
+        0,
+        1
+      );
+
+    const adsBlend =
+      THREE.MathUtils.smoothstep(
+        state.adsBlend,
         0,
         1
       );
@@ -621,16 +666,18 @@ export class WeaponSystem {
 
         // Fit the actual pistol grip near the firing shoulder. Different
         // weapon families get small offsets instead of sharing one giant pose.
-        const ads = this.aiming;
         const gripForward =
           (cfg.combatGripForward ?? 0.17) +
-          (ads ? (cfg.adsGripForwardAdd ?? 0.035) : 0);
+          (cfg.adsGripForwardAdd ?? 0.035) *
+            adsBlend;
         const gripRight =
           (cfg.combatGripRight ?? 0.0) +
-          (ads ? (cfg.adsGripRightAdd ?? -0.030) : 0);
+          (cfg.adsGripRightAdd ?? -0.030) *
+            adsBlend;
         const gripUp =
           (cfg.combatGripUp ?? -0.060) +
-          (ads ? (cfg.adsGripUpAdd ?? 0.030) : 0);
+          (cfg.adsGripUpAdd ?? 0.030) *
+            adsBlend;
 
         this.tmpGripWorld
           .copy(shoulder)
@@ -647,13 +694,26 @@ export class WeaponSystem {
         this.tmpDesiredWorldQ.copy(this.camera.quaternion);
 
         // Small visual recoil around the camera-aligned aim axis.
+        const aimPitchBase =
+          THREE.MathUtils.lerp(
+            cfg.hipFireAimPitch ?? -0.050,
+            cfg.adsAimPitch ?? -0.016,
+            adsBlend
+          );
+        const aimRollBase =
+          THREE.MathUtils.lerp(
+            cfg.hipFireAimRoll ?? -0.040,
+            cfg.adsAimRoll ?? -0.010,
+            adsBlend
+          );
+
         const recoilQ = new THREE.Quaternion().setFromEuler(
           new THREE.Euler(
-            -0.035 -
+            aimPitchBase -
               state.visualKick * 0.72 -
               state.recoilPitch,
             state.recoilYaw,
-            -0.035 -
+            aimRollBase -
               swayX * 0.45 +
               state.recoilRoll,
             'YXZ'
@@ -783,9 +843,11 @@ export class WeaponSystem {
           shoulderIK,
           THREE.MathUtils.lerp(
             cfg.supportHandIKLambda ?? 150,
-            34,
+            cfg.shoulderSupportIKLambda ?? 52,
             shoulderBlend
-          )
+          ),
+          adsBlend,
+          shoulderBlend
         );
         return;
       }
@@ -983,7 +1045,9 @@ export class WeaponSystem {
   updateGripPose(
     rightHandIK = false,
     rightHandOrient = false,
-    leftHandLambda = 30
+    leftHandLambda = 30,
+    adsBlend = 0,
+    shoulderBlend = 0
   ) {
     const model = this.active.model;
     model.rightGrip.getWorldPosition(this.gripPose.rightGrip);
@@ -1003,6 +1067,10 @@ export class WeaponSystem {
     this.gripPose.rightHandIK = Boolean(rightHandIK);
     this.gripPose.rightHandOrient = Boolean(rightHandOrient);
     this.gripPose.leftHandLambda = leftHandLambda;
+    this.gripPose.adsBlend =
+      THREE.MathUtils.clamp(adsBlend, 0, 1);
+    this.gripPose.shoulderBlend =
+      THREE.MathUtils.clamp(shoulderBlend, 0, 1);
   }
 
   getGripPose() {
@@ -1274,6 +1342,7 @@ export class WeaponSystem {
       entry.state.shotIndex = 0;
       entry.state.burstShots = 0;
       entry.state.shoulderBlend = 0;
+      entry.state.adsBlend = 0;
       entry.state.sinceShot = 999;
       entry.state.pumpSoundPlayed = true;
       if (entry.model.pumpRoot) {
