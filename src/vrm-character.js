@@ -143,6 +143,41 @@ function vrmBones(vrm) {
     rightLowerArm: bone(vrm, 'rightLowerArm'),
     leftHand: bone(vrm, 'leftHand'),
     rightHand: bone(vrm, 'rightHand'),
+
+    leftThumbMetacarpal: bone(vrm, 'leftThumbMetacarpal'),
+    leftThumbProximal: bone(vrm, 'leftThumbProximal'),
+    leftThumbIntermediate: bone(vrm, 'leftThumbIntermediate'),
+    leftThumbDistal: bone(vrm, 'leftThumbDistal'),
+    leftIndexProximal: bone(vrm, 'leftIndexProximal'),
+    leftIndexIntermediate: bone(vrm, 'leftIndexIntermediate'),
+    leftIndexDistal: bone(vrm, 'leftIndexDistal'),
+    leftMiddleProximal: bone(vrm, 'leftMiddleProximal'),
+    leftMiddleIntermediate: bone(vrm, 'leftMiddleIntermediate'),
+    leftMiddleDistal: bone(vrm, 'leftMiddleDistal'),
+    leftRingProximal: bone(vrm, 'leftRingProximal'),
+    leftRingIntermediate: bone(vrm, 'leftRingIntermediate'),
+    leftRingDistal: bone(vrm, 'leftRingDistal'),
+    leftLittleProximal: bone(vrm, 'leftLittleProximal'),
+    leftLittleIntermediate: bone(vrm, 'leftLittleIntermediate'),
+    leftLittleDistal: bone(vrm, 'leftLittleDistal'),
+
+    rightThumbMetacarpal: bone(vrm, 'rightThumbMetacarpal'),
+    rightThumbProximal: bone(vrm, 'rightThumbProximal'),
+    rightThumbIntermediate: bone(vrm, 'rightThumbIntermediate'),
+    rightThumbDistal: bone(vrm, 'rightThumbDistal'),
+    rightIndexProximal: bone(vrm, 'rightIndexProximal'),
+    rightIndexIntermediate: bone(vrm, 'rightIndexIntermediate'),
+    rightIndexDistal: bone(vrm, 'rightIndexDistal'),
+    rightMiddleProximal: bone(vrm, 'rightMiddleProximal'),
+    rightMiddleIntermediate: bone(vrm, 'rightMiddleIntermediate'),
+    rightMiddleDistal: bone(vrm, 'rightMiddleDistal'),
+    rightRingProximal: bone(vrm, 'rightRingProximal'),
+    rightRingIntermediate: bone(vrm, 'rightRingIntermediate'),
+    rightRingDistal: bone(vrm, 'rightRingDistal'),
+    rightLittleProximal: bone(vrm, 'rightLittleProximal'),
+    rightLittleIntermediate: bone(vrm, 'rightLittleIntermediate'),
+    rightLittleDistal: bone(vrm, 'rightLittleDistal'),
+
     hips: bone(vrm, 'hips'),
     leftUpperLeg: bone(vrm, 'leftUpperLeg'),
     rightUpperLeg: bone(vrm, 'rightUpperLeg'),
@@ -173,6 +208,41 @@ function vrmRawBones(vrm) {
     rightLowerArm: raw('rightLowerArm'),
     leftHand: raw('leftHand'),
     rightHand: raw('rightHand'),
+
+    leftThumbMetacarpal: raw('leftThumbMetacarpal'),
+    leftThumbProximal: raw('leftThumbProximal'),
+    leftThumbIntermediate: raw('leftThumbIntermediate'),
+    leftThumbDistal: raw('leftThumbDistal'),
+    leftIndexProximal: raw('leftIndexProximal'),
+    leftIndexIntermediate: raw('leftIndexIntermediate'),
+    leftIndexDistal: raw('leftIndexDistal'),
+    leftMiddleProximal: raw('leftMiddleProximal'),
+    leftMiddleIntermediate: raw('leftMiddleIntermediate'),
+    leftMiddleDistal: raw('leftMiddleDistal'),
+    leftRingProximal: raw('leftRingProximal'),
+    leftRingIntermediate: raw('leftRingIntermediate'),
+    leftRingDistal: raw('leftRingDistal'),
+    leftLittleProximal: raw('leftLittleProximal'),
+    leftLittleIntermediate: raw('leftLittleIntermediate'),
+    leftLittleDistal: raw('leftLittleDistal'),
+
+    rightThumbMetacarpal: raw('rightThumbMetacarpal'),
+    rightThumbProximal: raw('rightThumbProximal'),
+    rightThumbIntermediate: raw('rightThumbIntermediate'),
+    rightThumbDistal: raw('rightThumbDistal'),
+    rightIndexProximal: raw('rightIndexProximal'),
+    rightIndexIntermediate: raw('rightIndexIntermediate'),
+    rightIndexDistal: raw('rightIndexDistal'),
+    rightMiddleProximal: raw('rightMiddleProximal'),
+    rightMiddleIntermediate: raw('rightMiddleIntermediate'),
+    rightMiddleDistal: raw('rightMiddleDistal'),
+    rightRingProximal: raw('rightRingProximal'),
+    rightRingIntermediate: raw('rightRingIntermediate'),
+    rightRingDistal: raw('rightRingDistal'),
+    rightLittleProximal: raw('rightLittleProximal'),
+    rightLittleIntermediate: raw('rightLittleIntermediate'),
+    rightLittleDistal: raw('rightLittleDistal'),
+
     hips: raw('hips'),
     leftUpperLeg: raw('leftUpperLeg'),
     rightUpperLeg: raw('rightUpperLeg'),
@@ -2035,6 +2105,241 @@ function animateScoutAccessories(
   }
 }
 
+function applyFingerCurl(
+  bones,
+  baseRotations,
+  side,
+  finger,
+  {
+    proximal = 0,
+    intermediate = 0,
+    distal = 0
+  },
+  dt,
+  lambda = 30
+) {
+  const prefix =
+    side === 'left'
+      ? 'left'
+      : 'right';
+
+  const cap =
+    finger[0].toUpperCase() +
+    finger.slice(1);
+
+  stableWeaponBoneEuler(
+    bones[`${prefix}${cap}Proximal`],
+    baseRotations,
+    0,
+    0,
+    proximal,
+    lambda,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones[`${prefix}${cap}Intermediate`],
+    baseRotations,
+    0,
+    0,
+    intermediate,
+    lambda,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    bones[`${prefix}${cap}Distal`],
+    baseRotations,
+    0,
+    0,
+    distal,
+    lambda,
+    dt
+  );
+}
+
+function applyThumbGrip(
+  bones,
+  baseRotations,
+  side,
+  strength,
+  dt
+) {
+  const prefix =
+    side === 'left'
+      ? 'left'
+      : 'right';
+
+  const sideSign =
+    side === 'left' ? 1 : -1;
+
+  const metacarpal =
+    bones[`${prefix}ThumbMetacarpal`];
+
+  const proximal =
+    bones[`${prefix}ThumbProximal`];
+
+  const intermediate =
+    bones[`${prefix}ThumbIntermediate`];
+
+  const distal =
+    bones[`${prefix}ThumbDistal`];
+
+  // VRM0 often has proximal/intermediate/distal only; VRM1 may also expose
+  // the metacarpal. Pose whichever nodes are actually present.
+  stableWeaponBoneEuler(
+    metacarpal,
+    baseRotations,
+    0.16 * strength,
+    0,
+    sideSign * 0.28 * strength,
+    28,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    proximal,
+    baseRotations,
+    0.30 * strength,
+    0,
+    sideSign * 0.48 * strength,
+    30,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    intermediate,
+    baseRotations,
+    0.18 * strength,
+    0,
+    sideSign * 0.24 * strength,
+    30,
+    dt
+  );
+
+  stableWeaponBoneEuler(
+    distal,
+    baseRotations,
+    0.10 * strength,
+    0,
+    sideSign * 0.14 * strength,
+    30,
+    dt
+  );
+}
+
+function applyWeaponFingerGrip(
+  bones,
+  baseRotations,
+  {
+    ads = 0,
+    combat = false
+  } = {},
+  dt
+) {
+  const grip =
+    THREE.MathUtils.lerp(
+      0.88,
+      1.0,
+      ads
+    );
+
+  // Trigger hand: middle/ring/little wrap firmly around the pistol grip.
+  // Index stays less curled so it reads as a trigger finger instead of a fist.
+  applyFingerCurl(
+    bones,
+    baseRotations,
+    'right',
+    'index',
+    {
+      proximal:
+        (combat ? 0.58 : 0.38) * grip,
+      intermediate:
+        (combat ? 0.42 : 0.30) * grip,
+      distal:
+        (combat ? 0.24 : 0.18) * grip
+    },
+    dt,
+    32
+  );
+
+  for (const finger of [
+    'middle',
+    'ring',
+    'little'
+  ]) {
+    const scale =
+      finger === 'little'
+        ? 0.92
+        : 1;
+
+    applyFingerCurl(
+      bones,
+      baseRotations,
+      'right',
+      finger,
+      {
+        proximal:
+          1.08 * grip * scale,
+        intermediate:
+          1.18 * grip * scale,
+        distal:
+          0.78 * grip * scale
+      },
+      dt,
+      32
+    );
+  }
+
+  applyThumbGrip(
+    bones,
+    baseRotations,
+    'right',
+    grip,
+    dt
+  );
+
+  // Support hand wraps the foregrip with all four fingers.
+  for (const finger of [
+    'index',
+    'middle',
+    'ring',
+    'little'
+  ]) {
+    const scale =
+      finger === 'index'
+        ? 0.96
+        : finger === 'little'
+          ? 0.90
+          : 1;
+
+    applyFingerCurl(
+      bones,
+      baseRotations,
+      'left',
+      finger,
+      {
+        proximal:
+          1.04 * grip * scale,
+        intermediate:
+          1.14 * grip * scale,
+        distal:
+          0.76 * grip * scale
+      },
+      dt,
+      32
+    );
+  }
+
+  applyThumbGrip(
+    bones,
+    baseRotations,
+    'left',
+    grip * 0.94,
+    dt
+  );
+}
+
 function applyWeaponAimPose(
   bones,
   baseRotations,
@@ -2180,6 +2485,16 @@ function applyWeaponAimPose(
       ads
     ),
     28,
+    dt
+  );
+
+  applyWeaponFingerGrip(
+    bones,
+    baseRotations,
+    {
+      ads,
+      combat: true
+    },
     dt
   );
 
@@ -2356,6 +2671,16 @@ function applyWeaponCarryPose(
     0.008,
     -0.018,
     24,
+    dt
+  );
+
+  applyWeaponFingerGrip(
+    bones,
+    baseRotations,
+    {
+      ads: 0,
+      combat: false
+    },
     dt
   );
 }
@@ -2930,7 +3255,41 @@ function clearStableWeaponPose(bones) {
     bones.leftHand,
     bones.rightUpperArm,
     bones.rightLowerArm,
-    bones.rightHand
+    bones.rightHand,
+
+    bones.leftThumbMetacarpal,
+    bones.leftThumbProximal,
+    bones.leftThumbIntermediate,
+    bones.leftThumbDistal,
+    bones.leftIndexProximal,
+    bones.leftIndexIntermediate,
+    bones.leftIndexDistal,
+    bones.leftMiddleProximal,
+    bones.leftMiddleIntermediate,
+    bones.leftMiddleDistal,
+    bones.leftRingProximal,
+    bones.leftRingIntermediate,
+    bones.leftRingDistal,
+    bones.leftLittleProximal,
+    bones.leftLittleIntermediate,
+    bones.leftLittleDistal,
+
+    bones.rightThumbMetacarpal,
+    bones.rightThumbProximal,
+    bones.rightThumbIntermediate,
+    bones.rightThumbDistal,
+    bones.rightIndexProximal,
+    bones.rightIndexIntermediate,
+    bones.rightIndexDistal,
+    bones.rightMiddleProximal,
+    bones.rightMiddleIntermediate,
+    bones.rightMiddleDistal,
+    bones.rightRingProximal,
+    bones.rightRingIntermediate,
+    bones.rightRingDistal,
+    bones.rightLittleProximal,
+    bones.rightLittleIntermediate,
+    bones.rightLittleDistal
   ]) {
     if (node) {
       WEAPON_POSE_FILTER.delete(node);
