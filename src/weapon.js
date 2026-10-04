@@ -1418,10 +1418,10 @@ function getFortniteStyleRecoil(cfg, shotNumber) {
     };
   }
 
-  // Public Fortnite weapon rows expose vertical/horizontal recoil as balance
-  // values rather than radians. A shared conversion scale preserves the real
-  // class-to-class ratios while fitting SHIFT's third-person camera.
-  const unit = profile.unitScale ?? 0.0036;
+  // Fortnite recoil values are degree-like angular magnitudes. Convert them
+  // directly to radians for Three.js instead of shrinking them with an
+  // arbitrary scalar; that was why 010.22B looked almost unchanged in-game.
+  const cameraScale = profile.cameraScale ?? 1;
   const horizontalPattern =
     profile.horizontalPattern ?? [-1, 1];
   const side =
@@ -1437,8 +1437,14 @@ function getFortniteStyleRecoil(cfg, shotNumber) {
       earlyRampPerShot;
 
   return {
-    pitch: profile.vertical * unit * ramp,
-    yaw: profile.horizontal * unit * side
+    pitch:
+      THREE.MathUtils.degToRad(profile.vertical) *
+      cameraScale *
+      ramp,
+    yaw:
+      THREE.MathUtils.degToRad(profile.horizontal) *
+      cameraScale *
+      side
   };
 }
 
