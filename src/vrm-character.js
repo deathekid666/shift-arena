@@ -1482,9 +1482,9 @@ function applyStablePelvis(character) {
 function updatePose(character, dt, state) {
   const { bones, baseRotations } = character;
   const combat = Boolean(state.combat);
-  // Throw IK is applied by Fang after camera update, before projectile release.
-  const fang = state.fangAnimation?.mode === 'slash' ? state.fangAnimation : null;
 
+  // Knife slash is applied later in the frame by the same world-space IK layer
+  // used for Fang aiming/throwing. Locomotion owns the base pose here.
   const locomotion = updateLocomotionLayer(character, dt, state);
   const { cycle, moveBlend, stateName, authored } = locomotion;
 
@@ -1516,8 +1516,7 @@ function updatePose(character, dt, state) {
 
   const stableWeaponUpperBody =
     state.weaponEquipped &&
-    !authoredSlideOwnsUpperBody &&
-    !fang;
+    !authoredSlideOwnsUpperBody;
 
   if (
     combat &&
@@ -1544,7 +1543,7 @@ function updatePose(character, dt, state) {
   } else {
     clearStableWeaponPose(bones);
 
-    if (!fang && !authored) {
+    if (!authored) {
     const armAmplitude =
       stateName === 'RUN' ? 0.58 :
       stateName === 'WALK' ? 0.36 :
@@ -1576,8 +1575,6 @@ function updatePose(character, dt, state) {
     dampBoneEuler(bones.rightHand, baseRotations, 0, 0, 0, 10, dt);
     }
   }
-
-  if (fang) applyRealFangPose(bones, baseRotations, fang, dt);
 
   if (!authored) {
     dampBoneEuler(
@@ -3795,76 +3792,6 @@ function rotateBoneChildToward(
   );
 
   root.updateWorldMatrix(true, true);
-}
-
-function applyRealFangPose(bones, baseRotations, fang, dt) {
-  const mode = fang.mode ?? 'aim';
-  const t = THREE.MathUtils.clamp(fang.t ?? 0, 0, 1);
-
-  let upper;
-  let lower;
-  let hand;
-  let shoulder;
-  let chest;
-
-  if (mode === 'slash') {
-    const swing = easeInOut(t);
-    upper = [
-      THREE.MathUtils.lerp(-0.85, 0.52, swing),
-      THREE.MathUtils.lerp(-0.18, 0.28, swing),
-      THREE.MathUtils.lerp(0.92, 0.20, swing)
-    ];
-    lower = [
-      THREE.MathUtils.lerp(-1.05, -0.28, swing),
-      0,
-      THREE.MathUtils.lerp(0.20, -0.26, swing)
-    ];
-    hand = [
-      THREE.MathUtils.lerp(-0.22, 0.28, swing),
-      0,
-      THREE.MathUtils.lerp(0.18, -0.20, swing)
-    ];
-    shoulder = [-0.06, 0, 0.10];
-    chest = [0, THREE.MathUtils.lerp(0.10, -0.10, swing), 0];
-  } else {
-    return;
-  }
-
-  dampBoneEuler(
-    bones.rightShoulder,
-    baseRotations,
-    ...shoulder,
-    24,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightUpperArm,
-    baseRotations,
-    ...upper,
-    26,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightLowerArm,
-    baseRotations,
-    ...lower,
-    28,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightHand,
-    baseRotations,
-    ...hand,
-    28,
-    dt
-  );
-  dampBoneEuler(
-    bones.upperChest ?? bones.chest,
-    baseRotations,
-    ...chest,
-    20,
-    dt
-  );
 }
 
 function easeOut(t) {

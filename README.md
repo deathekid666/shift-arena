@@ -474,3 +474,13 @@ was 0.566 world units versus 0.288 for standing.
 - Knife-equipped idle/running does not force combat-facing locomotion, so sprint remains the normal 8.4 m/s baseline.
 
 - Tin Fang now has an explicit 0.45 kg physical/mobility baseline with 1.00x walk, sprint, acceleration and turn-response multipliers. This is intentionally the future reference point for heavier firearm mobility profiles.
+
+
+## Build 010.28B — knife slash rig
+- Replaced the old single Euler interpolation slash with a world-space two-bone IK melee layer.
+- The attack now has explicit anticipation, fast strike, follow-through and recovery phases instead of one smooth arm sweep.
+- Slash is applied late in the frame after locomotion, using the same isolated Fang pose layer as throw aiming. This removes the old one-frame-late/double-writer behavior.
+- The elbow pole, hand target, chest coil and blade orientation are solved together, so the knife edge travels through the cut instead of the wrist merely twisting.
+- The real VRM no longer renders the oversized floating ring slash effect. The fallback primitive character keeps a reduced version.
+- Melee hit detection now stays active through the full cutting window and only consumes the attack after an actual target is hit.
+- Slash duration is now an explicit 0.46 s combat value.

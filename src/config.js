@@ -626,6 +626,7 @@ export const GAME_CONFIG = {
       turnResponseMultiplier: 1.00
     },
     meleeDamage: 40,
+    meleeDuration: 0.46,
     clawDamage: 22,
     throwBodyDamage: 90,
     meleeRange: 1.85,

@@ -1,5 +1,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG } from './config.js';
+import {
+  sampleKnifeSlash
+} from './knife-slash-motion.js';
 
 export class TinFangSystem {
   constructor({ scene, camera, cameraRig, player, input, world, targets, audio, onHit, onState, onToast }) {
@@ -727,12 +730,25 @@ export class TinFangSystem {
 
     this.state = 'SLASH';
     this.actionTime = 0;
-    this.actionDuration = 0.38;
-    this.armRig.visible = !this.useRealHand;
-    this.player.setFangArmOverride?.(true);
-    this.player.setFangAnimation?.({ mode: 'slash', t: 0, compact: false });
+    this.actionDuration =
+      this.cfg.meleeDuration ??
+      0.46;
+    this.armRig.visible =
+      !this.useRealHand;
+    this.player.setFangArmOverride?.(
+      true
+    );
+    this.player.setFangAnimation?.({
+      mode: 'slash',
+      t: 0,
+      compact: false
+    });
     this.handFang.visible = true;
-    this.slashArc.visible = true;
+
+    // The old full ring looked detached from the hand on the real VRM.
+    // Keep it only for the fallback primitive character.
+    this.slashArc.visible =
+      !this.useRealHand;
     this.slashArc.material.opacity = 0;
     this.trajectoryLine.visible = false;
     this.audio?.playFang?.('slash');
@@ -741,50 +757,248 @@ export class TinFangSystem {
 
   updateSlash(dt) {
     this.actionTime += dt;
-    const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
+
+    const t =
+      THREE.MathUtils.clamp(
+        this.actionTime /
+          this.actionDuration,
+        0,
+        1
+      );
+
+    const slash =
+      sampleKnifeSlash(t);
 
     if (this.useRealHand) {
-      this.player.setFangAnimation?.({ mode: 'slash', t, compact: false });
-    }
+      const direction =
+        this.camera
+          .getWorldDirection(
+            new THREE.Vector3()
+          );
 
-    if (t < 0.20) {
-      const k = easeOut(t / 0.20);
-      this.setArmPose({
-        shoulder: [THREE.MathUtils.lerp(-0.35, -1.10, k), -0.12, THREE.MathUtils.lerp(-0.15, -0.62, k)],
-        elbow: [THREE.MathUtils.lerp(0.55, 1.30, k), 0.06, 0.26],
-        hand: [-0.25, 0, 0.35]
-      }, 1);
-    } else if (t < 0.68) {
-      const k = easeInOut((t - 0.20) / 0.48);
-      this.setArmPose({
-        shoulder: [THREE.MathUtils.lerp(-1.10, 0.72, k), THREE.MathUtils.lerp(-0.12, 0.28, k), THREE.MathUtils.lerp(-0.62, 0.52, k)],
-        elbow: [THREE.MathUtils.lerp(1.30, -0.62, k), THREE.MathUtils.lerp(0.06, -0.10, k), THREE.MathUtils.lerp(0.26, -0.32, k)],
-        hand: [THREE.MathUtils.lerp(-0.25, 0.38, k), 0, THREE.MathUtils.lerp(0.35, -0.30, k)]
-      }, 1);
+      const animation = {
+        mode: 'slash',
+        t,
+        compact: false,
+        direction,
+        aimYaw:
+          angleDelta(
+            this.player.group.rotation.y,
+            Math.atan2(
+              -direction.x,
+              -direction.z
+            )
+          )
+      };
 
-      const swing = Math.sin(k * Math.PI);
-      this.slashArc.visible = true;
-      this.slashArc.position.set(0, 1.06, -0.50);
-      this.slashArc.rotation.set(Math.PI / 2, 0, THREE.MathUtils.lerp(-1.25, 0.95, k));
-      this.slashArc.scale.setScalar(0.92 + swing * 0.20);
-      this.slashArc.material.opacity = swing * 0.62;
+      this.player.setFangAnimation?.(
+        animation
+      );
 
-      if (!this.slashDidHit && k >= 0.34) {
-        this.slashDidHit = true;
-        this.performMeleeHit(this.cfg.meleeDamage, false);
-      }
+      // Apply after locomotion in the current frame, exactly like the throw IK
+      // layer. This removes the old one-frame-late Euler slash.
+      this.player.applyFangPose?.(
+        animation,
+        dt
+      );
+
+      this.slashArc.visible = false;
+
+      setFangGlow(
+        this.handFang,
+        slash.contactStrength *
+          0.16
+      );
     } else {
-      const k = easeOut((t - 0.68) / 0.32);
-      this.dampArmPose({
-        shoulder: [0.05, 0, 0],
-        elbow: [0.10, 0, 0],
-        hand: [0, 0, 0]
-      }, 18, dt);
-      this.slashArc.material.opacity *= 1 - Math.min(1, dt * 9);
-      this.player.body.rotation.z = THREE.MathUtils.lerp(this.player.body.rotation.z, 0, k);
+      // Primitive-character fallback keeps the old simple readable swing.
+      if (t < 0.20) {
+        const k =
+          easeOut(
+            t / 0.20
+          );
+
+        this.setArmPose(
+          {
+            shoulder: [
+              THREE.MathUtils.lerp(
+                -0.35,
+                -1.10,
+                k
+              ),
+              -0.12,
+              THREE.MathUtils.lerp(
+                -0.15,
+                -0.62,
+                k
+              )
+            ],
+            elbow: [
+              THREE.MathUtils.lerp(
+                0.55,
+                1.30,
+                k
+              ),
+              0.06,
+              0.26
+            ],
+            hand: [
+              -0.25,
+              0,
+              0.35
+            ]
+          },
+          1
+        );
+      } else if (t < 0.68) {
+        const k =
+          easeInOut(
+            (t - 0.20) /
+              0.48
+          );
+
+        this.setArmPose(
+          {
+            shoulder: [
+              THREE.MathUtils.lerp(
+                -1.10,
+                0.72,
+                k
+              ),
+              THREE.MathUtils.lerp(
+                -0.12,
+                0.28,
+                k
+              ),
+              THREE.MathUtils.lerp(
+                -0.62,
+                0.52,
+                k
+              )
+            ],
+            elbow: [
+              THREE.MathUtils.lerp(
+                1.30,
+                -0.62,
+                k
+              ),
+              THREE.MathUtils.lerp(
+                0.06,
+                -0.10,
+                k
+              ),
+              THREE.MathUtils.lerp(
+                0.26,
+                -0.32,
+                k
+              )
+            ],
+            hand: [
+              THREE.MathUtils.lerp(
+                -0.25,
+                0.38,
+                k
+              ),
+              0,
+              THREE.MathUtils.lerp(
+                0.35,
+                -0.30,
+                k
+              )
+            ]
+          },
+          1
+        );
+      } else {
+        const k =
+          easeOut(
+            (t - 0.68) /
+              0.32
+          );
+
+        this.dampArmPose(
+          {
+            shoulder: [
+              0.05,
+              0,
+              0
+            ],
+            elbow: [
+              0.10,
+              0,
+              0
+            ],
+            hand: [
+              0,
+              0,
+              0
+            ]
+          },
+          18,
+          dt
+        );
+
+        this.player.body.rotation.z =
+          THREE.MathUtils.lerp(
+            this.player.body.rotation.z,
+            0,
+            k
+          );
+      }
+
+      const swing =
+        slash.contactStrength;
+
+      this.slashArc.visible =
+        swing > 0.02;
+      this.slashArc.position.set(
+        0,
+        1.06,
+        -0.50
+      );
+      this.slashArc.rotation.set(
+        Math.PI / 2,
+        0,
+        THREE.MathUtils.lerp(
+          -0.92,
+          0.72,
+          THREE.MathUtils.clamp(
+            (
+              t - 0.24
+            ) /
+              0.38,
+            0,
+            1
+          )
+        )
+      );
+      this.slashArc.scale.setScalar(
+        0.72 +
+          swing * 0.10
+      );
+      this.slashArc.material.opacity =
+        swing * 0.26;
     }
 
-    if (t >= 1) this.finishHandAction();
+    // Check the target for the whole cutting interval, not at one arbitrary
+    // frame. Mark the slash consumed only after a real hit is found.
+    if (
+      !this.slashDidHit &&
+      slash.hitActive
+    ) {
+      this.slashDidHit =
+        this.performMeleeHit(
+          this.cfg.meleeDamage,
+          false
+        );
+    }
+
+    if (t >= 1) {
+      setFangGlow(
+        this.handFang,
+        0
+      );
+      this.finishHandAction();
+    }
   }
 
   beginClaw() {
@@ -853,15 +1067,23 @@ export class TinFangSystem {
       }
     }
 
-    if (!best) return;
+    if (!best) return false;
 
-    const result = this.targets.applyDamage(best, damage, 1);
+    const result =
+      this.targets.applyDamage(
+        best,
+        damage,
+        1
+      );
     if (result) {
       result.melee = true;
       result.claw = claw;
       this.onHit?.(result);
       this.audio?.playFang?.('hit');
+      return true;
     }
+
+    return false;
   }
 
   hasClearMeleeLine(origin, targetPos, targetDistance) {
