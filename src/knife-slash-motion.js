@@ -48,21 +48,26 @@ function mixPose(from, to, t) {
 }
 
 const READY = {
-  hand: { right: 0.20, up: -0.10, forward: 0.27 },
-  pole: { right: 0.56, up: 0.02, forward: 0.12 },
-  chest: { x: 0, y: -0.025, z: 0 },
-  shoulder: { x: -0.025, y: 0.020, z: -0.055 },
-  blade: { right: -0.08, up: -0.32, forward: 0.94 },
-  edgeRoll: -0.08
+  // Third-person knife carry: keep the weapon clearly in one hand, outside
+  // the torso silhouette. The elbow stays soft and the blade points forward
+  // with a slight downward cant instead of lying across the chest like a gun.
+  hand: { right: 0.32, up: -0.30, forward: 0.16 },
+  pole: { right: 0.66, up: -0.08, forward: 0.10 },
+  chest: { x: 0.005, y: -0.015, z: 0 },
+  shoulder: { x: 0.010, y: 0.015, z: -0.075 },
+  blade: { right: -0.06, up: -0.20, forward: 0.98 },
+  edgeRoll: -0.04
 };
 
 const SPRINT = {
-  hand: { right: 0.24, up: -0.23, forward: 0.12 },
-  pole: { right: 0.60, up: -0.11, forward: -0.01 },
-  chest: { x: 0.025, y: -0.015, z: 0 },
-  shoulder: { x: 0.020, y: 0.025, z: -0.095 },
-  blade: { right: -0.04, up: -0.54, forward: 0.84 },
-  edgeRoll: -0.12
+  // Running lowers the knife beside the right hip while keeping the same
+  // forward hammer grip. It must never migrate back into a rifle-ready pose.
+  hand: { right: 0.36, up: -0.46, forward: 0.05 },
+  pole: { right: 0.70, up: -0.22, forward: -0.02 },
+  chest: { x: 0.025, y: -0.005, z: 0 },
+  shoulder: { x: 0.035, y: 0.015, z: -0.105 },
+  blade: { right: -0.02, up: -0.38, forward: 0.92 },
+  edgeRoll: -0.06
 };
 
 const SWINGS = [
