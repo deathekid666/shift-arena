@@ -148,7 +148,7 @@ const SWINGS = [
       edgeRoll: -0.34
     }
   }
-]
+];
 
 export function sampleKnifeReady(sprintBlend = 0) {
   return {
