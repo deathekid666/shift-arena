@@ -339,8 +339,15 @@ export class WeaponSystem {
     );
   }
 
-  updateSelection() {
-    if (!this.blocked) this.processWeaponSwitch();
+  updateSelection(allowWhileBlocked = false) {
+    if (
+      this.blocked &&
+      !allowWhileBlocked
+    ) {
+      return false;
+    }
+
+    return this.processWeaponSwitch();
   }
 
   update(dt) {
@@ -1595,19 +1602,28 @@ export class WeaponSystem {
   processWeaponSwitch() {
     if (this.input.consume('slot1')) {
       this.equipSlot(0);
-      return;
+      return true;
     }
 
     if (this.input.consume('slot2')) {
       this.equipSlot(1);
-      return;
+      return true;
     }
 
-    const wheel = this.input.consumeWeaponWheel();
+    const wheel =
+      this.input.consumeWeaponWheel();
+
     if (wheel !== 0) {
       // With exactly two firearm slots, next/previous both switch to the other gun.
-      this.equipSlot(this.activeSlot === 0 ? 1 : 0);
+      this.equipSlot(
+        this.activeSlot === 0
+          ? 1
+          : 0
+      );
+      return true;
     }
+
+    return false;
   }
 
   equipSlot(index) {

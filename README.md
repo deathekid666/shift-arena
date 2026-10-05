@@ -460,3 +460,17 @@ was 0.566 world units versus 0.288 for standing.
 - Support-hand IK target history is rebased at slide enter/exit boundaries and is pinned directly to the weapon grip during the authored slide. This removes the small sideways hand drift caused by filtering from the previous carry target.
 - Right/master hand remains animation-owned exactly as in the confirmed-good slide architecture; weapon position remains rigidly derived from that authored hand.
 - No slide leg, speed, camera, crouch, recoil, weapon weight or normal carry tuning was changed.
+
+
+## Build 010.28A — knife equip
+- V no longer performs an attack. V now toggles Tin Fang between holstered and equipped.
+- Equipped Tin Fang is a true lightweight weapon state: firearm models are hidden/blocked, but normal locomotion and full sprint remain unchanged.
+- Left Mouse while the knife is equipped performs the existing slash attack.
+- Holding Right Mouse enters/holds throw aim. Left Mouse while aim is held commits the throw.
+- Releasing Right Mouse lowers the knife without throwing it.
+- Pressing 1, 2, or using the mouse wheel while the knife is equipped returns directly to a firearm.
+- Throwing the knife automatically returns the player to the gun after the blade leaves the hand; recovery returns the knife to the sheath until V is pressed again.
+- Removed V-trigger melee/claw behavior from the live control path.
+- Knife-equipped idle/running does not force combat-facing locomotion, so sprint remains the normal 8.4 m/s baseline.
+
+- Tin Fang now has an explicit 0.45 kg physical/mobility baseline with 1.00x walk, sprint, acceleration and turn-response multipliers. This is intentionally the future reference point for heavier firearm mobility profiles.

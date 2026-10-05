@@ -615,6 +615,16 @@ export const GAME_CONFIG = {
     }
   },
   tinFang: {
+    // Mobility baseline for the loadout system: a compact hand weapon should
+    // impose no locomotion penalty. Firearm profiles will be measured from
+    // this 1.00x reference rather than from an arbitrary gun.
+    massKg: 0.45,
+    mobility: {
+      walkSpeedMultiplier: 1.00,
+      sprintSpeedMultiplier: 1.00,
+      accelerationMultiplier: 1.00,
+      turnResponseMultiplier: 1.00
+    },
     meleeDamage: 40,
     clawDamage: 22,
     throwBodyDamage: 90,

@@ -17,6 +17,7 @@ export class TinFangSystem {
     this.cfg = GAME_CONFIG.tinFang;
 
     this.state = 'READY';
+    this.equipped = false;
     this.holdTime = 0;
     this.actionTime = 0;
     this.actionDuration = 0;
@@ -52,11 +53,25 @@ export class TinFangSystem {
   }
 
   get blocksWeapons() {
-    return ['PRIMING', 'AIMING', 'RELEASE', 'SLASH', 'CLAW'].includes(this.state);
+    return (
+      this.equipped ||
+      ['PRIMING', 'AIMING', 'RELEASE', 'SLASH'].includes(this.state)
+    );
   }
 
   get aiming() {
-    return ['PRIMING', 'AIMING', 'RELEASE'].includes(this.state);
+    return (
+      this.equipped &&
+      ['PRIMING', 'AIMING', 'RELEASE'].includes(this.state)
+    );
+  }
+
+  get combatFacing() {
+    return (
+      this.aiming ||
+      this.state === 'RELEASE' ||
+      this.state === 'SLASH'
+    );
   }
 
   get hasFang() {
@@ -64,11 +79,24 @@ export class TinFangSystem {
   }
 
   get chargeRatio() {
-    if (this.state !== 'AIMING' && this.state !== 'RELEASE') return 0;
-    if (this.state === 'RELEASE') return this.releaseCharge;
+    if (
+      this.state !== 'PRIMING' &&
+      this.state !== 'AIMING' &&
+      this.state !== 'RELEASE'
+    ) {
+      return 0;
+    }
+
+    if (this.state === 'RELEASE') {
+      return this.releaseCharge;
+    }
+
     return THREE.MathUtils.clamp(
-      (this.holdTime - this.cfg.primeThreshold) /
-      Math.max(0.001, this.cfg.fullChargeTime - this.cfg.primeThreshold),
+      this.holdTime /
+      Math.max(
+        0.001,
+        this.cfg.fullChargeTime
+      ),
       0,
       1
     );
@@ -171,14 +199,22 @@ export class TinFangSystem {
   syncFangVisuals() {
     const stored =
       this.state === 'READY' &&
+      !this.equipped &&
       !this.projectile;
 
     const inHand =
       (
+        (
+          this.state === 'READY' &&
+          this.equipped
+        ) ||
         this.state === 'PRIMING' ||
         this.state === 'AIMING' ||
         this.state === 'SLASH' ||
-        (this.state === 'RELEASE' && !this.releaseLaunched)
+        (
+          this.state === 'RELEASE' &&
+          !this.releaseLaunched
+        )
       ) &&
       !this.projectile;
 
@@ -212,6 +248,7 @@ export class TinFangSystem {
   reset() {
     this.removeProjectile();
     this.state = 'READY';
+    this.equipped = false;
     this.holdTime = 0;
     this.actionTime = 0;
     this.releaseAimPoint = null;
@@ -231,9 +268,14 @@ export class TinFangSystem {
     this.updateProjectile(dt);
 
     if (!canUse) {
-      if (['PRIMING', 'AIMING', 'SLASH', 'CLAW'].includes(this.state)) {
+      if (
+        ['PRIMING', 'AIMING', 'SLASH'].includes(
+          this.state
+        )
+      ) {
         this.cancelHandAction();
       }
+
       this.trajectoryLine.visible = false;
       this.syncFangVisuals();
       this.emitState();
@@ -242,44 +284,178 @@ export class TinFangSystem {
 
     this.tryRecover();
 
-    if (this.state === 'READY' && this.input.consume('melee')) {
-      this.beginPrime();
-    } else if (
-      ['THROWN', 'STUCK', 'FALLING', 'DROPPED', 'LOST'].includes(this.state) &&
-      this.input.consume('melee')
-    ) {
-      this.beginClaw();
+    // V now only selects/holsters the knife. It never attacks.
+    if (this.input.consume('knife')) {
+      if (
+        this.state === 'READY' &&
+        this.hasFang
+      ) {
+        this.setEquipped(
+          !this.equipped
+        );
+      } else if (
+        this.state === 'PRIMING' ||
+        this.state === 'AIMING'
+      ) {
+        this.cancelThrowAim();
+        this.setEquipped(false);
+      } else if (!this.hasFang) {
+        this.onToast?.(
+          'TIN FANG IS NOT IN HAND'
+        );
+      }
     }
 
-    if (this.state === 'PRIMING' || this.state === 'AIMING') {
-      const stillHolding = this.input.down('melee');
+    if (
+      this.equipped &&
+      this.state === 'READY'
+    ) {
+      if (
+        this.input.pointerLocked &&
+        this.input.mouseDown(2)
+      ) {
+        this.beginPrime();
+      } else if (
+        this.input.consumeMouse(0)
+      ) {
+        this.beginSlash();
+      }
+    }
 
-      if (stillHolding) {
+    if (
+      this.state === 'PRIMING' ||
+      this.state === 'AIMING'
+    ) {
+      const stillAiming =
+        this.input.pointerLocked &&
+        this.input.mouseDown(2);
+
+      if (stillAiming) {
         this.holdTime += dt;
-        if (this.state === 'PRIMING' && this.holdTime >= this.cfg.primeThreshold) {
+
+        if (
+          this.state === 'PRIMING' &&
+          this.holdTime >=
+            this.cfg.primeThreshold
+        ) {
           this.state = 'AIMING';
-          this.audio?.playFang?.('charge');
+          this.audio?.playFang?.(
+            'charge'
+          );
+        }
+
+        // Throw only on a deliberate fire click while aim is held.
+        if (this.input.consumeMouse(0)) {
+          this.beginRelease();
         }
       } else {
-        if (this.holdTime >= this.cfg.primeThreshold) this.beginRelease();
-        else this.beginSlash();
+        // Releasing RMB only lowers the knife.
+        this.cancelThrowAim();
       }
-
-      this.input.consumeReleased('melee');
-    } else {
-      this.input.consumeReleased('melee');
     }
 
-    if (this.state === 'PRIMING' || this.state === 'AIMING') this.updateAimPose(dt);
-    if (this.state === 'RELEASE') this.updateRelease(dt);
-    if (this.state === 'SLASH') this.updateSlash(dt);
-    if (this.state === 'CLAW') this.updateClaw(dt);
+    if (
+      this.state === 'PRIMING' ||
+      this.state === 'AIMING'
+    ) {
+      this.updateAimPose(dt);
+    }
+
+    if (this.state === 'RELEASE') {
+      this.updateRelease(dt);
+    }
+
+    if (this.state === 'SLASH') {
+      this.updateSlash(dt);
+    }
 
     this.syncFangVisuals();
     this.emitState();
   }
 
+  setEquipped(equipped) {
+    const next =
+      Boolean(equipped) &&
+      this.hasFang;
+
+    if (this.equipped === next) {
+      return;
+    }
+
+    this.equipped = next;
+
+    if (next) {
+      this.state = 'READY';
+      this.holdTime = 0;
+      this.actionTime = 0;
+      this.trajectoryLine.visible = false;
+      this.player.setFangAnimation?.(null);
+      this.syncFangVisuals();
+      this.audio?.playFang?.('draw');
+      this.onToast?.('TIN FANG EQUIPPED');
+    } else {
+      if (
+        this.state === 'PRIMING' ||
+        this.state === 'AIMING'
+      ) {
+        this.cancelThrowAim();
+      }
+
+      this.trajectoryLine.visible = false;
+      this.player.setFangAnimation?.(null);
+      this.resetBodyPose();
+
+      if (!this.projectile) {
+        this.state =
+          this.state === 'LOST'
+            ? 'LOST'
+            : 'READY';
+      }
+
+      this.syncFangVisuals();
+    }
+
+    this.emitState();
+  }
+
+  unequipForGunSwitch() {
+    if (!this.equipped) return false;
+
+    if (
+      this.state === 'PRIMING' ||
+      this.state === 'AIMING'
+    ) {
+      this.cancelThrowAim();
+    }
+
+    if (this.state === 'RELEASE') {
+      return false;
+    }
+
+    this.setEquipped(false);
+    return true;
+  }
+
+  cancelThrowAim() {
+    this.armRig.visible = false;
+    this.player.setFangArmOverride?.(false);
+    this.player.setFangAnimation?.(null);
+    this.trajectoryLine.visible = false;
+    this.resetBodyPose();
+    this.state = 'READY';
+    this.holdTime = 0;
+    this.compactAim = false;
+    this.syncFangVisuals();
+  }
+
   beginPrime() {
+    if (
+      !this.equipped ||
+      !this.hasFang
+    ) {
+      return;
+    }
+
     this.state = 'PRIMING';
     this.holdTime = 0;
     this.actionTime = 0;
@@ -299,7 +475,6 @@ export class TinFangSystem {
       elbow: [0.20, 0, 0.25],
       hand: [0.15, 0, 0.15]
     }, 1);
-    this.audio?.playFang?.('draw');
   }
 
   updateAimPose(dt) {
@@ -368,9 +543,19 @@ export class TinFangSystem {
     return Boolean(hit);
   }
   beginRelease() {
+    if (
+      !this.equipped ||
+      !this.hasFang
+    ) {
+      return;
+    }
+
     this.releaseCharge = THREE.MathUtils.clamp(
-      (this.holdTime - this.cfg.primeThreshold) /
-      Math.max(0.001, this.cfg.fullChargeTime - this.cfg.primeThreshold),
+      this.holdTime /
+      Math.max(
+        0.001,
+        this.cfg.fullChargeTime
+      ),
       0,
       1
     );
@@ -496,7 +681,11 @@ export class TinFangSystem {
 
     if (!this.releaseLaunched && t >= this.cfg.releaseMoment) {
       this.releaseLaunched = true;
-      this.launchFang(this.releaseCharge, this.releaseAimPoint);
+      this.launchFang(
+        this.releaseCharge,
+        this.releaseAimPoint
+      );
+      this.equipped = false;
       this.handFang.visible = false;
       this.trajectoryLine.visible = false;
     } else if (!this.releaseLaunched) {
@@ -529,6 +718,13 @@ export class TinFangSystem {
   }
 
   beginSlash() {
+    if (
+      !this.equipped ||
+      !this.hasFang
+    ) {
+      return;
+    }
+
     this.state = 'SLASH';
     this.actionTime = 0;
     this.actionDuration = 0.38;
@@ -1126,6 +1322,7 @@ export class TinFangSystem {
     this.removeProjectile();
     this.stuckPosition = null;
     this.state = 'READY';
+    this.equipped = false;
     this.sheath.visible = true;
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
@@ -1140,6 +1337,7 @@ export class TinFangSystem {
     this.removeProjectile();
     this.stuckPosition = null;
     this.state = 'LOST';
+    this.equipped = false;
     this.sheath.visible = true;
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
@@ -1264,6 +1462,7 @@ export class TinFangSystem {
 
     this.onState?.({
       state: this.state,
+      equipped: this.equipped,
       charge: this.chargeRatio,
       hasFang: this.hasFang,
       blocksWeapons: this.blocksWeapons,
