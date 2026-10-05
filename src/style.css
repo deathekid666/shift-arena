@@ -8,12 +8,18 @@
 html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { background: #0b1420; }
 canvas { display: block; width: 100%; height: 100%; outline: none; }
-#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud {
+  --aim-x: 50vw;
+  --aim-y: 50vh;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
 
 #crosshair {
-  position: absolute;
-  left: 50%;
-  top: 50%;
+  position: fixed;
+  left: var(--aim-x);
+  top: var(--aim-y);
   width: 24px;
   height: 24px;
   transform: translate(-50%, -50%);
@@ -43,9 +49,9 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 #crosshair.disabled { opacity: .15; }
 
 #hit-marker {
-  position: absolute;
-  left: 50%;
-  top: 50%;
+  position: fixed;
+  left: var(--aim-x);
+  top: var(--aim-y);
   width: 30px;
   height: 30px;
   transform: translate(-50%, -50%) rotate(45deg);
@@ -542,8 +548,8 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 }
 .scope-reticle {
   position: absolute;
-  left: 50%;
-  top: 50%;
+  left: var(--aim-x);
+  top: var(--aim-y);
   width: min(68vh, 68vw);
   height: min(68vh, 68vw);
   transform: translate(-50%, -50%);

@@ -72,7 +72,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.26A · TURN IN PLACE</div>
+    <div id="damage-test-hint">BUILD 010.26B · TRUE CAMERA CENTER RETICLE</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
     <div id="jitter-lab" hidden>
@@ -126,7 +126,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.26A · TURN IN PLACE</div>
+        <div class="build-tag">BUILD 010.26B · TRUE CAMERA CENTER RETICLE</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
@@ -190,6 +190,27 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 root.prepend(renderer.domElement);
 
+function syncAimHudToCanvas() {
+  const rect =
+    renderer.domElement.getBoundingClientRect();
+
+  const aimX =
+    rect.left + rect.width * 0.5;
+  const aimY =
+    rect.top + rect.height * 0.5;
+
+  hud?.style.setProperty(
+    '--aim-x',
+    `${aimX}px`
+  );
+  hud?.style.setProperty(
+    '--aim-y',
+    `${aimY}px`
+  );
+}
+
+syncAimHudToCanvas();
+
 scene.add(new THREE.HemisphereLight(0xdaf0ff, 0x5c4937, 2.2));
 const sun = new THREE.DirectionalLight(0xffffff, 3);
 sun.position.set(18, 28, 12);
@@ -207,6 +228,7 @@ const player = new PlayerController(world, input);
 const thirdCam = new ThirdPersonCamera(camera, player, input, world);
 const targets = new TargetRange(scene);
 
+const hud = document.querySelector('#hud');
 const crosshair = document.querySelector('#crosshair');
 const scopeOverlay = document.querySelector('#scope-overlay');
 const hitMarker = document.querySelector('#hit-marker');
@@ -772,6 +794,15 @@ window.addEventListener(
 document.addEventListener(
   'fullscreenchange',
   () => {
+    requestAnimationFrame(
+      () => {
+        syncAimHudToCanvas();
+        requestAnimationFrame(
+          syncAimHudToCanvas
+        );
+      }
+    );
+
     if (!document.fullscreenElement) {
       input.unlockGameKeys();
       return;
@@ -1363,4 +1394,8 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+
+  requestAnimationFrame(
+    syncAimHudToCanvas
+  );
 });
