@@ -3,6 +3,7 @@ import { GAME_CONFIG } from './config.js';
 import {
   sampleKnifeSlash
 } from './knife-slash-motion.js';
+import { KNIFE_HAND_GRIP } from './knife-grip.js';
 
 export class TinFangSystem {
   constructor({ scene, camera, cameraRig, player, input, world, targets, audio, onHit, onState, onToast }) {
@@ -188,17 +189,17 @@ export class TinFangSystem {
     // Active Fang always binds to the RIGHT hand. Storage is on LEFT hip.
     socket.add(this.handFang);
     this.handFang.position.set(
-      0.0,
-      0.012,
-      -0.082
+      KNIFE_HAND_GRIP.position.x,
+      KNIFE_HAND_GRIP.position.y,
+      KNIFE_HAND_GRIP.position.z
     );
     this.handFang.rotation.set(
-      -0.10,
-      0.0,
-      Math.PI * 0.52
+      KNIFE_HAND_GRIP.rotation.x,
+      KNIFE_HAND_GRIP.rotation.y,
+      KNIFE_HAND_GRIP.rotation.z
     );
     this.handFang.scale.setScalar(
-      0.46
+      KNIFE_HAND_GRIP.scale
     );
 
     const holsterSocket = this.player.getHolsterSocket?.();
