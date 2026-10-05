@@ -1488,6 +1488,11 @@ function updatePose(character, dt, state) {
       dt
     );
 
+  applyTurnInPlacePose(
+    character,
+    state
+  );
+
   const time = performance.now() * 0.001;
   const breathe = Math.sin(time * 2.4) * 0.025;
 
@@ -2061,6 +2066,206 @@ function animateScoutAccessories(
   }
 }
 
+function applyTurnInPlacePose(
+  character,
+  state
+) {
+  const blend =
+    THREE.MathUtils.clamp(
+      state.turnInPlaceBlend ?? 0,
+      0,
+      1
+    );
+
+  if (
+    blend < 0.001 ||
+    !state.combat ||
+    state.grounded === false ||
+    state.sliding ||
+    (state.crouchBlend ?? 0) > 0.08 ||
+    (state.speed ?? 0) > 0.32
+  ) {
+    return;
+  }
+
+  const direction =
+    Math.sign(
+      state.turnInPlaceDirection ?? 0
+    ) || 1;
+
+  const phase =
+    state.turnInPlacePhase ?? 0;
+
+  // One foot takes the visible step while the opposite foot stays planted.
+  // A sin-squared envelope produces lift -> plant without a discontinuity.
+  const stepWave =
+    Math.sin(
+      Math.min(
+        Math.PI,
+        Math.max(
+          0,
+          phase % Math.PI
+        )
+      )
+    );
+
+  const lift =
+    stepWave * stepWave * blend;
+
+  const settle =
+    (
+      1 -
+      Math.cos(
+        Math.min(
+          Math.PI,
+          Math.max(
+            0,
+            phase % Math.PI
+          )
+        )
+      )
+    ) *
+    0.5 *
+    blend;
+
+  const movingUpperLeg =
+    direction > 0
+      ? character.bones?.rightUpperLeg
+      : character.bones?.leftUpperLeg;
+
+  const movingLowerLeg =
+    direction > 0
+      ? character.bones?.rightLowerLeg
+      : character.bones?.leftLowerLeg;
+
+  const movingFoot =
+    direction > 0
+      ? character.bones?.rightFoot
+      : character.bones?.leftFoot;
+
+  const plantedUpperLeg =
+    direction > 0
+      ? character.bones?.leftUpperLeg
+      : character.bones?.rightUpperLeg;
+
+  const plantedLowerLeg =
+    direction > 0
+      ? character.bones?.leftLowerLeg
+      : character.bones?.rightLowerLeg;
+
+  const plantedFoot =
+    direction > 0
+      ? character.bones?.leftFoot
+      : character.bones?.rightFoot;
+
+  // Additive offsets are multiplied onto the authored idle frame. The mixer
+  // rewrites that frame next tick, so these offsets cannot accumulate.
+  multiplyBoneEuler(
+    character.bones?.hips,
+    0.015 * lift,
+    direction *
+      (
+        0.055 +
+        settle * 0.075
+      ) *
+      blend,
+    -direction * 0.025 * lift,
+    1
+  );
+
+  multiplyBoneEuler(
+    movingUpperLeg,
+    -0.18 * lift,
+    direction *
+      (
+        0.12 +
+        0.10 * settle
+      ) *
+      blend,
+    -direction * 0.11 * lift,
+    1
+  );
+
+  multiplyBoneEuler(
+    movingLowerLeg,
+    0.34 * lift,
+    direction * 0.025 * settle,
+    0,
+    1
+  );
+
+  multiplyBoneEuler(
+    movingFoot,
+    -0.16 * lift,
+    direction * 0.12 * settle,
+    direction * 0.025 * lift,
+    1
+  );
+
+  multiplyBoneEuler(
+    plantedUpperLeg,
+    -0.035 * blend,
+    -direction * 0.050 * settle,
+    direction * 0.035 * lift,
+    1
+  );
+
+  multiplyBoneEuler(
+    plantedLowerLeg,
+    0.075 * blend,
+    0,
+    0,
+    1
+  );
+
+  multiplyBoneEuler(
+    plantedFoot,
+    -0.035 * blend,
+    -direction * 0.055 * settle,
+    0,
+    1
+  );
+
+  character.root.updateWorldMatrix(
+    true,
+    true
+  );
+}
+
+function multiplyBoneEuler(
+  node,
+  x,
+  y,
+  z,
+  blend = 1
+) {
+  if (!node) return;
+
+  const offset =
+    new THREE.Quaternion()
+      .setFromEuler(
+        new THREE.Euler(
+          x,
+          y,
+          z,
+          'XYZ'
+        )
+      );
+
+  if (blend < 0.999) {
+    offset.slerp(
+      new THREE.Quaternion(),
+      1 - THREE.MathUtils.clamp(
+        blend,
+        0,
+        1
+      )
+    );
+  }
+
+  node.quaternion.multiply(offset);
+}
+
 function applyCombatStrafeOrientationWarp(
   character,
   state,
@@ -2097,6 +2302,7 @@ function applyCombatStrafeOrientationWarp(
     state.grounded !== false &&
     !slideVisualActive &&
     crouchBlend < 0.08 &&
+    (state.turnInPlaceBlend ?? 0) < 0.02 &&
     speed > 0.22;
 
   let targetYaw = 0;

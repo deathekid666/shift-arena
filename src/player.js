@@ -48,6 +48,14 @@ export class PlayerController {
     this.aimPitchTarget = 0;
     this.weaponAiming = false;
 
+    // Stationary combat turn-in-place state. Root yaw stays planted for small
+    // camera corrections, then steps toward aim once the threshold is crossed.
+    this.turnInPlaceActive = false;
+    this.turnInPlaceDirection = 0;
+    this.turnInPlacePhase = 0;
+    this.turnInPlaceBlend = 0;
+    this.turnInPlaceError = 0;
+
     // Start the real anime/VRM pipeline immediately. The old geometry only
     // reappears if the external development avatar genuinely fails to load.
     this.characterReady = this.loadVrmVisual();
@@ -83,6 +91,11 @@ export class PlayerController {
     this.aimPitch = 0;
     this.aimYawTarget = 0;
     this.aimPitchTarget = 0;
+    this.turnInPlaceActive = false;
+    this.turnInPlaceDirection = 0;
+    this.turnInPlacePhase = 0;
+    this.turnInPlaceBlend = 0;
+    this.turnInPlaceError = 0;
   }
 
   update(
@@ -372,16 +385,124 @@ export class PlayerController {
           dt
         );
       } else {
-        this.group.rotation.y = dampAngle(
-          this.group.rotation.y,
-          cameraYaw,
+        const stationaryTurnError =
+          angleDelta(
+            this.group.rotation.y,
+            cameraYaw
+          );
+
+        const turnEnterThreshold =
           THREE.MathUtils.lerp(
-            22,
-            27,
+            0.50,
+            0.36,
             aimBlend
-          ),
-          dt
-        );
+          );
+
+        const turnExitThreshold =
+          THREE.MathUtils.lerp(
+            0.11,
+            0.075,
+            aimBlend
+          );
+
+        if (
+          !this.turnInPlaceActive &&
+          Math.abs(stationaryTurnError) >
+            turnEnterThreshold
+        ) {
+          this.turnInPlaceActive = true;
+          this.turnInPlaceDirection =
+            Math.sign(stationaryTurnError) || 1;
+
+          // Start each step from a stable planted phase instead of inheriting
+          // arbitrary locomotion timing.
+          this.turnInPlacePhase = 0;
+        }
+
+        if (this.turnInPlaceActive) {
+          const errorMagnitude =
+            Math.abs(stationaryTurnError);
+
+          const turnResponse =
+            THREE.MathUtils.lerp(
+              7.8,
+              10.5,
+              aimBlend
+            );
+
+          this.group.rotation.y =
+            dampAngle(
+              this.group.rotation.y,
+              cameraYaw,
+              turnResponse,
+              dt
+            );
+
+          this.turnInPlacePhase +=
+            dt *
+            THREE.MathUtils.lerp(
+              5.8,
+              7.4,
+              THREE.MathUtils.clamp(
+                errorMagnitude / 0.85,
+                0,
+                1
+              )
+            );
+
+          const remainingError =
+            Math.abs(
+              angleDelta(
+                this.group.rotation.y,
+                cameraYaw
+              )
+            );
+
+          if (
+            remainingError <
+            turnExitThreshold
+          ) {
+            this.turnInPlaceActive = false;
+          }
+        }
+
+        this.turnInPlaceError =
+          angleDelta(
+            this.group.rotation.y,
+            cameraYaw
+          );
+
+        const turnBlendTarget =
+          this.turnInPlaceActive
+            ? THREE.MathUtils.smoothstep(
+                Math.abs(
+                  this.turnInPlaceError
+                ),
+                turnExitThreshold,
+                Math.max(
+                  turnEnterThreshold,
+                  turnExitThreshold + 0.001
+                )
+              )
+            : 0;
+
+        this.turnInPlaceBlend =
+          THREE.MathUtils.damp(
+            this.turnInPlaceBlend,
+            turnBlendTarget,
+            this.turnInPlaceActive
+              ? 13
+              : 17,
+            dt
+          );
+
+        if (
+          !this.turnInPlaceActive &&
+          this.turnInPlaceBlend < 0.002
+        ) {
+          this.turnInPlaceBlend = 0;
+          this.turnInPlaceDirection = 0;
+        }
       }
     } else if (moving && Number.isFinite(movementFacing)) {
       const turnResponse =
@@ -395,6 +516,28 @@ export class PlayerController {
         turnResponse,
         dt
       );
+    }
+
+    if (
+      !combatFacing ||
+      moving ||
+      this.sliding ||
+      this.crouching ||
+      !this.grounded
+    ) {
+      this.turnInPlaceActive = false;
+      this.turnInPlaceBlend =
+        THREE.MathUtils.damp(
+          this.turnInPlaceBlend,
+          0,
+          18,
+          dt
+        );
+
+      if (this.turnInPlaceBlend < 0.002) {
+        this.turnInPlaceBlend = 0;
+        this.turnInPlaceDirection = 0;
+      }
     }
 
     const leanAllowed =
@@ -577,6 +720,16 @@ export class PlayerController {
           : 0,
       aimPitch: this.aimPitch,
       aimYawOffset: this.aimYawOffset,
+      turnInPlaceActive:
+        this.turnInPlaceActive,
+      turnInPlaceDirection:
+        this.turnInPlaceDirection,
+      turnInPlacePhase:
+        this.turnInPlacePhase,
+      turnInPlaceBlend:
+        this.turnInPlaceBlend,
+      turnInPlaceError:
+        this.turnInPlaceError,
       crouching: this.crouching,
       crouchBlend: this.crouchVisual,
       grounded: this.grounded,
