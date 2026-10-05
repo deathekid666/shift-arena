@@ -383,3 +383,13 @@ an assertion of its proprietary implementation. The supplied running-jump image
 informed the lead/trail silhouette. Browser inspection used the actual VRM at
 rise, apex and descent for standing and sprint jumps; sprint apex knee separation
 was 0.566 world units versus 0.288 for standing.
+
+
+## Build 010.27B — synchronized weapon raise / lower
+- Added one shared deterministic carry-to-combat easing curve used by both the weapon transform and the character upper body.
+- Carry, hip-fire and ADS no longer change upper-body targets abruptly; the arms now blend from the class-specific carry pose into the combat pose using the same shoulder alpha that moves the gun.
+- Added a small class-specific transition arc: the SMG is light/quick, AR neutral, shotgun heavier, and sniper heaviest.
+- Raise moves slightly up/in toward the shoulder while lower follows a softer down/out return path, rather than looking like a reversed linear slide.
+- Final carry, hip-fire and ADS endpoints are unchanged, preserving the existing recoil calibration, stable two-hand IK, crouch behavior and authored slide ownership.
+- Added dependency-free tests for easing endpoints, monotonicity, arc shape and per-class transition separation.
+- Architecture follows the existing layered stack: shared locomotion → weapon-class upper body → additive aim/recoil → final hand IK.

@@ -6,6 +6,7 @@ import { createFangPoseLayer } from './fang-pose.js';
 import { createCrouchPoseLayer } from './crouch-pose.js';
 import { createSlidePoseLayer } from './slide-pose.js';
 import { createJumpPoseLayer } from './jump-pose.js';
+import { weaponRaiseBlend } from './weapon-transition.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -2696,6 +2697,48 @@ function blendProfilePose(
   ];
 }
 
+function blendReadyWeaponPose(
+  profile,
+  bone,
+  ads,
+  shoulder
+) {
+  const carry =
+    profilePose(
+      profile,
+      'carry',
+      bone
+    );
+
+  const combat =
+    blendProfilePose(
+      profile,
+      bone,
+      ads
+    );
+
+  if (!carry) return combat;
+  if (!combat) return carry;
+
+  return [
+    THREE.MathUtils.lerp(
+      carry[0],
+      combat[0],
+      shoulder
+    ),
+    THREE.MathUtils.lerp(
+      carry[1],
+      combat[1],
+      shoulder
+    ),
+    THREE.MathUtils.lerp(
+      carry[2],
+      combat[2],
+      shoulder
+    )
+  ];
+}
+
 function applyProfileWeaponBone(
   bone,
   baseRotations,
@@ -2760,22 +2803,25 @@ function applyWeaponAimPose(
     );
 
   const shoulder =
-    THREE.MathUtils.clamp(
-      state.weaponShoulderBlend ?? 1,
-      0,
-      1
+    weaponRaiseBlend(
+      state.weaponShoulderBlend ?? 1
     );
 
   const response =
-    profile.combatResponse;
+    THREE.MathUtils.lerp(
+      profile.carryResponse,
+      profile.combatResponse,
+      shoulder
+    );
 
   applyProfileWeaponBone(
     bones.spine,
     baseRotations,
-    blendProfilePose(
+    blendReadyWeaponPose(
       profile,
       'spine',
-      ads
+      ads,
+      shoulder
     ),
     response * 0.82,
     dt,
@@ -2804,10 +2850,11 @@ function applyWeaponAimPose(
   applyProfileWeaponBone(
     bones.chest,
     baseRotations,
-    blendProfilePose(
+    blendReadyWeaponPose(
       profile,
       'chest',
-      ads
+      ads,
+      shoulder
     ),
     response * 0.90,
     dt,
@@ -2836,10 +2883,11 @@ function applyWeaponAimPose(
   applyProfileWeaponBone(
     bones.upperChest,
     baseRotations,
-    blendProfilePose(
+    blendReadyWeaponPose(
       profile,
       'upperChest',
-      ads
+      ads,
+      shoulder
     ),
     response * 0.94,
     dt,
@@ -2898,10 +2946,11 @@ function applyWeaponAimPose(
     applyProfileWeaponBone(
       bones[boneName],
       baseRotations,
-      blendProfilePose(
+      blendReadyWeaponPose(
         profile,
         boneName,
-        ads
+        ads,
+        shoulder
       ),
       response,
       dt

@@ -2,6 +2,11 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 import { GAME_CONFIG, WEAPON_ORDER } from './config.js';
 import { buildJunkWeaponVisual } from './junk-weapon-model.js';
 import { WeaponAudio } from './audio.js';
+import {
+  weaponRaiseBlend,
+  weaponTransitionArc,
+  getWeaponTransitionProfile
+} from './weapon-transition.js';
 
 const SHOTGUN_PATTERN_10 = [
   [0.00, 0.00],
@@ -577,11 +582,26 @@ export class WeaponSystem {
     }
 
     const shoulderBlend =
-      THREE.MathUtils.smoothstep(
-        state.shoulderBlend,
-        0,
-        1
+      weaponRaiseBlend(
+        state.shoulderBlend
       );
+
+    const transitionArc =
+      weaponTransitionArc(
+        state.shoulderBlend
+      );
+
+    const transitionProfile =
+      getWeaponTransitionProfile(
+        this.poseClass
+      );
+
+    // Raise and lower intentionally use slightly different arcs so the gun
+    // feels lifted into the shoulder, then relaxed back to carry.
+    const transitionDirection =
+      shoulderRequested
+        ? 1
+        : -0.72;
 
     const adsBlend =
       THREE.MathUtils.smoothstep(
@@ -794,11 +814,7 @@ export class WeaponSystem {
 
       if (chest && shoulder) {
         const readyToAim =
-          THREE.MathUtils.smoothstep(
-            shoulderBlend,
-            0,
-            1
-          );
+          shoulderBlend;
 
         // Capture a stable body-space anchor once. The old build sampled the
         // animated chest/shoulder every frame; any clip or IK micro-motion was
@@ -862,11 +878,20 @@ export class WeaponSystem {
         const aimCorrection =
           new THREE.Quaternion().setFromEuler(
             new THREE.Euler(
-              posePitch -
+              posePitch +
+                transitionProfile.pitch *
+                  transitionArc *
+                  transitionDirection -
                 state.visualKick * 0.18 -
                 state.recoilPitch * 0.20,
-              state.recoilYaw * 0.18,
+              state.recoilYaw * 0.18 +
+                transitionProfile.yaw *
+                  transitionArc *
+                  transitionDirection,
               poseRoll +
+                transitionProfile.roll *
+                  transitionArc *
+                  transitionDirection +
                 state.recoilRoll * 0.16,
               'YXZ'
             )
@@ -933,6 +958,21 @@ export class WeaponSystem {
             fireGripZ,
             readyToAim
           );
+
+        // Small class-specific transition arc. It is exactly zero at both
+        // endpoints, so existing carry/hip/ADS calibration remains unchanged.
+        this.tmpGripLocal.x +=
+          transitionProfile.right *
+          transitionArc *
+          transitionDirection;
+        this.tmpGripLocal.y +=
+          transitionProfile.lift *
+          transitionArc *
+          transitionDirection;
+        this.tmpGripLocal.z +=
+          transitionProfile.forward *
+          transitionArc *
+          transitionDirection;
 
         // Convert the independent grip target into the weapon group's local
         // transform. rightGrip is the exact modeled pistol-grip pivot.
