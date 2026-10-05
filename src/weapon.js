@@ -18,6 +18,9 @@ import {
   resetWeaponNaturalMotion,
   stepWeaponNaturalMotion
 } from './weapon-natural-motion.js';
+import {
+  isAuthoredSlideOwnershipActive
+} from './weapon-slide-ownership.js';
 
 const SHOTGUN_PATTERN_10 = [
   [0.00, 0.00],
@@ -96,7 +99,8 @@ export class WeaponSystem {
       poseClass: 'ar',
       naturalBodyPitch: 0,
       naturalBodyYaw: 0,
-      naturalBodyRoll: 0
+      naturalBodyRoll: 0,
+      slideOwned: false
     };
 
     this.entries = WEAPON_ORDER.map((key) => {
@@ -737,14 +741,11 @@ export class WeaponSystem {
       this.player.vrmCharacter?.authoredLocomotion ??
       null;
 
-    const slideCarryActive = Boolean(
-      this.player.sliding ||
-      authoredLocomotion?.slideExitActive ||
-      (authoredLocomotion?.slideExitTail ?? 0) > 0.015 ||
-      authoredLocomotion?.state === 'SLIDE_START' ||
-      authoredLocomotion?.state === 'SLIDE_LOOP' ||
-      authoredLocomotion?.state === 'SLIDE_EXIT'
-    );
+    const slideCarryActive =
+      isAuthoredSlideOwnershipActive(
+        this.player.sliding,
+        authoredLocomotion
+      );
 
     // When authored slide recovery has completely finished, release hand
     // ownership and recapture the Fortnite body-space anchor from the now
@@ -849,7 +850,8 @@ export class WeaponSystem {
           cfg.supportHandIKLambda ?? 150,
           0,
           0,
-          0
+          0,
+          true
         );
 
         return;
@@ -1361,7 +1363,8 @@ export class WeaponSystem {
     leftHandLambda = 30,
     adsBlend = 0,
     shoulderBlend = 0,
-    rightHandIKBlend = 0
+    rightHandIKBlend = 0,
+    slideOwned = false
   ) {
     const model = this.active.model;
     model.rightGrip.getWorldPosition(this.gripPose.rightGrip);
@@ -1430,6 +1433,8 @@ export class WeaponSystem {
       THREE.MathUtils.clamp(shoulderBlend, 0, 1);
     this.gripPose.poseClass =
       this.cfg.poseClass ?? 'ar';
+    this.gripPose.slideOwned =
+      Boolean(slideOwned);
 
     const natural =
       this.state.naturalOutput;

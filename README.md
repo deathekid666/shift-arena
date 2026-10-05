@@ -449,3 +449,14 @@ was 0.566 world units versus 0.288 for standing.
 - Magnified sniper ADS suppresses almost all passive drift. Hip/carry retains the most weight expression.
 - Added tests for 30/60/120 FPS consistency, gait-phase sync, acceleration reaction, ADS suppression and heavy follow-through.
 - Slide remains on the confirmed-good authored-hand ownership path and clears procedural motion while active.
+
+
+## Build 010.27H — slide hand lock
+- Fixed the slide-hand regression by correcting animation ownership rather than adding a positional compensation.
+- Added one shared authored-slide ownership predicate used by both the weapon system and the VRM upper-body system.
+- Slide_Start, Slide_Loop, Slide_Exit and the remaining exit tail now keep continuous authored upper-body ownership. Normal carry/aim layers cannot re-enable halfway through recovery.
+- Added an explicit slideOwned flag to the grip pose.
+- Late connected-body weapon reaction is disabled while authored slide owns the pose.
+- Support-hand IK target history is rebased at slide enter/exit boundaries and is pinned directly to the weapon grip during the authored slide. This removes the small sideways hand drift caused by filtering from the previous carry target.
+- Right/master hand remains animation-owned exactly as in the confirmed-good slide architecture; weapon position remains rigidly derived from that authored hand.
+- No slide leg, speed, camera, crouch, recoil, weapon weight or normal carry tuning was changed.

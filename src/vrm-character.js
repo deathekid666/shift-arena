@@ -11,6 +11,9 @@ import {
   weaponTransitionSettle,
   getWeaponTransitionProfile
 } from './weapon-transition.js';
+import {
+  isAuthoredSlideOwnershipActive
+} from './weapon-slide-ownership.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -1505,9 +1508,15 @@ function updatePose(character, dt, state) {
   // weapon carry/aim owns the upper body with its own persistent filter while
   // authored locomotion continues to own the lower body. The authored slide
   // remains fully intact and is never overwritten by this layer.
+  const authoredSlideOwnsUpperBody =
+    isAuthoredSlideOwnershipActive(
+      state.sliding,
+      character.authoredLocomotion
+    );
+
   const stableWeaponUpperBody =
     state.weaponEquipped &&
-    !state.sliding &&
+    !authoredSlideOwnsUpperBody &&
     !fang;
 
   if (
@@ -3243,6 +3252,7 @@ function getWeaponIkTargetFilter(
   if (!state) {
     state = {
       initialized: false,
+      slideOwned: false,
       right: new THREE.Vector3(),
       left: new THREE.Vector3()
     };
@@ -3314,14 +3324,26 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       WEAPON_IK_TARGET_FILTER.get(
         character
       );
-    if (filter) filter.initialized = false;
+    if (filter) {
+      filter.initialized = false;
+      filter.slideOwned = false;
+    }
     return;
   }
 
-  applyLateWeaponBodyReaction(
-    character,
-    gripPose
-  );
+  const slideOwned =
+    Boolean(
+      gripPose?.slideOwned
+    );
+
+  // Authored slide owns the right arm and upper body. No late carry reaction
+  // may be layered onto that pose.
+  if (!slideOwned) {
+    applyLateWeaponBodyReaction(
+      character,
+      gripPose
+    );
+  }
 
   character.root.updateWorldMatrix(
     true,
@@ -3359,49 +3381,72 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       character
     );
 
-  if (!targetFilter.initialized) {
+  const ownershipChanged =
+    targetFilter.slideOwned !==
+    slideOwned;
+
+  if (
+    !targetFilter.initialized ||
+    ownershipChanged
+  ) {
+    // Rebase at state boundaries. Without this, the support-hand target keeps
+    // interpolating from the previous carry pose for a few frames and visibly
+    // drags sideways when the authored slide takes ownership.
     if (rightHandIK) {
       targetFilter.right.copy(
         gripPose.rightGrip
       );
     }
+
     targetFilter.left.copy(
       gripPose.leftGrip
     );
+
     targetFilter.initialized = true;
+    targetFilter.slideOwned =
+      slideOwned;
   }
 
-  if (rightHandIK) {
+  if (!slideOwned) {
+    if (rightHandIK) {
+      filterWeaponIkTarget(
+        targetFilter.right,
+        gripPose.rightGrip,
+        dt,
+        {
+          lambda:
+            THREE.MathUtils.lerp(
+              68,
+              78,
+              ads
+            ),
+          epsilon: 0.00004
+        }
+      );
+    }
+
     filterWeaponIkTarget(
-      targetFilter.right,
-      gripPose.rightGrip,
+      targetFilter.left,
+      gripPose.leftGrip,
       dt,
       {
         lambda:
           THREE.MathUtils.lerp(
-            68,
-            78,
+            64,
+            76,
             ads
           ),
         epsilon: 0.00004
       }
     );
+  } else {
+    // During authored slide the right hand is animation-owned and the left
+    // support hand must stay directly on the weapon socket. No carry-history
+    // smoothing is allowed to pull it to either side.
+    targetFilter.left.copy(
+      gripPose.leftGrip
+    );
   }
-
-  filterWeaponIkTarget(
-    targetFilter.left,
-    gripPose.leftGrip,
-    dt,
-    {
-      lambda:
-        THREE.MathUtils.lerp(
-          64,
-          76,
-          ads
-        ),
-      epsilon: 0.00004
-    }
-  );
 
   if (rightHandIK) {
     // Trigger/master hand: elbow stays bent and tucked instead of extending
