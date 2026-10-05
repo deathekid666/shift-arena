@@ -62,6 +62,22 @@ export function createMeshyHumanoid(scene) {
   // Establish a T-pose before capturing normalized rest transforms. The source
   // is A-posed; its original inverse bind matrices continue deforming the mesh.
   scene.updateMatrixWorld(true);
+  // Meshy's A-pose also splays the thighs/shins. Remove that lateral rest
+  // angle before retargeting, otherwise every clip inherits a second stance
+  // spread. Keep the original forward knee bend and hip spacing.
+  for (const side of ['left', 'right']) {
+    for (const [joint, child] of [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']]) {
+      const node = humanBones[side + joint].node;
+      const end = humanBones[side + child].node;
+      const from = end.getWorldPosition(new THREE.Vector3()).sub(node.getWorldPosition(new THREE.Vector3())).normalize();
+      const direction = from.clone().setX(0).normalize();
+      const delta = new THREE.Quaternion().setFromUnitVectors(from, direction);
+      const world = node.getWorldQuaternion(new THREE.Quaternion());
+      const parent = node.parent.getWorldQuaternion(new THREE.Quaternion());
+      node.quaternion.copy(parent.invert().multiply(delta).multiply(world));
+      scene.updateMatrixWorld(true);
+    }
+  }
   for (const side of ['left', 'right']) {
     const direction = new THREE.Vector3(side === 'left' ? 1 : -1, 0, 0);
     for (const [joint, child] of [['UpperArm', 'LowerArm'], ['LowerArm', 'Hand']]) {
