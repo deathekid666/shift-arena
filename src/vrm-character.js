@@ -6,7 +6,11 @@ import { createFangPoseLayer } from './fang-pose.js';
 import { createCrouchPoseLayer } from './crouch-pose.js';
 import { createSlidePoseLayer } from './slide-pose.js';
 import { createJumpPoseLayer } from './jump-pose.js';
-import { weaponRaiseBlend } from './weapon-transition.js';
+import {
+  weaponRaiseBlend,
+  weaponTransitionSettle,
+  getWeaponTransitionProfile
+} from './weapon-transition.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -2802,9 +2806,26 @@ function applyWeaponAimPose(
       1
     );
 
+  const shoulderRaw =
+    THREE.MathUtils.clamp(
+      state.weaponShoulderBlend ?? 1,
+      0,
+      1
+    );
+
   const shoulder =
     weaponRaiseBlend(
-      state.weaponShoulderBlend ?? 1
+      shoulderRaw
+    );
+
+  const transitionSettle =
+    weaponTransitionSettle(
+      shoulderRaw
+    );
+
+  const transitionProfile =
+    getWeaponTransitionProfile(
+      state.weaponPoseClass
     );
 
   const response =
@@ -2832,7 +2853,10 @@ function applyWeaponAimPose(
           0.18,
           ads
         ) *
-        shoulder,
+        shoulder -
+        transitionProfile.bodyPitch *
+          transitionSettle *
+          0.45,
       (
         yaw *
           THREE.MathUtils.lerp(
@@ -2865,7 +2889,10 @@ function applyWeaponAimPose(
           0.25,
           ads
         ) *
-        shoulder,
+        shoulder -
+        transitionProfile.bodyPitch *
+          transitionSettle *
+          0.80,
       (
         yaw *
           THREE.MathUtils.lerp(
@@ -2898,7 +2925,9 @@ function applyWeaponAimPose(
           0.22,
           ads
         ) *
-        shoulder,
+        shoulder -
+        transitionProfile.bodyPitch *
+          transitionSettle,
       (
         yaw *
           THREE.MathUtils.lerp(

@@ -393,3 +393,12 @@ was 0.566 world units versus 0.288 for standing.
 - Final carry, hip-fire and ADS endpoints are unchanged, preserving the existing recoil calibration, stable two-hand IK, crouch behavior and authored slide ownership.
 - Added dependency-free tests for easing endpoints, monotonicity, arc shape and per-class transition separation.
 - Architecture follows the existing layered stack: shared locomotion → weapon-class upper body → additive aim/recoil → final hand IK.
+
+
+## Build 010.27C — weapon motion polish
+- Reworked raise/lower direction handling so releasing aim or fire halfway through a raise cannot instantly flip the weapon arc.
+- Transition direction now carries short-lived momentum and reverses continuously, creating a subtle anticipation on raise and weighted hang before lowering.
+- Added a tiny two-phase settle curve: early lift/rotation followed by a restrained stock-plant correction near the shoulder, with zero offset at both calibrated endpoints.
+- Added class-specific motion weight. SMG changes direction fastest; AR stays balanced; shotgun and sniper retain visibly heavier follow-through.
+- Upper chest/spine now participate in the same settle timing so the character does not look like rigid arms moving a prop independently of the torso.
+- Slide, crouch, jump, recoil endpoints, ADS calibration and final two-hand IK are unchanged.

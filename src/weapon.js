@@ -5,6 +5,8 @@ import { WeaponAudio } from './audio.js';
 import {
   weaponRaiseBlend,
   weaponTransitionArc,
+  weaponTransitionSettle,
+  dampTransitionDirection,
   getWeaponTransitionProfile
 } from './weapon-transition.js';
 
@@ -114,7 +116,8 @@ export class WeaponSystem {
         bodyGripLocal: new THREE.Vector3(),
         slideCarryActive: false,
         bobTime: 0,
-        pumpSoundPlayed: true
+        pumpSoundPlayed: true,
+        transitionDirection: -1
       };
       return { key, cfg, model, state };
     });
@@ -591,17 +594,33 @@ export class WeaponSystem {
         state.shoulderBlend
       );
 
+    const transitionSettle =
+      weaponTransitionSettle(
+        state.shoulderBlend
+      );
+
     const transitionProfile =
       getWeaponTransitionProfile(
         this.poseClass
       );
 
-    // Raise and lower intentionally use slightly different arcs so the gun
-    // feels lifted into the shoulder, then relaxed back to carry.
+    // Never hard-flip the raise/lower arc when the player releases input in
+    // the middle of the motion. Direction carries momentum for a few frames,
+    // producing a tiny anticipation on raise and a weighted hang before lower.
+    state.transitionDirection =
+      dampTransitionDirection(
+        state.transitionDirection,
+        shoulderRequested,
+        transitionProfile.directionResponse,
+        dt
+      );
+
     const transitionDirection =
-      shoulderRequested
-        ? 1
-        : -0.72;
+      state.transitionDirection;
+
+    const directedArc =
+      transitionArc *
+      transitionDirection;
 
     const adsBlend =
       THREE.MathUtils.smoothstep(
@@ -880,18 +899,19 @@ export class WeaponSystem {
             new THREE.Euler(
               posePitch +
                 transitionProfile.pitch *
-                  transitionArc *
-                  transitionDirection -
+                  directedArc +
+                transitionProfile.settlePitch *
+                  transitionSettle -
                 state.visualKick * 0.18 -
                 state.recoilPitch * 0.20,
               state.recoilYaw * 0.18 +
                 transitionProfile.yaw *
-                  transitionArc *
-                  transitionDirection,
+                  directedArc,
               poseRoll +
                 transitionProfile.roll *
-                  transitionArc *
-                  transitionDirection +
+                  directedArc +
+                transitionProfile.settleRoll *
+                  transitionSettle +
                 state.recoilRoll * 0.16,
               'YXZ'
             )
@@ -963,16 +983,17 @@ export class WeaponSystem {
         // endpoints, so existing carry/hip/ADS calibration remains unchanged.
         this.tmpGripLocal.x +=
           transitionProfile.right *
-          transitionArc *
-          transitionDirection;
+          directedArc;
         this.tmpGripLocal.y +=
           transitionProfile.lift *
-          transitionArc *
-          transitionDirection;
+            directedArc +
+          transitionProfile.settleLift *
+            transitionSettle;
         this.tmpGripLocal.z +=
           transitionProfile.forward *
-          transitionArc *
-          transitionDirection;
+            directedArc +
+          transitionProfile.settleForward *
+            transitionSettle;
 
         // Convert the independent grip target into the weapon group's local
         // transform. rightGrip is the exact modeled pistol-grip pivot.
@@ -1485,6 +1506,7 @@ export class WeaponSystem {
     nextState.bodyGripReady = false;
     nextState.bodyGripLocal.set(0, 0, 0);
     nextState.slideCarryActive = false;
+    nextState.transitionDirection = -1;
 
     this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
@@ -1518,6 +1540,7 @@ export class WeaponSystem {
     );
     newEntry.state.isReloading = false;
     newEntry.state.reloadTimer = 0;
+    newEntry.state.transitionDirection = -1;
     newEntry.model.group.visible = !this.visualHidden;
 
     this.emitSwitch();
