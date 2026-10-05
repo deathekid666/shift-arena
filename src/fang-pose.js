@@ -14,6 +14,15 @@ const smooth = (v) => { const t = THREE.MathUtils.clamp(v, 0, 1); return t * t *
 export function createFangPoseLayer(character) {
   const { bones: b, baseRotations, root } = character;
   const chest = b.upperChest ?? b.chest;
+  const gripFingers = [];
+  if (character.vrm?.meta?.meshyAdapter) {
+    for (const finger of ['Index', 'Middle', 'Ring', 'Little']) {
+      for (const [i, segment] of ['Proximal', 'Intermediate', 'Distal'].entries()) {
+        const node = character.vrm.humanoid.getNormalizedBoneNode(`right${finger}${segment}`);
+        if (node) gripFingers.push({node, curl: [0.72, 0.90, 0.48][i]});
+      }
+    }
+  }
   const nodes = [
     ...new Set([
       chest,
@@ -24,7 +33,8 @@ export function createFangPoseLayer(character) {
       b.rightShoulder,
       b.rightUpperArm,
       b.rightLowerArm,
-      b.rightHand
+      b.rightHand,
+      ...gripFingers.map(({node}) => node)
     ].filter(Boolean))
   ];
   const underlying = new Map();
@@ -40,6 +50,14 @@ export function createFangPoseLayer(character) {
     if (!fang || !b.head || !b.rightUpperArm || !b.rightLowerArm || !b.rightHand) return;
     restore();
     for (const node of nodes) underlying.set(node, node.quaternion.clone());
+    // Use normalized finger axes; restore() removes this when switching guns.
+    const fingerWeight = fang.mode === 'release'
+      ? 1 - smooth(((fang.t ?? 0) - (fang.releaseMoment ?? 0.42)) / 0.15) : 1;
+    for (const {node, curl} of gripFingers) {
+      node.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 0, 1), curl * fingerWeight
+      ));
+    }
     compactBlend = THREE.MathUtils.damp(
       compactBlend,
       fang.compact ? 1 : 0,

@@ -347,6 +347,15 @@ function buildCharacterInterface({
   fangSocket.name = 'fangSocket';
   if (attachmentBones.rightHand) {
     fangSocket.position.set(0, 0.02, 0.055);
+    // Meshy raw hand axes differ from the normalized hand used by Fang IK.
+    // Calibrate once in the rest pose so the visible blade follows that IK.
+    if (vrm?.meta?.meshyAdapter && bones.rightHand) {
+      root.updateWorldMatrix(true, true);
+      fangSocket.quaternion.copy(
+        attachmentBones.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert()
+      ).multiply(bones.rightHand.getWorldQuaternion(new THREE.Quaternion()));
+      fangSocket.position.applyQuaternion(fangSocket.quaternion);
+    }
     attachmentBones.rightHand.add(fangSocket);
   } else {
     root.add(fangSocket);

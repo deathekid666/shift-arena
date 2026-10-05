@@ -82,3 +82,15 @@ test('slash recovers cleanly into ready stance', () => {
   assert.ok(sampleKnifeSlash(0.95, 0).attackWeight < 0.10);
   assert.equal(sampleKnifeSlash(1, 0).attackWeight, 0);
 });
+
+test('slash velocity stays continuous through contact for every variant', () => {
+  const e = 0.00001;
+  for(let variant=0;variant<3;variant++) {
+    const a=sampleKnifeSlash(0.4-e,variant), b=sampleKnifeSlash(0.4,variant), c=sampleKnifeSlash(0.4+e,variant);
+    for(const group of ['hand','pole','chest','shoulder','blade']) for(const axis of Object.keys(b[group])) {
+      const incoming=(b[group][axis]-a[group][axis])/e;
+      const outgoing=(c[group][axis]-b[group][axis])/e;
+      assert.ok(Math.abs(incoming-outgoing)<0.01, `${variant} ${group}.${axis} velocity discontinuity`);
+    }
+  }
+});

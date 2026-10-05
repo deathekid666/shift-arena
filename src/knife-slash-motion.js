@@ -6,16 +6,6 @@ const smooth = (value) => {
   return t * t * (3 - 2 * t);
 };
 
-const easeIn = (value) => {
-  const t = clamp01(value);
-  return t * t * t;
-};
-
-const easeOut = (value) => {
-  const t = clamp01(value);
-  return 1 - Math.pow(1 - t, 3);
-};
-
 function mix(a, b, t) {
   return a + (b - a) * t;
 }
@@ -47,12 +37,34 @@ function mixPose(from, to, t) {
   };
 }
 
+// A continuous velocity through contact keeps the cut flowing into its
+// follow-through. The old independent easing curves produced a visible jerk.
+function sampleCut(swing, t) {
+  const beforeContact = t < 0.40;
+  const duration = beforeContact ? 0.24 : 0.16;
+  const u = clamp01((t - (beforeContact ? 0.16 : 0.40)) / duration);
+  const h00 = 2*u*u*u - 3*u*u + 1;
+  const h10 = u*u*u - 2*u*u + u;
+  const h01 = -2*u*u*u + 3*u*u;
+  const h11 = u*u*u - u*u;
+  const interpolate = (wind, contact, follow) => {
+    if (typeof wind === 'object') return Object.fromEntries(
+      Object.keys(wind).map(key => [key, interpolate(wind[key], contact[key], follow[key])])
+    );
+    const tangent = (follow - wind) / 0.40;
+    return beforeContact
+      ? h00*wind + h01*contact + h11*duration*tangent
+      : h00*contact + h10*duration*tangent + h01*follow;
+  };
+  return interpolate(swing.windup, swing.contact, swing.follow);
+}
+
 const READY = {
   // Real third-person forward grip: the weapon hand lives at the right waist,
   // not under the chin. The elbow stays bent and outside the ribs, while the
   // knife projects away from the fist on a slight upward tactical angle.
   hand: { right: 0.43, up: -0.54, forward: 0.08 },
-  pole: { right: 0.74, up: -0.18, forward: 0.02 },
+  pole: { right: 0.38, up: -0.72, forward: -0.12 },
   chest: { x: 0.018, y: -0.095, z: -0.010 },
   shoulder: { x: 0.035, y: -0.030, z: -0.105 },
   blade: { right: -0.025, up: 0.27, forward: 0.962 },
@@ -63,7 +75,7 @@ const SPRINT = {
   // Sprint carry pulls the knife lower/back beside the hip. The knife arm no
   // longer floats in front of the chest while the legs are in a run cycle.
   hand: { right: 0.45, up: -0.66, forward: -0.04 },
-  pole: { right: 0.76, up: -0.34, forward: -0.08 },
+  pole: { right: 0.40, up: -0.80, forward: -0.18 },
   chest: { x: 0.030, y: -0.020, z: 0 },
   shoulder: { x: 0.050, y: 0.005, z: -0.12 },
   blade: { right: -0.015, up: -0.20, forward: 0.98 },
@@ -188,18 +200,10 @@ export function sampleKnifeSlash(progress, variant = 0) {
     );
   } else if (t < 0.40) {
     phase = 'strike';
-    pose = mixPose(
-      swing.windup,
-      swing.contact,
-      easeIn((t - 0.16) / 0.24)
-    );
+    pose = sampleCut(swing, t);
   } else if (t < 0.56) {
     phase = 'follow';
-    pose = mixPose(
-      swing.contact,
-      swing.follow,
-      easeOut((t - 0.40) / 0.16)
-    );
+    pose = sampleCut(swing, t);
   } else if (t < 0.72) {
     phase = 'recovery';
     pose = mixPose(

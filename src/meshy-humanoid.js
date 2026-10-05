@@ -93,5 +93,5 @@ export function createMeshyHumanoid(scene) {
   }
   const humanoid = new VRMHumanoid(humanBones);
   scene.add(humanoid.normalizedHumanBonesRoot);
-  return { scene, humanoid, meta: { metaVersion: '1' } };
+  return { scene, humanoid, meta: { metaVersion: '1', meshyAdapter: true } };
 }
