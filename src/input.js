@@ -5,7 +5,7 @@ const ACTION_CODES = {
   right: ['KeyD', 'ArrowRight'],
   jump: ['Space'],
   sprint: ['ShiftLeft', 'ShiftRight'],
-  crouch: ['KeyC'],
+  crouch: ['ControlLeft', 'ControlRight', 'KeyC'],
   reload: ['KeyR'],
   interact: ['KeyE'],
   armor: ['Digit3'],
@@ -106,9 +106,10 @@ export class InputController {
       event.ctrlKey &&
       event.code === 'KeyW'
     ) {
+      // Best-effort browser shortcut suppression. Do NOT return here: Ctrl
+      // remains a valid crouch input and W remains a valid movement input.
       event.preventDefault();
       event.stopPropagation();
-      return;
     }
 
     if (!this.keys.has(event.code)) {
