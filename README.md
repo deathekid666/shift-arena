@@ -484,3 +484,16 @@ was 0.566 world units versus 0.288 for standing.
 - The real VRM no longer renders the oversized floating ring slash effect. The fallback primitive character keeps a reduced version.
 - Melee hit detection now stays active through the full cutting window and only consumes the attack after an actual target is hit.
 - Slash duration is now an explicit 0.46 s combat value.
+
+
+## Build 010.28C — tactical knife
+- Rebuilt equipped knife behavior around the public Counter-Strike / VALORANT melee pattern instead of treating the knife like a procedural reach.
+- Counter-Strike reference: knife is the fastest movement weapon and uses a fast primary slash versus a slower/heavier secondary.
+- VALORANT reference: primary melee is a looping three-swing slash combo; secondary is a heavier jab. SHIFT adopts the fast 3-swing primary structure while preserving the previously requested RMB-hold throw mechanic.
+- Added a persistent tactical ready pose while the knife is equipped. The right hand no longer drops to the default locomotion position beside the thigh.
+- Added a lowered sprint-ready pose without changing movement speed; Tin Fang remains the 1.00x / 8.4 m/s mobility baseline.
+- Reduced active knife render scale from 0.64 to 0.46 at the hand socket so it reads as a compact knife instead of a short sword.
+- LMB now cycles three distinct primary cuts: right-to-left, return cut, then diagonal finisher.
+- Primary duration reduced to 0.34 s with combo chaining from 72% of the swing; holding/clicking LMB can continue the loop.
+- Visual hit window is aligned to the fast strike/follow window and melee targeting uses a wider primary cone with slightly longer reach for reliability.
+- RMB throw aim and throw projectile mechanics remain unchanged.

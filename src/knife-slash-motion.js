@@ -1,8 +1,5 @@
 const clamp01 = (value) =>
-  Math.min(
-    1,
-    Math.max(0, value)
-  );
+  Math.min(1, Math.max(0, value));
 
 const smooth = (value) => {
   const t = clamp01(value);
@@ -27,11 +24,7 @@ function mixVector(a, b, t) {
   return {
     right: mix(a.right, b.right, t),
     up: mix(a.up, b.up, t),
-    forward: mix(
-      a.forward,
-      b.forward,
-      t
-    )
+    forward: mix(a.forward, b.forward, t)
   };
 }
 
@@ -43,330 +36,196 @@ function mixEuler(a, b, t) {
   };
 }
 
-const READY_HAND = {
-  right: 0.20,
-  up: 0.10,
-  forward: 0.24
-};
-
-const WINDUP_HAND = {
-  right: 0.46,
-  up: 0.42,
-  forward: -0.05
-};
-
-const CONTACT_HAND = {
-  right: -0.08,
-  up: 0.04,
-  forward: 0.73
-};
-
-const FOLLOW_HAND = {
-  right: -0.39,
-  up: -0.18,
-  forward: 0.55
-};
-
-const RECOVER_HAND = {
-  right: 0.16,
-  up: 0.08,
-  forward: 0.28
-};
-
-const READY_POLE = {
-  right: 0.54,
-  up: 0.42,
-  forward: 0.12
-};
-
-const WINDUP_POLE = {
-  right: 0.76,
-  up: 0.56,
-  forward: 0.02
-};
-
-const CONTACT_POLE = {
-  right: 0.30,
-  up: 0.24,
-  forward: 0.52
-};
-
-const FOLLOW_POLE = {
-  right: 0.02,
-  up: 0.06,
-  forward: 0.55
-};
-
-const RECOVER_POLE = {
-  right: 0.42,
-  up: 0.30,
-  forward: 0.22
-};
-
-const ZERO_EULER = {
-  x: 0,
-  y: 0,
-  z: 0
-};
-
-const WINDUP_CHEST = {
-  x: -0.025,
-  y: 0.105,
-  z: 0.035
-};
-
-const CONTACT_CHEST = {
-  x: -0.020,
-  y: -0.155,
-  z: -0.030
-};
-
-const FOLLOW_CHEST = {
-  x: 0.015,
-  y: -0.205,
-  z: -0.045
-};
-
-const WINDUP_SHOULDER = {
-  x: -0.055,
-  y: -0.065,
-  z: 0.135
-};
-
-const CONTACT_SHOULDER = {
-  x: 0.015,
-  y: 0.105,
-  z: -0.075
-};
-
-const FOLLOW_SHOULDER = {
-  x: 0.040,
-  y: 0.135,
-  z: -0.110
-};
-
-const READY_BLADE = {
-  right: 0.12,
-  up: 0.18,
-  forward: 0.96
-};
-
-const WINDUP_BLADE = {
-  right: 0.28,
-  up: 0.32,
-  forward: 0.90
-};
-
-const CONTACT_BLADE = {
-  right: -0.38,
-  up: -0.20,
-  forward: 0.90
-};
-
-const FOLLOW_BLADE = {
-  right: -0.56,
-  up: -0.34,
-  forward: 0.74
-};
-
-const RECOVER_BLADE = {
-  right: 0.06,
-  up: 0.08,
-  forward: 0.99
-};
-
-function segmentSample(
-  t,
-  start,
-  end,
-  from,
-  to,
-  easing
-) {
-  const k =
-    easing(
-      (t - start) /
-      Math.max(
-        0.0001,
-        end - start
-      )
-    );
-
+function mixPose(from, to, t) {
   return {
-    hand:
-      mixVector(
-        from.hand,
-        to.hand,
-        k
-      ),
-    pole:
-      mixVector(
-        from.pole,
-        to.pole,
-        k
-      ),
-    chest:
-      mixEuler(
-        from.chest,
-        to.chest,
-        k
-      ),
-    shoulder:
-      mixEuler(
-        from.shoulder,
-        to.shoulder,
-        k
-      ),
-    blade:
-      mixVector(
-        from.blade,
-        to.blade,
-        k
-      ),
-    edgeRoll:
-      mix(
-        from.edgeRoll,
-        to.edgeRoll,
-        k
-      )
+    hand: mixVector(from.hand, to.hand, t),
+    pole: mixVector(from.pole, to.pole, t),
+    chest: mixEuler(from.chest, to.chest, t),
+    shoulder: mixEuler(from.shoulder, to.shoulder, t),
+    blade: mixVector(from.blade, to.blade, t),
+    edgeRoll: mix(from.edgeRoll, to.edgeRoll, t)
   };
 }
 
 const READY = {
-  hand: READY_HAND,
-  pole: READY_POLE,
-  chest: ZERO_EULER,
-  shoulder: ZERO_EULER,
-  blade: READY_BLADE,
-  edgeRoll: 0
+  hand: { right: 0.20, up: -0.10, forward: 0.27 },
+  pole: { right: 0.56, up: 0.02, forward: 0.12 },
+  chest: { x: 0, y: -0.025, z: 0 },
+  shoulder: { x: -0.025, y: 0.020, z: -0.055 },
+  blade: { right: -0.08, up: -0.32, forward: 0.94 },
+  edgeRoll: -0.08
 };
 
-const WINDUP = {
-  hand: WINDUP_HAND,
-  pole: WINDUP_POLE,
-  chest: WINDUP_CHEST,
-  shoulder: WINDUP_SHOULDER,
-  blade: WINDUP_BLADE,
-  edgeRoll: 0.28
+const SPRINT = {
+  hand: { right: 0.24, up: -0.23, forward: 0.12 },
+  pole: { right: 0.60, up: -0.11, forward: -0.01 },
+  chest: { x: 0.025, y: -0.015, z: 0 },
+  shoulder: { x: 0.020, y: 0.025, z: -0.095 },
+  blade: { right: -0.04, up: -0.54, forward: 0.84 },
+  edgeRoll: -0.12
 };
 
-const CONTACT = {
-  hand: CONTACT_HAND,
-  pole: CONTACT_POLE,
-  chest: CONTACT_CHEST,
-  shoulder: CONTACT_SHOULDER,
-  blade: CONTACT_BLADE,
-  edgeRoll: -0.18
-};
+const SWINGS = [
+  {
+    windup: {
+      hand: { right: 0.43, up: 0.25, forward: 0.08 },
+      pole: { right: 0.73, up: 0.36, forward: 0.03 },
+      chest: { x: -0.02, y: 0.085, z: 0.025 },
+      shoulder: { x: -0.05, y: -0.05, z: 0.12 },
+      blade: { right: 0.26, up: 0.24, forward: 0.93 },
+      edgeRoll: 0.18
+    },
+    contact: {
+      hand: { right: -0.04, up: 0.02, forward: 0.71 },
+      pole: { right: 0.31, up: 0.18, forward: 0.51 },
+      chest: { x: -0.01, y: -0.12, z: -0.02 },
+      shoulder: { x: 0.01, y: 0.08, z: -0.06 },
+      blade: { right: -0.35, up: -0.12, forward: 0.93 },
+      edgeRoll: -0.16
+    },
+    follow: {
+      hand: { right: -0.34, up: -0.12, forward: 0.51 },
+      pole: { right: 0.03, up: 0.03, forward: 0.53 },
+      chest: { x: 0.01, y: -0.17, z: -0.03 },
+      shoulder: { x: 0.03, y: 0.11, z: -0.09 },
+      blade: { right: -0.55, up: -0.27, forward: 0.79 },
+      edgeRoll: -0.25
+    }
+  },
+  {
+    windup: {
+      hand: { right: -0.18, up: 0.18, forward: 0.30 },
+      pole: { right: 0.18, up: 0.31, forward: 0.42 },
+      chest: { x: -0.01, y: -0.085, z: -0.02 },
+      shoulder: { x: -0.02, y: 0.09, z: -0.05 },
+      blade: { right: -0.42, up: 0.10, forward: 0.90 },
+      edgeRoll: -0.20
+    },
+    contact: {
+      hand: { right: 0.12, up: 0.01, forward: 0.72 },
+      pole: { right: 0.47, up: 0.17, forward: 0.47 },
+      chest: { x: -0.01, y: 0.105, z: 0.02 },
+      shoulder: { x: 0.01, y: -0.07, z: 0.07 },
+      blade: { right: 0.29, up: -0.12, forward: 0.95 },
+      edgeRoll: 0.15
+    },
+    follow: {
+      hand: { right: 0.37, up: -0.10, forward: 0.48 },
+      pole: { right: 0.69, up: 0.02, forward: 0.30 },
+      chest: { x: 0.01, y: 0.15, z: 0.03 },
+      shoulder: { x: 0.03, y: -0.10, z: 0.10 },
+      blade: { right: 0.50, up: -0.25, forward: 0.83 },
+      edgeRoll: 0.23
+    }
+  },
+  {
+    windup: {
+      hand: { right: 0.33, up: 0.38, forward: 0.06 },
+      pole: { right: 0.66, up: 0.52, forward: 0.02 },
+      chest: { x: -0.025, y: 0.07, z: 0.035 },
+      shoulder: { x: -0.07, y: -0.04, z: 0.14 },
+      blade: { right: 0.23, up: 0.39, forward: 0.89 },
+      edgeRoll: 0.22
+    },
+    contact: {
+      hand: { right: -0.03, up: -0.01, forward: 0.72 },
+      pole: { right: 0.30, up: 0.15, forward: 0.53 },
+      chest: { x: 0.00, y: -0.11, z: -0.025 },
+      shoulder: { x: 0.03, y: 0.08, z: -0.07 },
+      blade: { right: -0.29, up: -0.28, forward: 0.91 },
+      edgeRoll: -0.17
+    },
+    follow: {
+      hand: { right: -0.29, up: -0.22, forward: 0.49 },
+      pole: { right: 0.06, up: -0.02, forward: 0.48 },
+      chest: { x: 0.02, y: -0.15, z: -0.04 },
+      shoulder: { x: 0.04, y: 0.10, z: -0.10 },
+      blade: { right: -0.47, up: -0.46, forward: 0.76 },
+      edgeRoll: -0.27
+    }
+  }
+];
 
-const FOLLOW = {
-  hand: FOLLOW_HAND,
-  pole: FOLLOW_POLE,
-  chest: FOLLOW_CHEST,
-  shoulder: FOLLOW_SHOULDER,
-  blade: FOLLOW_BLADE,
-  edgeRoll: -0.30
-};
+export function sampleKnifeReady(sprintBlend = 0) {
+  return {
+    phase: 'ready',
+    attackWeight: 1,
+    hitActive: false,
+    contactStrength: 0,
+    ...mixPose(
+      READY,
+      SPRINT,
+      smooth(sprintBlend)
+    )
+  };
+}
 
-const RECOVER = {
-  hand: RECOVER_HAND,
-  pole: RECOVER_POLE,
-  chest: ZERO_EULER,
-  shoulder: ZERO_EULER,
-  blade: RECOVER_BLADE,
-  edgeRoll: 0
-};
-
-export function sampleKnifeSlash(
-  progress
-) {
-  const t =
-    clamp01(progress);
+export function sampleKnifeSlash(progress, variant = 0) {
+  const t = clamp01(progress);
+  const index =
+    Math.abs(Math.trunc(variant)) %
+    SWINGS.length;
+  const swing = SWINGS[index];
 
   let pose;
   let phase;
 
-  if (t < 0.18) {
+  if (t < 0.16) {
     phase = 'anticipation';
-    pose =
-      segmentSample(
-        t,
-        0,
-        0.18,
-        READY,
-        WINDUP,
-        smooth
-      );
-  } else if (t < 0.46) {
+    pose = mixPose(
+      READY,
+      swing.windup,
+      smooth(t / 0.16)
+    );
+  } else if (t < 0.40) {
     phase = 'strike';
-    pose =
-      segmentSample(
-        t,
-        0.18,
-        0.46,
-        WINDUP,
-        CONTACT,
-        easeIn
-      );
-  } else if (t < 0.64) {
+    pose = mixPose(
+      swing.windup,
+      swing.contact,
+      easeIn((t - 0.16) / 0.24)
+    );
+  } else if (t < 0.56) {
     phase = 'follow';
-    pose =
-      segmentSample(
-        t,
-        0.46,
-        0.64,
-        CONTACT,
-        FOLLOW,
-        easeOut
-      );
+    pose = mixPose(
+      swing.contact,
+      swing.follow,
+      easeOut((t - 0.40) / 0.16)
+    );
   } else {
     phase = 'recovery';
-    pose =
-      segmentSample(
-        t,
-        0.64,
-        1,
-        FOLLOW,
-        RECOVER,
-        smooth
-      );
+    pose = mixPose(
+      swing.follow,
+      READY,
+      smooth((t - 0.56) / 0.44)
+    );
   }
 
   const attackWeight =
-    t < 0.10
-      ? smooth(t / 0.10)
-      : t < 0.70
+    t < 0.07
+      ? smooth(t / 0.07)
+      : t < 0.68
         ? 1
         : 1 -
-          smooth(
-            (t - 0.70) /
-              0.30
-          );
+          smooth((t - 0.68) / 0.32);
 
   const contactStrength =
-    t < 0.24 ||
-    t > 0.62
+    t < 0.20 || t > 0.56
       ? 0
       : Math.sin(
-          (
-            (t - 0.24) /
-            (0.62 - 0.24)
-          ) *
-            Math.PI
+          ((t - 0.20) / 0.36) *
+          Math.PI
         );
 
   return {
     t,
+    variant: index,
     phase,
     attackWeight,
     hitActive:
-      t >= 0.28 &&
-      t <= 0.60,
+      t >= 0.23 &&
+      t <= 0.53,
     contactStrength:
-      Math.max(
-        0,
-        contactStrength
-      ),
+      Math.max(0, contactStrength),
     ...pose
   };
 }

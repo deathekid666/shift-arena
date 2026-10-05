@@ -2,80 +2,48 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  sampleKnifeReady,
   sampleKnifeSlash
 } from '../src/knife-slash-motion.js';
 
-test('knife slash has anticipation strike follow and recovery phases', () => {
-  assert.equal(
-    sampleKnifeSlash(0.08).phase,
-    'anticipation'
-  );
-  assert.equal(
-    sampleKnifeSlash(0.30).phase,
-    'strike'
-  );
-  assert.equal(
-    sampleKnifeSlash(0.54).phase,
-    'follow'
-  );
-  assert.equal(
-    sampleKnifeSlash(0.82).phase,
-    'recovery'
-  );
+test('knife ready stance stays above the hanging leg pose', () => {
+  const ready = sampleKnifeReady(0);
+  assert.ok(ready.hand.up > -0.16);
+  assert.ok(ready.hand.forward > 0.20);
+  assert.ok(ready.blade.forward > 0.90);
 });
 
-test('knife slash keeps a multi-frame contact window', () => {
-  assert.equal(
-    sampleKnifeSlash(0.20).hitActive,
-    false
-  );
-  assert.equal(
-    sampleKnifeSlash(0.32).hitActive,
-    true
-  );
-  assert.equal(
-    sampleKnifeSlash(0.50).hitActive,
-    true
-  );
-  assert.equal(
-    sampleKnifeSlash(0.63).hitActive,
-    false
-  );
+test('knife sprint stance lowers but remains controlled', () => {
+  const ready = sampleKnifeReady(0);
+  const sprint = sampleKnifeReady(1);
+  assert.ok(sprint.hand.up < ready.hand.up);
+  assert.ok(sprint.hand.forward < ready.hand.forward);
 });
 
-test('strike travels across the body and forward', () => {
-  const windup =
-    sampleKnifeSlash(0.18);
-  const contact =
-    sampleKnifeSlash(0.46);
-  const follow =
-    sampleKnifeSlash(0.64);
+test('primary attack has three distinct slash variants', () => {
+  const a = sampleKnifeSlash(0.40, 0);
+  const b = sampleKnifeSlash(0.40, 1);
+  const c = sampleKnifeSlash(0.40, 2);
 
-  assert.ok(
-    windup.hand.right > 0.35
+  assert.equal(a.variant, 0);
+  assert.equal(b.variant, 1);
+  assert.equal(c.variant, 2);
+  assert.notEqual(
+    Math.sign(a.blade.right),
+    Math.sign(b.blade.right)
   );
-  assert.ok(
-    contact.hand.forward > 0.65
-  );
-  assert.ok(
-    follow.hand.right < -0.30
-  );
+  assert.ok(c.blade.up < a.blade.up);
 });
 
-test('slash fades cleanly back into locomotion', () => {
-  assert.ok(
-    sampleKnifeSlash(0.45)
-      .attackWeight >
-      0.95
-  );
-  assert.ok(
-    sampleKnifeSlash(0.95)
-      .attackWeight <
-      0.10
-  );
-  assert.equal(
-    sampleKnifeSlash(1)
-      .attackWeight,
-    0
-  );
+test('fast primary slash has a visual contact window', () => {
+  assert.equal(sampleKnifeSlash(0.18, 0).hitActive, false);
+  assert.equal(sampleKnifeSlash(0.30, 0).hitActive, true);
+  assert.equal(sampleKnifeSlash(0.50, 0).hitActive, true);
+  assert.equal(sampleKnifeSlash(0.58, 0).hitActive, false);
+});
+
+test('slash recovers cleanly into ready stance', () => {
+  assert.ok(sampleKnifeSlash(0.42, 0).attackWeight > 0.95);
+  assert.ok(sampleKnifeSlash(0.95, 0).attackWeight < 0.10);
+  assert.equal(sampleKnifeSlash(1, 0).attackWeight, 0);
 });

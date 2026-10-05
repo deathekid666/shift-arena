@@ -72,7 +72,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.28B · KNIFE SLASH RIG</div>
+    <div id="damage-test-hint">BUILD 010.28C · TACTICAL KNIFE</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
     <div id="jitter-lab" hidden>
@@ -121,12 +121,12 @@ root.innerHTML = `
     </div>
 
     <div id="reload-state"></div>
-    <div id="controls">WASD move · Shift sprint · Ctrl / C crouch & slide · Esc fullscreen · Wheel / 1 / 2 guns · V knife · LMB slash · RMB hold aim + LMB throw · 3 armor · E swap · B toggle bots</div>
+    <div id="controls">WASD move · Shift sprint · Ctrl / C crouch & slide · Esc fullscreen · Wheel / 1 / 2 guns · V knife · LMB 3-swing combo · RMB hold aim + LMB throw · 3 armor · E swap · B toggle bots</div>
     <div id="touch-note">Touch controls will be added in the dedicated mobile-input phase.</div>
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.28B · KNIFE SLASH RIG</div>
+        <div class="build-tag">BUILD 010.28C · TACTICAL KNIFE</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>

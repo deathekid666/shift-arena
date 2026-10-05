@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {
+  sampleKnifeReady,
   sampleKnifeSlash
 } from './knife-slash-motion.js';
 
@@ -41,9 +42,23 @@ export function createFangPoseLayer(character) {
       dt
     );
 
+    if (fang.mode === 'ready') {
+      applyMeleePose(
+        fang,
+        sampleKnifeReady(
+          fang.sprintBlend ?? 0
+        )
+      );
+      return;
+    }
+
     if (fang.mode === 'slash') {
-      applySlashPose(
-        fang
+      applyMeleePose(
+        fang,
+        sampleKnifeSlash(
+          fang.t ?? 0,
+          fang.variant ?? 0
+        )
       );
       return;
     }
@@ -121,75 +136,44 @@ export function createFangPoseLayer(character) {
     root.updateWorldMatrix(true, true);
   }
 
-  function applySlashPose(fang) {
-    const slash =
-      sampleKnifeSlash(
-        fang.t ?? 0
-      );
-
+  function applyMeleePose(fang, pose) {
     const forward =
       (
         fang.direction?.clone() ??
-        new THREE.Vector3(
-          0,
-          0,
-          -1
-        )
+        new THREE.Vector3(0, 0, -1)
       );
 
     forward.y =
       THREE.MathUtils.clamp(
         forward.y,
-        -0.45,
-        0.45
+        -0.32,
+        0.32
       );
-
     forward.normalize();
 
     const right =
-      forward
-        .clone()
-        .cross(UP)
-        .normalize();
-
-    if (
-      right.lengthSq() <
-      0.001
-    ) {
-      right.set(
-        1,
-        0,
-        0
-      );
+      forward.clone().cross(UP).normalize();
+    if (right.lengthSq() < 0.001) {
+      right.set(1, 0, 0);
     }
 
     const horizontal =
-      UP
-        .clone()
-        .cross(right)
-        .normalize();
+      UP.clone().cross(right).normalize();
 
     const underlyingChest =
       underlying.get(chest);
-
-    if (
-      chest &&
-      underlyingChest
-    ) {
+    if (chest && underlyingChest) {
       setRelativeOffset(
         chest,
         underlyingChest,
-        slash.chest.x,
-        slash.chest.y,
-        slash.chest.z
+        pose.chest.x,
+        pose.chest.y,
+        pose.chest.z
       );
     }
 
     const underlyingShoulder =
-      underlying.get(
-        b.rightShoulder
-      );
-
+      underlying.get(b.rightShoulder);
     if (
       b.rightShoulder &&
       underlyingShoulder
@@ -197,82 +181,58 @@ export function createFangPoseLayer(character) {
       setRelativeOffset(
         b.rightShoulder,
         underlyingShoulder,
-        slash.shoulder.x,
-        slash.shoulder.y,
-        slash.shoulder.z
+        pose.shoulder.x,
+        pose.shoulder.y,
+        pose.shoulder.z
       );
     }
 
-    root.updateWorldMatrix(
-      true,
-      true
-    );
+    root.updateWorldMatrix(true, true);
 
     const shoulder =
-      position(
-        b.rightUpperArm
-      );
-
+      position(b.rightUpperArm);
     const upperLength =
       shoulder.distanceTo(
-        position(
-          b.rightLowerArm
-        )
+        position(b.rightLowerArm)
       );
-
     const lowerLength =
-      position(
-        b.rightLowerArm
-      ).distanceTo(
-        position(
-          b.rightHand
-        )
-      );
-
+      position(b.rightLowerArm)
+        .distanceTo(
+          position(b.rightHand)
+        );
     const reach =
-      upperLength +
-      lowerLength;
+      upperLength + lowerLength;
 
     const target =
-      shoulder
-        .clone()
+      shoulder.clone()
         .addScaledVector(
           right,
-          reach *
-            slash.hand.right
+          reach * pose.hand.right
         )
         .addScaledVector(
           UP,
-          reach *
-            slash.hand.up
+          reach * pose.hand.up
         )
         .addScaledVector(
           horizontal,
-          reach *
-            slash.hand.forward
+          reach * pose.hand.forward
         );
 
     const pole =
-      shoulder
-        .clone()
+      shoulder.clone()
         .addScaledVector(
           right,
-          reach *
-            slash.pole.right
+          reach * pose.pole.right
         )
         .addScaledVector(
           UP,
-          reach *
-            slash.pole.up
+          reach * pose.pole.up
         )
         .addScaledVector(
           horizontal,
-          reach *
-            slash.pole.forward
+          reach * pose.pole.forward
         );
 
-    // Start from the locomotion pose for this frame, then solve the arm to the
-    // slash target. No moving Euler target and no second damping spring.
     for (const node of [
       b.rightUpperArm,
       b.rightLowerArm,
@@ -280,18 +240,12 @@ export function createFangPoseLayer(character) {
     ]) {
       const base =
         underlying.get(node);
-
       if (base) {
-        node.quaternion.copy(
-          base
-        );
+        node.quaternion.copy(base);
       }
     }
 
-    root.updateWorldMatrix(
-      true,
-      true
-    );
+    root.updateWorldMatrix(true, true);
 
     solveArm(
       b.rightUpperArm,
@@ -303,27 +257,23 @@ export function createFangPoseLayer(character) {
       lowerLength
     );
 
-    // Point the physical blade through the cut instead of twisting the wrist
-    // around the knife's long axis.
     const blade =
-      horizontal
-        .clone()
+      horizontal.clone()
         .multiplyScalar(
-          slash.blade.forward
+          pose.blade.forward
         )
         .addScaledVector(
           right,
-          slash.blade.right
+          pose.blade.right
         )
         .addScaledVector(
           UP,
-          slash.blade.up
+          pose.blade.up
         )
         .normalize();
 
     const bladeSide =
-      right
-        .clone()
+      right.clone()
         .addScaledVector(
           blade,
           -right.dot(blade)
@@ -334,25 +284,19 @@ export function createFangPoseLayer(character) {
       0.001
     ) {
       bladeSide
-        .copy(
-          blade
-        )
+        .copy(blade)
         .cross(UP);
     }
 
     bladeSide.normalize();
-
     bladeSide.applyAxisAngle(
       blade,
-      slash.edgeRoll
+      pose.edgeRoll
     );
 
     const bladeUp =
-      bladeSide
-        .clone()
-        .cross(
-          blade
-        )
+      bladeSide.clone()
+        .cross(blade)
         .normalize();
 
     const worldQ =
@@ -362,9 +306,7 @@ export function createFangPoseLayer(character) {
             .makeBasis(
               bladeSide,
               bladeUp,
-              blade
-                .clone()
-                .negate()
+              blade.clone().negate()
             )
         );
 
@@ -379,22 +321,18 @@ export function createFangPoseLayer(character) {
         )
         .invert();
 
-    worldQ.multiply(
-      gripInverse
-    );
-
+    worldQ.multiply(gripInverse);
     setWorldQuaternion(
       b.rightHand,
       worldQ
     );
 
     const weight =
-      slash.attackWeight;
+      pose.attackWeight ?? 1;
 
     for (const node of nodes) {
       const base =
         underlying.get(node);
-
       if (!base) continue;
 
       const solved =
@@ -408,10 +346,7 @@ export function createFangPoseLayer(character) {
         );
     }
 
-    root.updateWorldMatrix(
-      true,
-      true
-    );
+    root.updateWorldMatrix(true, true);
   }
 
   function setRelativeOffset(

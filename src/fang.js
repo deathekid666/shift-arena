@@ -21,6 +21,10 @@ export class TinFangSystem {
 
     this.state = 'READY';
     this.equipped = false;
+    this.slashComboIndex = 0;
+    this.activeSlashVariant = 0;
+    this.slashComboTimer = 0;
+    this.slashQueued = false;
     this.holdTime = 0;
     this.actionTime = 0;
     this.actionDuration = 0;
@@ -183,9 +187,19 @@ export class TinFangSystem {
     this.armRig.visible = false;
     // Active Fang always binds to the RIGHT hand. Storage is on LEFT hip.
     socket.add(this.handFang);
-    this.handFang.position.set(0.0, 0.015, -0.10);
-    this.handFang.rotation.set(-0.10, 0.0, Math.PI * 0.52);
-    this.handFang.scale.setScalar(0.64);
+    this.handFang.position.set(
+      0.0,
+      0.012,
+      -0.082
+    );
+    this.handFang.rotation.set(
+      -0.10,
+      0.0,
+      Math.PI * 0.52
+    );
+    this.handFang.scale.setScalar(
+      0.46
+    );
 
     const holsterSocket = this.player.getHolsterSocket?.();
     if (holsterSocket && this.sheath) {
@@ -252,6 +266,10 @@ export class TinFangSystem {
     this.removeProjectile();
     this.state = 'READY';
     this.equipped = false;
+    this.slashComboIndex = 0;
+    this.activeSlashVariant = 0;
+    this.slashComboTimer = 0;
+    this.slashQueued = false;
     this.holdTime = 0;
     this.actionTime = 0;
     this.releaseAimPoint = null;
@@ -286,6 +304,23 @@ export class TinFangSystem {
     }
 
     this.tryRecover();
+
+    if (
+      this.state === 'READY' &&
+      this.slashComboTimer > 0
+    ) {
+      this.slashComboTimer =
+        Math.max(
+          0,
+          this.slashComboTimer - dt
+        );
+
+      if (
+        this.slashComboTimer === 0
+      ) {
+        this.slashComboIndex = 0;
+      }
+    }
 
     // V now only selects/holsters the knife. It never attacks.
     if (this.input.consume('knife')) {
@@ -369,7 +404,20 @@ export class TinFangSystem {
     }
 
     if (this.state === 'SLASH') {
+      if (
+        this.input.consumeMouse(0)
+      ) {
+        this.slashQueued = true;
+      }
+
       this.updateSlash(dt);
+    }
+
+    if (
+      this.equipped &&
+      this.state === 'READY'
+    ) {
+      this.updateEquippedPose(dt);
     }
 
     this.syncFangVisuals();
@@ -386,6 +434,10 @@ export class TinFangSystem {
     }
 
     this.equipped = next;
+    this.slashComboIndex = 0;
+    this.activeSlashVariant = 0;
+    this.slashComboTimer = 0;
+    this.slashQueued = false;
 
     if (next) {
       this.state = 'READY';
@@ -449,6 +501,84 @@ export class TinFangSystem {
     this.holdTime = 0;
     this.compactAim = false;
     this.syncFangVisuals();
+  }
+
+  updateEquippedPose(dt) {
+    if (!this.equipped) return;
+
+    if (this.useRealHand) {
+      const direction =
+        new THREE.Vector3(
+          0,
+          0,
+          -1
+        )
+          .applyQuaternion(
+            this.player.group.quaternion
+          )
+          .normalize();
+
+      const animation = {
+        mode: 'ready',
+        direction,
+        sprintBlend:
+          THREE.MathUtils.clamp(
+            this.player.sprintBlend ?? 0,
+            0,
+            1
+          )
+      };
+
+      this.player.setFangAnimation?.(
+        animation
+      );
+      this.player.applyFangPose?.(
+        animation,
+        dt
+      );
+      this.slashArc.visible = false;
+      setFangGlow(
+        this.handFang,
+        0
+      );
+    } else {
+      const sprint =
+        THREE.MathUtils.clamp(
+          this.player.sprintBlend ?? 0,
+          0,
+          1
+        );
+
+      this.dampArmPose(
+        {
+          shoulder: [
+            THREE.MathUtils.lerp(
+              -0.18,
+              0.05,
+              sprint
+            ),
+            -0.05,
+            -0.22
+          ],
+          elbow: [
+            THREE.MathUtils.lerp(
+              0.72,
+              0.52,
+              sprint
+            ),
+            0,
+            0.18
+          ],
+          hand: [
+            -0.12,
+            0,
+            0.20
+          ]
+        },
+        22,
+        dt
+      );
+    }
   }
 
   beginPrime() {
@@ -732,7 +862,18 @@ export class TinFangSystem {
     this.actionTime = 0;
     this.actionDuration =
       this.cfg.meleeDuration ??
-      0.46;
+      0.34;
+    this.activeSlashVariant =
+      this.slashComboIndex;
+    this.slashComboIndex =
+      (
+        this.slashComboIndex +
+        1
+      ) % 3;
+    this.slashComboTimer =
+      this.cfg.meleeComboReset ??
+      0.82;
+    this.slashQueued = false;
     this.armRig.visible =
       !this.useRealHand;
     this.player.setFangArmOverride?.(
@@ -741,6 +882,8 @@ export class TinFangSystem {
     this.player.setFangAnimation?.({
       mode: 'slash',
       t: 0,
+      variant:
+        this.activeSlashVariant,
       compact: false
     });
     this.handFang.visible = true;
@@ -767,7 +910,10 @@ export class TinFangSystem {
       );
 
     const slash =
-      sampleKnifeSlash(t);
+      sampleKnifeSlash(
+        t,
+        this.activeSlashVariant
+      );
 
     if (this.useRealHand) {
       const direction =
@@ -779,6 +925,8 @@ export class TinFangSystem {
       const animation = {
         mode: 'slash',
         t,
+        variant:
+          this.activeSlashVariant,
         compact: false,
         direction,
         aimYaw:
@@ -992,6 +1140,29 @@ export class TinFangSystem {
         );
     }
 
+    const wantsChain =
+      this.slashQueued ||
+      (
+        this.input.pointerLocked &&
+        this.input.mouseDown(0)
+      );
+
+    if (
+      wantsChain &&
+      t >=
+        (
+          this.cfg.meleeChainPoint ??
+          0.72
+        )
+    ) {
+      setFangGlow(
+        this.handFang,
+        0
+      );
+      this.beginSlash();
+      return;
+    }
+
     if (t >= 1) {
       setFangGlow(
         this.handFang,
@@ -1056,8 +1227,17 @@ export class TinFangSystem {
       if (flat.lengthSq() < 0.001) continue;
       flat.normalize();
 
-      const facing = forward.dot(flat);
-      if (facing < 0.42) continue;
+      const facing =
+        forward.dot(flat);
+      if (
+        facing <
+        (
+          this.cfg.meleeFacingDot ??
+          0.30
+        )
+      ) {
+        continue;
+      }
       if (!this.hasClearMeleeLine(origin, this.tmpA, distance)) continue;
 
       const score = distance - facing * 0.55;
