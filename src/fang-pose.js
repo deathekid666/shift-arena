@@ -17,6 +17,10 @@ export function createFangPoseLayer(character) {
   const nodes = [
     ...new Set([
       chest,
+      b.leftShoulder,
+      b.leftUpperArm,
+      b.leftLowerArm,
+      b.leftHand,
       b.rightShoulder,
       b.rightUpperArm,
       b.rightLowerArm,
@@ -264,6 +268,15 @@ export function createFangPoseLayer(character) {
       lowerLength
     );
 
+    // A believable knife stance uses the free arm too. In READY it protects
+    // the upper torso and balances the weapon side; during the cut it remains
+    // a compact counterbalance. Sprint releases it back to locomotion.
+    applyFreeHandGuard(
+      fang,
+      right,
+      horizontal
+    );
+
     const blade =
       horizontal.clone()
         .multiplyScalar(
@@ -351,6 +364,134 @@ export function createFangPoseLayer(character) {
         .slerp(
           solved,
           weight
+        );
+    }
+
+    root.updateWorldMatrix(true, true);
+  }
+
+  function applyFreeHandGuard(
+    fang,
+    right,
+    horizontal
+  ) {
+    if (
+      !b.leftUpperArm ||
+      !b.leftLowerArm ||
+      !b.leftHand
+    ) {
+      return;
+    }
+
+    const sprint =
+      THREE.MathUtils.clamp(
+        fang.sprintBlend ?? 0,
+        0,
+        1
+      );
+
+    const guardBlend =
+      fang.mode === 'ready'
+        ? 1 - smooth(sprint)
+        : fang.mode === 'slash'
+          ? 0.86
+          : 0;
+
+    if (guardBlend <= 0.001) {
+      return;
+    }
+
+    const leftShoulder =
+      position(b.leftUpperArm);
+    const leftUpperLength =
+      leftShoulder.distanceTo(
+        position(b.leftLowerArm)
+      );
+    const leftLowerLength =
+      position(b.leftLowerArm)
+        .distanceTo(
+          position(b.leftHand)
+        );
+    const leftReach =
+      leftUpperLength +
+      leftLowerLength;
+
+    // Hand sits in front of the left upper ribs, slightly toward center.
+    // The elbow stays outside the silhouette instead of collapsing across
+    // the chest, which avoids the old two-handed-rifle read.
+    const guardTarget =
+      leftShoulder.clone()
+        .addScaledVector(
+          right,
+          leftReach * 0.22
+        )
+        .addScaledVector(
+          UP,
+          leftReach * 0.10
+        )
+        .addScaledVector(
+          horizontal,
+          leftReach * 0.34
+        );
+
+    const guardPole =
+      leftShoulder.clone()
+        .addScaledVector(
+          right,
+          -leftReach * 0.56
+        )
+        .addScaledVector(
+          UP,
+          leftReach * 0.06
+        )
+        .addScaledVector(
+          horizontal,
+          leftReach * 0.16
+        );
+
+    for (const node of [
+      b.leftUpperArm,
+      b.leftLowerArm,
+      b.leftHand
+    ]) {
+      const base =
+        underlying.get(node);
+      if (base) {
+        node.quaternion.copy(base);
+      }
+    }
+
+    root.updateWorldMatrix(true, true);
+
+    solveArm(
+      b.leftUpperArm,
+      b.leftLowerArm,
+      b.leftHand,
+      guardTarget,
+      guardPole,
+      leftUpperLength,
+      leftLowerLength
+    );
+
+    // Preserve the authored locomotion hand/arm as the zero state and blend
+    // into the guard instead of snapping ownership.
+    for (const node of [
+      b.leftUpperArm,
+      b.leftLowerArm,
+      b.leftHand
+    ]) {
+      const base =
+        underlying.get(node);
+      if (!base) continue;
+
+      const solved =
+        node.quaternion.clone();
+
+      node.quaternion
+        .copy(base)
+        .slerp(
+          solved,
+          guardBlend
         );
     }
 
