@@ -191,13 +191,18 @@ export function sampleKnifeSlash(progress, variant = 0) {
       swing.follow,
       easeOut((t - 0.40) / 0.16)
     );
-  } else {
+  } else if (t < 0.72) {
     phase = 'recovery';
     pose = mixPose(
       swing.follow,
       READY,
-      smooth((t - 0.56) / 0.44)
+      smooth((t - 0.56) / 0.16)
     );
+  } else {
+    // The combo can chain at 72%, so be exactly back at READY there.
+    // This prevents the next swing from teleporting across the body.
+    phase = 'ready';
+    pose = READY;
   }
 
   const attackWeight =
