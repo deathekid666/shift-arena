@@ -62,7 +62,7 @@ root.innerHTML = `
       </div>
       <div class="status-actions">
         <span><kbd>3</kbd> PLATE <b id="armor-count">×2</b></span>
-        <span class="fang-action"><kbd>V</kbd> <b id="fang-state">FANG READY</b></span>
+        <span class="fang-action"><kbd>V</kbd> <b id="fang-state">KNIFE HOLSTERED</b></span>
       </div>
       <i id="armor-progress"></i>
     </div>
@@ -72,7 +72,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">PREVIEW · ROACH SCOUT · BASE 010.27A</div>
+    <div id="damage-test-hint">PREVIEW · ROACH SCOUT · BASE 010.28I</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
     <div id="jitter-lab" hidden>
@@ -94,7 +94,7 @@ root.innerHTML = `
 
     <div id="fang-charge">
       <div class="fang-charge-track"><i id="fang-charge-fill"></i></div>
-      <span>HOLD V · RELEASE TO THROW</span>
+      <span>HOLD AIM · CLICK FIRE TO THROW</span>
     </div>
 
     <div id="fang-marker">
@@ -121,14 +121,14 @@ root.innerHTML = `
     </div>
 
     <div id="reload-state"></div>
-    <div id="controls">WASD move · Shift sprint · Ctrl / C crouch & slide · Esc fullscreen · Wheel / 1 / 2 guns · V tap melee · hold V aim / release throw · 3 armor · E swap · B toggle bots</div>
+    <div id="controls">WASD move · Shift sprint · Ctrl / C crouch & slide · Esc fullscreen · Wheel / 1 / 2 guns · V knife · LMB 3-swing combo · RMB hold aim + LMB throw · 3 armor · E swap · B toggle bots</div>
     <div id="touch-note">Touch controls will be added in the dedicated mobile-input phase.</div>
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">PREVIEW · ROACH SCOUT · BASE 010.27A</div>
+        <div class="build-tag">PREVIEW · ROACH SCOUT · BASE 010.28I</div>
         <h1>SHIFT Arena</h1>
-        <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
+        <p>Roach Scout character preview. Choose opponents, then test movement, jumping and weapons.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
         <div class="opponent-setup">
           <div class="opponent-heading">
@@ -996,22 +996,30 @@ function updateFangHud(state) {
   if (!state) return;
 
   const labels = {
-    READY: 'FANG READY',
-    PRIMING: 'DRAWING',
-    AIMING: 'FANG AIM',
+    READY:
+      state.equipped
+        ? 'KNIFE EQUIPPED · 0.45 KG'
+        : 'KNIFE HOLSTERED',
+    PRIMING: 'THROW AIM',
+    AIMING: 'THROW AIM',
     RELEASE: 'THROW',
-    SLASH: 'MELEE',
-    THROWN: 'FANG THROWN',
-    STUCK: 'FANG EMBEDDED',
-    FALLING: 'FANG FALLING',
-    DROPPED: 'PICK UP FANG',
-    LOST: 'FANG LOST',
+    SLASH: 'KNIFE SLASH',
+    THROWN: 'KNIFE THROWN',
+    STUCK: 'KNIFE EMBEDDED',
+    FALLING: 'KNIFE FALLING',
+    DROPPED: 'PICK UP KNIFE',
+    LOST: 'KNIFE LOST',
     CLAW: 'CLAW'
   };
 
-  fangState.textContent = state.state === 'AIMING' && state.compactAim
-    ? 'FANG AIM · LOW'
-    : (labels[state.state] ?? state.state);
+  fangState.textContent =
+    state.state === 'AIMING' &&
+    state.compactAim
+      ? 'THROW AIM · LOW'
+      : (
+          labels[state.state] ??
+          state.state
+        );
   fangState.classList.toggle('missing', !state.hasFang);
 
   const fangMode =
@@ -1021,7 +1029,10 @@ function updateFangHud(state) {
         ? 'fang-aim'
         : state.state === 'RELEASE'
           ? 'fang-release'
-          : (state.state === 'SLASH' || state.state === 'CLAW')
+          : (
+              state.state === 'SLASH' ||
+              state.equipped
+            )
             ? 'melee'
             : 'gun';
 
@@ -1032,7 +1043,10 @@ function updateFangHud(state) {
   crosshair.style.setProperty('--fang-charge-angle', `${charge * 360}deg`);
   crosshair.classList.toggle('fang-full', fangMode === 'fang-aim' && charge >= 0.985);
 
-  const aiming = state.state === 'AIMING' || state.state === 'RELEASE';
+  const aiming =
+    state.state === 'PRIMING' ||
+    state.state === 'AIMING' ||
+    state.state === 'RELEASE';
   fangCharge.classList.toggle('show', aiming);
   fangChargeFill.style.width = `${charge * 100}%`;
 
@@ -1228,7 +1242,10 @@ function loop(now) {
     const combatFacing =
       input.pointerLocked &&
       !armor.using &&
-      (weaponCombatPose || fang.blocksWeapons);
+      (
+        weaponCombatPose ||
+        fang.combatFacing
+      );
 
     if (player.vrmCharacter) {
       player.vrmCharacter.debugFreezeAuthored =
@@ -1252,7 +1269,14 @@ function loop(now) {
       player.body.rotation.z = 0;
     }
 
-    weapon.updateSelection();
+    const selectedGun =
+      weapon.updateSelection(
+        fang.equipped
+      );
+
+    if (selectedGun) {
+      fang.unequipForGunSwitch();
+    }
 
     const fangAiming = fang.aiming;
     const frozenCameraPose = jitterDebug.freezeCamera
@@ -1385,7 +1409,7 @@ function loop(now) {
     frames = 0;
     fpsTimer = 0;
     const speed = Math.hypot(player.velocity.x, player.velocity.z);
-    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>Anim <b>${player.getAnimationState()}</b><br>State <b>${!health.alive ? 'ELIMINATED' : armor?.using ? 'ARMOR' : fang?.blocksWeapons ? fang.state : weapon.scoped ? 'SCOPED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
+    stats.innerHTML = `FPS <b>${fps}</b><br>Speed <b>${speed.toFixed(1)}</b><br>Grounded <b>${player.grounded ? 'YES' : 'NO'}</b><br>Anim <b>${player.getAnimationState()}</b><br>State <b>${!health.alive ? 'ELIMINATED' : armor?.using ? 'ARMOR' : fang?.equipped ? 'KNIFE' : fang?.blocksWeapons ? fang.state : weapon.scoped ? 'SCOPED' : player.sliding ? 'SLIDE' : player.crouching ? 'CROUCH' : weapon.aiming ? 'ADS' : 'NORMAL'}</b>`;
   }
 }
 requestAnimationFrame(loop);

@@ -383,3 +383,117 @@ an assertion of its proprietary implementation. The supplied running-jump image
 informed the lead/trail silhouette. Browser inspection used the actual VRM at
 rise, apex and descent for standing and sprint jumps; sprint apex knee separation
 was 0.566 world units versus 0.288 for standing.
+
+
+## Build 010.27B — synchronized weapon raise / lower
+- Added one shared deterministic carry-to-combat easing curve used by both the weapon transform and the character upper body.
+- Carry, hip-fire and ADS no longer change upper-body targets abruptly; the arms now blend from the class-specific carry pose into the combat pose using the same shoulder alpha that moves the gun.
+- Added a small class-specific transition arc: the SMG is light/quick, AR neutral, shotgun heavier, and sniper heaviest.
+- Raise moves slightly up/in toward the shoulder while lower follows a softer down/out return path, rather than looking like a reversed linear slide.
+- Final carry, hip-fire and ADS endpoints are unchanged, preserving the existing recoil calibration, stable two-hand IK, crouch behavior and authored slide ownership.
+- Added dependency-free tests for easing endpoints, monotonicity, arc shape and per-class transition separation.
+- Architecture follows the existing layered stack: shared locomotion → weapon-class upper body → additive aim/recoil → final hand IK.
+
+
+## Build 010.27C — weapon motion polish
+- Reworked raise/lower direction handling so releasing aim or fire halfway through a raise cannot instantly flip the weapon arc.
+- Transition direction now carries short-lived momentum and reverses continuously, creating a subtle anticipation on raise and weighted hang before lowering.
+- Added a tiny two-phase settle curve: early lift/rotation followed by a restrained stock-plant correction near the shoulder, with zero offset at both calibrated endpoints.
+- Added class-specific motion weight. SMG changes direction fastest; AR stays balanced; shotgun and sniper retain visibly heavier follow-through.
+- Upper chest/spine now participate in the same settle timing so the character does not look like rigid arms moving a prop independently of the torso.
+- Slide, crouch, jump, recoil endpoints, ADS calibration and final two-hand IK are unchanged.
+
+
+## Build 010.27D — physical weapon size + weight
+- Added explicit physical mass in kilograms and explicit rendered dimensions in meters for every firearm.
+- Current class calibration: Tape-Rattler SMG 2.8 kg / 0.66 m, Staple-Slinger AR 3.5 kg / 0.84 m, Bug-Sprayer Shotgun 3.8 kg / 1.03 m, Marksman Sniper 9.5 kg / 1.14 m.
+- Procedural weapon meshes are now measured after construction and normalized to their configured world-space width/height/length through a dependency-free, tested bounding-box scale calculation. This fixes the old problem where a nominal SMG could render almost rifle-length because each handmade mesh had a different native bounding box.
+- Pickup models preserve their intentional larger presentation ratio, while held weapons use the physical dimensions exactly.
+- Replaced the old dimensionless mass tuning with a bounded kg-to-handling conversion.
+- Mass now affects shoulder raise/lower response, ADS pose response, mid-transition direction reversal, weapon recoil spring settling and fallback weapon transform inertia.
+- Heavy weapons therefore feel slower and more planted; the SMG is visibly quicker. Player movement speed is intentionally unchanged, matching the Fortnite/Lyra style of weapon-specific upper-body handling rather than weapon-weight movement penalties.
+- Existing slide ownership, crouch, jump, hit logic, damage values, ammunition and final two-hand IK were not changed.
+
+
+## Build 010.27E — heavy sniper handling
+- Fixed the reason Build 010.27D looked too similar: the primary master-hand weapon path still hard-coded the same carry pitch/roll for every firearm, so class-specific carry orientation values were being ignored.
+- The main weapon path now respects per-weapon carry pitch, yaw and roll.
+- The 9.5 kg Marksman Sniper now rests lower and more downward-angled across the torso, with stronger shoulder/arm load than the 3.5 kg AR.
+- Reworked kg response from inverse-square-root to inverse-mass handling so heavy weapons separate visually instead of differing by only a few frames.
+- Added transition-only inertial follow from the stable body-space weapon target. The AR remains responsive; the sniper visibly trails and settles while raising/lowering.
+- The inertial follow switches back to exact rigid alignment at the fully shouldered endpoint, so firing/crosshair accuracy is not delayed.
+- Sniper upper-body pose response is deliberately slower and its carry pose engages more spine/chest/shoulder effort.
+- Known-good slide ownership remains rigid and explicitly resets the heavy follow state on slide exit.
+
+
+## Build 010.27F — kinetic weapon motion
+- Replaced the exaggerated "heavy = slow animation" approach with a Battlefield-inspired layered response model.
+- Research basis: Battlefield 6's 2026 Kinesthetic Combat Systems presentation emphasizes connected movement/aim/firing feedback, realistic limb motion and visual line-of-sight; BFV/BF1 community comparisons consistently identify passive weapon sway, step-linked motion and smooth transitions as core to their weightier feel.
+- Added a renderer-independent damped-spring weapon motion layer with look-velocity lag, acceleration/deceleration reaction, asymmetric two-harmonic step motion and tiny deterministic breathing drift.
+- Mass and weapon length control spring response and rotational leverage. Heavy/long weapons keep passive follow-through longer; compact weapons settle faster.
+- The sniper remains slower to shoulder than the AR, but no longer looks like a globally slowed animation.
+- Scoped ADS suppresses almost all procedural drift so sight alignment remains readable and accurate.
+- Removed the 010.27E whole-gun transition chase that could read as rubbery/floaty. Final weapon-to-hand attachment is exact again; only the additive physical offsets carry inertia.
+- Reduced the exaggerated sniper carry droop and torso deformation from 010.27E. Weight now comes primarily from passive response, not a caricatured pose.
+- Known-good slide ownership remains untouched and explicitly clears the natural-motion history while sliding.
+
+
+## Build 010.27G — connected weapon motion
+- Reworked the kinetic layer after checking Battlefield's official gunplay/movement notes, Battlefield V weapon-type animation notes, and open-source spring-driven FPS rigs instead of continuing to tune arbitrary offsets.
+- Camera-driven weapon inertia now consumes look angular velocity in radians/second rather than already-damped raw mouse deltas. Recoil is excluded from that input so it is not applied twice.
+- Local X/Z acceleration now drives small opposite-direction mass reaction. Starting, braking and strafing therefore move the gun for physical reasons instead of from a generic bob curve.
+- Step response is synchronized to the actual VRM locomotion phase. The weapon no longer runs its own independent gait clock when an authored phase is available.
+- Vertical step motion is deliberately restrained; Battlefield update history explicitly includes toning down weapon movement around ADS and smoothing camera/weapon stance transitions.
+- The same passive motion propagates a smaller late additive reaction through spine/chest/upper-chest/clavicles before final two-hand IK. The body and weapon therefore react as one connected system rather than the hands chasing a moving prop.
+- Final weapon transform stays exact to the stable body-space target; final hand IK stays exact to the weapon grips.
+- Magnified sniper ADS suppresses almost all passive drift. Hip/carry retains the most weight expression.
+- Added tests for 30/60/120 FPS consistency, gait-phase sync, acceleration reaction, ADS suppression and heavy follow-through.
+- Slide remains on the confirmed-good authored-hand ownership path and clears procedural motion while active.
+
+
+## Build 010.27H — slide hand lock
+- Fixed the slide-hand regression by correcting animation ownership rather than adding a positional compensation.
+- Added one shared authored-slide ownership predicate used by both the weapon system and the VRM upper-body system.
+- Slide_Start, Slide_Loop, Slide_Exit and the remaining exit tail now keep continuous authored upper-body ownership. Normal carry/aim layers cannot re-enable halfway through recovery.
+- Added an explicit slideOwned flag to the grip pose.
+- Late connected-body weapon reaction is disabled while authored slide owns the pose.
+- Support-hand IK target history is rebased at slide enter/exit boundaries and is pinned directly to the weapon grip during the authored slide. This removes the small sideways hand drift caused by filtering from the previous carry target.
+- Right/master hand remains animation-owned exactly as in the confirmed-good slide architecture; weapon position remains rigidly derived from that authored hand.
+- No slide leg, speed, camera, crouch, recoil, weapon weight or normal carry tuning was changed.
+
+
+## Build 010.28A — knife equip
+- V no longer performs an attack. V now toggles Tin Fang between holstered and equipped.
+- Equipped Tin Fang is a true lightweight weapon state: firearm models are hidden/blocked, but normal locomotion and full sprint remain unchanged.
+- Left Mouse while the knife is equipped performs the existing slash attack.
+- Holding Right Mouse enters/holds throw aim. Left Mouse while aim is held commits the throw.
+- Releasing Right Mouse lowers the knife without throwing it.
+- Pressing 1, 2, or using the mouse wheel while the knife is equipped returns directly to a firearm.
+- Throwing the knife automatically returns the player to the gun after the blade leaves the hand; recovery returns the knife to the sheath until V is pressed again.
+- Removed V-trigger melee/claw behavior from the live control path.
+- Knife-equipped idle/running does not force combat-facing locomotion, so sprint remains the normal 8.4 m/s baseline.
+
+- Tin Fang now has an explicit 0.45 kg physical/mobility baseline with 1.00x walk, sprint, acceleration and turn-response multipliers. This is intentionally the future reference point for heavier firearm mobility profiles.
+
+
+## Build 010.28B — knife slash rig
+- Replaced the old single Euler interpolation slash with a world-space two-bone IK melee layer.
+- The attack now has explicit anticipation, fast strike, follow-through and recovery phases instead of one smooth arm sweep.
+- Slash is applied late in the frame after locomotion, using the same isolated Fang pose layer as throw aiming. This removes the old one-frame-late/double-writer behavior.
+- The elbow pole, hand target, chest coil and blade orientation are solved together, so the knife edge travels through the cut instead of the wrist merely twisting.
+- The real VRM no longer renders the oversized floating ring slash effect. The fallback primitive character keeps a reduced version.
+- Melee hit detection now stays active through the full cutting window and only consumes the attack after an actual target is hit.
+- Slash duration is now an explicit 0.46 s combat value.
+
+
+## Build 010.28C — tactical knife
+- Rebuilt equipped knife behavior around the public Counter-Strike / VALORANT melee pattern instead of treating the knife like a procedural reach.
+- Counter-Strike reference: knife is the fastest movement weapon and uses a fast primary slash versus a slower/heavier secondary.
+- VALORANT reference: primary melee is a looping three-swing slash combo; secondary is a heavier jab. SHIFT adopts the fast 3-swing primary structure while preserving the previously requested RMB-hold throw mechanic.
+- Added a persistent tactical ready pose while the knife is equipped. The right hand no longer drops to the default locomotion position beside the thigh.
+- Added a lowered sprint-ready pose without changing movement speed; Tin Fang remains the 1.00x / 8.4 m/s mobility baseline.
+- Reduced active knife render scale from 0.64 to 0.46 at the hand socket so it reads as a compact knife instead of a short sword.
+- LMB now cycles three distinct primary cuts: right-to-left, return cut, then diagonal finisher.
+- Primary duration reduced to 0.34 s with combo chaining from 72% of the swing; holding/clicking LMB can continue the loop.
+- Visual hit window is aligned to the fast strike/follow window and melee targeting uses a wider primary cone with slightly longer reach for reliability.
+- RMB throw aim and throw projectile mechanics remain unchanged.

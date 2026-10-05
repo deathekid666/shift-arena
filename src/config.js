@@ -78,6 +78,11 @@ export const GAME_CONFIG = {
       visualWidthScale: 1.00,
       visualHeightScale: 1.00,
       visualLengthScale: 1.00,
+      // Physical presentation benchmark: M4-class carbine proportions.
+      // This is an original scavenged weapon, but its world-space footprint is
+      // calibrated in meters so it cannot silently become SMG/sniper sized.
+      massKg: 3.5,
+      physicalSizeM: { width: 0.12, height: 0.26, length: 0.84 },
 
       stanceReadyX: 0.010,
       stanceReadyY: -0.090,
@@ -200,7 +205,6 @@ export const GAME_CONFIG = {
       weaponRecoilMaxYaw: 0.012,
       weaponRecoilMaxRoll: 0.014,
       visualKick: 0.105,
-      mass: 1.16,
       sway: 0.0042,
       bob: 0.014,
       adsFov: 52,
@@ -227,6 +231,10 @@ export const GAME_CONFIG = {
       visualWidthScale: 1.10,
       visualHeightScale: 1.06,
       visualLengthScale: 1.02,
+      // Full-length pump silhouette, slightly heavier than the real-world
+      // benchmark because the Bug-Sprayer carries a bulky tank assembly.
+      massKg: 3.8,
+      physicalSizeM: { width: 0.20, height: 0.32, length: 1.03 },
 
       stanceReadyX: 0.012,
       stanceReadyY: -0.102,
@@ -349,7 +357,6 @@ export const GAME_CONFIG = {
       pumpAction: true,
       pumpTravel: 0.16,
       hidePelletTracers: true,
-      mass: 1.34,
       sway: 0.0035,
       bob: 0.011,
       adsFov: 60,
@@ -376,10 +383,14 @@ export const GAME_CONFIG = {
       visualWidthScale: 0.96,
       visualHeightScale: 0.98,
       visualLengthScale: 1.06,
+      // Heavy precision-rifle class. The 1.14 m envelope follows a compact
+      // .50-cal benchmark while keeping SHIFT's original antenna silhouette.
+      massKg: 9.5,
+      physicalSizeM: { width: 0.16, height: 0.30, length: 1.14 },
 
-      stanceReadyX: 0.008,
-      stanceReadyY: -0.108,
-      stanceReadyZ: -0.140,
+      stanceReadyX: 0.014,
+      stanceReadyY: -0.135,
+      stanceReadyZ: -0.108,
       stanceHipX: 0.004,
       stanceHipY: -0.066,
       stanceHipZ: -0.202,
@@ -401,14 +412,14 @@ export const GAME_CONFIG = {
       leftGripX: 0,
       leftGripY: -0.060,
       foregripZ: -0.365,
-      shoulderHoldTime: 0.54,
-      shoulderRaiseSpeed: 27,
-      shoulderLowerSpeed: 8.5,
-      shoulderPoseSpeed: 32,
-      shoulderLowerPoseSpeed: 17,
-      shoulderSupportIKLambda: 164,
-      adsPoseInSpeed: 24,
-      adsPoseOutSpeed: 16,
+      shoulderHoldTime: 0.62,
+      shoulderRaiseSpeed: 24,
+      shoulderLowerSpeed: 7.2,
+      shoulderPoseSpeed: 27,
+      shoulderLowerPoseSpeed: 14,
+      shoulderSupportIKLambda: 154,
+      adsPoseInSpeed: 20,
+      adsPoseOutSpeed: 13,
       combatGripForward: 0.220,
       combatGripRight: -0.018,
       combatGripUp: -0.060,
@@ -419,9 +430,9 @@ export const GAME_CONFIG = {
       adsAimPitch: -0.010,
       hipFireAimRoll: -0.030,
       adsAimRoll: -0.004,
-      carryPitch: -0.105,
-      carryYaw: -0.010,
-      carryRoll: -0.040,
+      carryPitch: -0.145,
+      carryYaw: -0.022,
+      carryRoll: -0.068,
       slot: 5, name: 'MARKSMAN SNIPER', role: '2-SHOT LONG RANGE', automatic: false, ammoType: 'heavy',
       damage: 110, headshotMultiplier: 2, fireRate: 0.75, magazineSize: 2, reloadTime: 3.0,
       range: 160, falloffStart: 105, falloffEnd: 155, minDamageMultiplier: 0.90,
@@ -448,7 +459,7 @@ export const GAME_CONFIG = {
       sustainedFireRecovery: 4.8, weaponKickImpulse: 20.0, adsWeaponKickImpulse: 18.0,
       weaponRecoilPitch: 0.055, weaponRecoilYaw: 0.013, weaponRecoilRoll: 0.012,
       weaponRecoilRecovery: 8.0, weaponRecoilMaxPitch: 0.14, weaponRecoilMaxYaw: 0.030,
-      weaponRecoilMaxRoll: 0.032, visualKick: 0.36, mass: 1.58, sway: 0.0027, bob: 0.008,
+      weaponRecoilMaxRoll: 0.032, visualKick: 0.36, sway: 0.0027, bob: 0.008,
       adsFov: 24, adsDistance: 0.10, adsShoulderOffset: 0,
       reticle: 'sniper', reticleMinGap: 8, reticleMaxGap: 30, scope: true,
       pellets: 1, color: 0x7356b6, modelLength: 1.10,
@@ -462,6 +473,10 @@ export const GAME_CONFIG = {
       visualWidthScale: 0.94,
       visualHeightScale: 0.94,
       visualLengthScale: 0.90,
+      // Compact SMG envelope: substantially shorter/lighter than the AR.
+      // Width stays stylized because the signature tape wheel is intentional.
+      massKg: 2.8,
+      physicalSizeM: { width: 0.24, height: 0.30, length: 0.66 },
 
       stanceReadyX: 0.014,
       stanceReadyY: -0.080,
@@ -579,7 +594,6 @@ export const GAME_CONFIG = {
       weaponRecoilMaxYaw: 0.026,
       weaponRecoilMaxRoll: 0.018,
       visualKick: 0.047,
-      mass: 0.74,
       sway: 0.0075,
       bob: 0.026,
       adsFov: 60,
@@ -601,10 +615,24 @@ export const GAME_CONFIG = {
     }
   },
   tinFang: {
+    // Mobility baseline for the loadout system: a compact hand weapon should
+    // impose no locomotion penalty. Firearm profiles will be measured from
+    // this 1.00x reference rather than from an arbitrary gun.
+    massKg: 0.45,
+    mobility: {
+      walkSpeedMultiplier: 1.00,
+      sprintSpeedMultiplier: 1.00,
+      accelerationMultiplier: 1.00,
+      turnResponseMultiplier: 1.00
+    },
     meleeDamage: 40,
+    meleeDuration: 0.34,
+    meleeChainPoint: 0.72,
+    meleeComboReset: 0.82,
+    meleeFacingDot: 0.30,
     clawDamage: 22,
     throwBodyDamage: 90,
-    meleeRange: 1.85,
+    meleeRange: 1.92,
     primeThreshold: 0.28,
     fullChargeTime: 0.82,
     minThrowSpeed: 21,

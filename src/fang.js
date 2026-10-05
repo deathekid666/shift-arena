@@ -1,5 +1,9 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GAME_CONFIG } from './config.js';
+import {
+  sampleKnifeSlash
+} from './knife-slash-motion.js';
+import { KNIFE_HAND_GRIP } from './knife-grip.js';
 
 export class TinFangSystem {
   constructor({ scene, camera, cameraRig, player, input, world, targets, audio, onHit, onState, onToast }) {
@@ -17,6 +21,11 @@ export class TinFangSystem {
     this.cfg = GAME_CONFIG.tinFang;
 
     this.state = 'READY';
+    this.equipped = false;
+    this.slashComboIndex = 0;
+    this.activeSlashVariant = 0;
+    this.slashComboTimer = 0;
+    this.slashQueued = false;
     this.holdTime = 0;
     this.actionTime = 0;
     this.actionDuration = 0;
@@ -52,11 +61,25 @@ export class TinFangSystem {
   }
 
   get blocksWeapons() {
-    return ['PRIMING', 'AIMING', 'RELEASE', 'SLASH', 'CLAW'].includes(this.state);
+    return (
+      this.equipped ||
+      ['PRIMING', 'AIMING', 'RELEASE', 'SLASH'].includes(this.state)
+    );
   }
 
   get aiming() {
-    return ['PRIMING', 'AIMING', 'RELEASE'].includes(this.state);
+    return (
+      this.equipped &&
+      ['PRIMING', 'AIMING', 'RELEASE'].includes(this.state)
+    );
+  }
+
+  get combatFacing() {
+    return (
+      this.aiming ||
+      this.state === 'RELEASE' ||
+      this.state === 'SLASH'
+    );
   }
 
   get hasFang() {
@@ -64,11 +87,24 @@ export class TinFangSystem {
   }
 
   get chargeRatio() {
-    if (this.state !== 'AIMING' && this.state !== 'RELEASE') return 0;
-    if (this.state === 'RELEASE') return this.releaseCharge;
+    if (
+      this.state !== 'PRIMING' &&
+      this.state !== 'AIMING' &&
+      this.state !== 'RELEASE'
+    ) {
+      return 0;
+    }
+
+    if (this.state === 'RELEASE') {
+      return this.releaseCharge;
+    }
+
     return THREE.MathUtils.clamp(
-      (this.holdTime - this.cfg.primeThreshold) /
-      Math.max(0.001, this.cfg.fullChargeTime - this.cfg.primeThreshold),
+      this.holdTime /
+      Math.max(
+        0.001,
+        this.cfg.fullChargeTime
+      ),
       0,
       1
     );
@@ -152,9 +188,19 @@ export class TinFangSystem {
     this.armRig.visible = false;
     // Active Fang always binds to the RIGHT hand. Storage is on LEFT hip.
     socket.add(this.handFang);
-    this.handFang.position.set(0.0, 0.015, -0.10);
-    this.handFang.rotation.set(-0.10, 0.0, Math.PI * 0.52);
-    this.handFang.scale.setScalar(0.64);
+    this.handFang.position.set(
+      KNIFE_HAND_GRIP.position.x,
+      KNIFE_HAND_GRIP.position.y,
+      KNIFE_HAND_GRIP.position.z
+    );
+    this.handFang.rotation.set(
+      KNIFE_HAND_GRIP.rotation.x,
+      KNIFE_HAND_GRIP.rotation.y,
+      KNIFE_HAND_GRIP.rotation.z
+    );
+    this.handFang.scale.setScalar(
+      KNIFE_HAND_GRIP.scale
+    );
 
     const holsterSocket = this.player.getHolsterSocket?.();
     if (holsterSocket && this.sheath) {
@@ -171,14 +217,22 @@ export class TinFangSystem {
   syncFangVisuals() {
     const stored =
       this.state === 'READY' &&
+      !this.equipped &&
       !this.projectile;
 
     const inHand =
       (
+        (
+          this.state === 'READY' &&
+          this.equipped
+        ) ||
         this.state === 'PRIMING' ||
         this.state === 'AIMING' ||
         this.state === 'SLASH' ||
-        (this.state === 'RELEASE' && !this.releaseLaunched)
+        (
+          this.state === 'RELEASE' &&
+          !this.releaseLaunched
+        )
       ) &&
       !this.projectile;
 
@@ -212,6 +266,11 @@ export class TinFangSystem {
   reset() {
     this.removeProjectile();
     this.state = 'READY';
+    this.equipped = false;
+    this.slashComboIndex = 0;
+    this.activeSlashVariant = 0;
+    this.slashComboTimer = 0;
+    this.slashQueued = false;
     this.holdTime = 0;
     this.actionTime = 0;
     this.releaseAimPoint = null;
@@ -231,9 +290,14 @@ export class TinFangSystem {
     this.updateProjectile(dt);
 
     if (!canUse) {
-      if (['PRIMING', 'AIMING', 'SLASH', 'CLAW'].includes(this.state)) {
+      if (
+        ['PRIMING', 'AIMING', 'SLASH'].includes(
+          this.state
+        )
+      ) {
         this.cancelHandAction();
       }
+
       this.trajectoryLine.visible = false;
       this.syncFangVisuals();
       this.emitState();
@@ -242,44 +306,290 @@ export class TinFangSystem {
 
     this.tryRecover();
 
-    if (this.state === 'READY' && this.input.consume('melee')) {
-      this.beginPrime();
-    } else if (
-      ['THROWN', 'STUCK', 'FALLING', 'DROPPED', 'LOST'].includes(this.state) &&
-      this.input.consume('melee')
+    if (
+      this.state === 'READY' &&
+      this.slashComboTimer > 0
     ) {
-      this.beginClaw();
+      this.slashComboTimer =
+        Math.max(
+          0,
+          this.slashComboTimer - dt
+        );
+
+      if (
+        this.slashComboTimer === 0
+      ) {
+        this.slashComboIndex = 0;
+      }
     }
 
-    if (this.state === 'PRIMING' || this.state === 'AIMING') {
-      const stillHolding = this.input.down('melee');
+    // V now only selects/holsters the knife. It never attacks.
+    if (this.input.consume('knife')) {
+      if (
+        this.state === 'READY' &&
+        this.hasFang
+      ) {
+        this.setEquipped(
+          !this.equipped
+        );
+      } else if (
+        this.state === 'PRIMING' ||
+        this.state === 'AIMING'
+      ) {
+        this.cancelThrowAim();
+        this.setEquipped(false);
+      } else if (!this.hasFang) {
+        this.onToast?.(
+          'TIN FANG IS NOT IN HAND'
+        );
+      }
+    }
 
-      if (stillHolding) {
+    if (
+      this.equipped &&
+      this.state === 'READY'
+    ) {
+      if (
+        this.input.pointerLocked &&
+        this.input.mouseDown(2)
+      ) {
+        this.beginPrime();
+      } else if (
+        this.input.consumeMouse(0)
+      ) {
+        this.beginSlash();
+      }
+    }
+
+    if (
+      this.state === 'PRIMING' ||
+      this.state === 'AIMING'
+    ) {
+      const stillAiming =
+        this.input.pointerLocked &&
+        this.input.mouseDown(2);
+
+      if (stillAiming) {
         this.holdTime += dt;
-        if (this.state === 'PRIMING' && this.holdTime >= this.cfg.primeThreshold) {
+
+        if (
+          this.state === 'PRIMING' &&
+          this.holdTime >=
+            this.cfg.primeThreshold
+        ) {
           this.state = 'AIMING';
-          this.audio?.playFang?.('charge');
+          this.audio?.playFang?.(
+            'charge'
+          );
+        }
+
+        // Throw only on a deliberate fire click while aim is held.
+        if (this.input.consumeMouse(0)) {
+          this.beginRelease();
         }
       } else {
-        if (this.holdTime >= this.cfg.primeThreshold) this.beginRelease();
-        else this.beginSlash();
+        // Releasing RMB only lowers the knife.
+        this.cancelThrowAim();
       }
-
-      this.input.consumeReleased('melee');
-    } else {
-      this.input.consumeReleased('melee');
     }
 
-    if (this.state === 'PRIMING' || this.state === 'AIMING') this.updateAimPose(dt);
-    if (this.state === 'RELEASE') this.updateRelease(dt);
-    if (this.state === 'SLASH') this.updateSlash(dt);
-    if (this.state === 'CLAW') this.updateClaw(dt);
+    if (
+      this.state === 'PRIMING' ||
+      this.state === 'AIMING'
+    ) {
+      this.updateAimPose(dt);
+    }
+
+    if (this.state === 'RELEASE') {
+      this.updateRelease(dt);
+    }
+
+    if (this.state === 'SLASH') {
+      if (
+        this.input.consumeMouse(0)
+      ) {
+        this.slashQueued = true;
+      }
+
+      this.updateSlash(dt);
+    }
+
+    if (
+      this.equipped &&
+      this.state === 'READY'
+    ) {
+      this.updateEquippedPose(dt);
+    }
 
     this.syncFangVisuals();
     this.emitState();
   }
 
+  setEquipped(equipped) {
+    const next =
+      Boolean(equipped) &&
+      this.hasFang;
+
+    if (this.equipped === next) {
+      return;
+    }
+
+    this.equipped = next;
+    this.slashComboIndex = 0;
+    this.activeSlashVariant = 0;
+    this.slashComboTimer = 0;
+    this.slashQueued = false;
+
+    if (next) {
+      this.state = 'READY';
+      this.holdTime = 0;
+      this.actionTime = 0;
+      this.trajectoryLine.visible = false;
+      this.player.setFangAnimation?.(null);
+      this.syncFangVisuals();
+      this.audio?.playFang?.('draw');
+      this.onToast?.('TIN FANG EQUIPPED');
+    } else {
+      if (
+        this.state === 'PRIMING' ||
+        this.state === 'AIMING'
+      ) {
+        this.cancelThrowAim();
+      }
+
+      this.trajectoryLine.visible = false;
+      this.player.setFangAnimation?.(null);
+      this.resetBodyPose();
+
+      if (!this.projectile) {
+        this.state =
+          this.state === 'LOST'
+            ? 'LOST'
+            : 'READY';
+      }
+
+      this.syncFangVisuals();
+    }
+
+    this.emitState();
+  }
+
+  unequipForGunSwitch() {
+    if (!this.equipped) return false;
+
+    if (
+      this.state === 'PRIMING' ||
+      this.state === 'AIMING'
+    ) {
+      this.cancelThrowAim();
+    }
+
+    if (this.state === 'RELEASE') {
+      return false;
+    }
+
+    this.setEquipped(false);
+    return true;
+  }
+
+  cancelThrowAim() {
+    this.armRig.visible = false;
+    this.player.setFangArmOverride?.(false);
+    this.player.setFangAnimation?.(null);
+    this.trajectoryLine.visible = false;
+    this.resetBodyPose();
+    this.state = 'READY';
+    this.holdTime = 0;
+    this.compactAim = false;
+    this.syncFangVisuals();
+  }
+
+  updateEquippedPose(dt) {
+    if (!this.equipped) return;
+
+    if (this.useRealHand) {
+      const direction =
+        new THREE.Vector3(
+          0,
+          0,
+          -1
+        )
+          .applyQuaternion(
+            this.player.group.quaternion
+          )
+          .normalize();
+
+      const animation = {
+        mode: 'ready',
+        direction,
+        sprintBlend:
+          THREE.MathUtils.clamp(
+            this.player.sprintBlend ?? 0,
+            0,
+            1
+          )
+      };
+
+      this.player.setFangAnimation?.(
+        animation
+      );
+      this.player.applyFangPose?.(
+        animation,
+        dt
+      );
+      this.slashArc.visible = false;
+      setFangGlow(
+        this.handFang,
+        0
+      );
+    } else {
+      const sprint =
+        THREE.MathUtils.clamp(
+          this.player.sprintBlend ?? 0,
+          0,
+          1
+        );
+
+      this.dampArmPose(
+        {
+          shoulder: [
+            THREE.MathUtils.lerp(
+              -0.18,
+              0.05,
+              sprint
+            ),
+            -0.05,
+            -0.22
+          ],
+          elbow: [
+            THREE.MathUtils.lerp(
+              0.72,
+              0.52,
+              sprint
+            ),
+            0,
+            0.18
+          ],
+          hand: [
+            -0.12,
+            0,
+            0.20
+          ]
+        },
+        22,
+        dt
+      );
+    }
+  }
+
   beginPrime() {
+    if (
+      !this.equipped ||
+      !this.hasFang
+    ) {
+      return;
+    }
+
     this.state = 'PRIMING';
     this.holdTime = 0;
     this.actionTime = 0;
@@ -299,7 +609,6 @@ export class TinFangSystem {
       elbow: [0.20, 0, 0.25],
       hand: [0.15, 0, 0.15]
     }, 1);
-    this.audio?.playFang?.('draw');
   }
 
   updateAimPose(dt) {
@@ -368,9 +677,19 @@ export class TinFangSystem {
     return Boolean(hit);
   }
   beginRelease() {
+    if (
+      !this.equipped ||
+      !this.hasFang
+    ) {
+      return;
+    }
+
     this.releaseCharge = THREE.MathUtils.clamp(
-      (this.holdTime - this.cfg.primeThreshold) /
-      Math.max(0.001, this.cfg.fullChargeTime - this.cfg.primeThreshold),
+      this.holdTime /
+      Math.max(
+        0.001,
+        this.cfg.fullChargeTime
+      ),
       0,
       1
     );
@@ -496,7 +815,11 @@ export class TinFangSystem {
 
     if (!this.releaseLaunched && t >= this.cfg.releaseMoment) {
       this.releaseLaunched = true;
-      this.launchFang(this.releaseCharge, this.releaseAimPoint);
+      this.launchFang(
+        this.releaseCharge,
+        this.releaseAimPoint
+      );
+      this.equipped = false;
       this.handFang.visible = false;
       this.trajectoryLine.visible = false;
     } else if (!this.releaseLaunched) {
@@ -529,14 +852,47 @@ export class TinFangSystem {
   }
 
   beginSlash() {
+    if (
+      !this.equipped ||
+      !this.hasFang
+    ) {
+      return;
+    }
+
     this.state = 'SLASH';
     this.actionTime = 0;
-    this.actionDuration = 0.38;
-    this.armRig.visible = !this.useRealHand;
-    this.player.setFangArmOverride?.(true);
-    this.player.setFangAnimation?.({ mode: 'slash', t: 0, compact: false });
+    this.actionDuration =
+      this.cfg.meleeDuration ??
+      0.34;
+    this.activeSlashVariant =
+      this.slashComboIndex;
+    this.slashComboIndex =
+      (
+        this.slashComboIndex +
+        1
+      ) % 3;
+    this.slashComboTimer =
+      this.cfg.meleeComboReset ??
+      0.82;
+    this.slashQueued = false;
+    this.armRig.visible =
+      !this.useRealHand;
+    this.player.setFangArmOverride?.(
+      true
+    );
+    this.player.setFangAnimation?.({
+      mode: 'slash',
+      t: 0,
+      variant:
+        this.activeSlashVariant,
+      compact: false
+    });
     this.handFang.visible = true;
-    this.slashArc.visible = true;
+
+    // The old full ring looked detached from the hand on the real VRM.
+    // Keep it only for the fallback primitive character.
+    this.slashArc.visible =
+      !this.useRealHand;
     this.slashArc.material.opacity = 0;
     this.trajectoryLine.visible = false;
     this.audio?.playFang?.('slash');
@@ -545,50 +901,276 @@ export class TinFangSystem {
 
   updateSlash(dt) {
     this.actionTime += dt;
-    const t = THREE.MathUtils.clamp(this.actionTime / this.actionDuration, 0, 1);
+
+    const t =
+      THREE.MathUtils.clamp(
+        this.actionTime /
+          this.actionDuration,
+        0,
+        1
+      );
+
+    const slash =
+      sampleKnifeSlash(
+        t,
+        this.activeSlashVariant
+      );
 
     if (this.useRealHand) {
-      this.player.setFangAnimation?.({ mode: 'slash', t, compact: false });
-    }
+      const direction =
+        this.camera
+          .getWorldDirection(
+            new THREE.Vector3()
+          );
 
-    if (t < 0.20) {
-      const k = easeOut(t / 0.20);
-      this.setArmPose({
-        shoulder: [THREE.MathUtils.lerp(-0.35, -1.10, k), -0.12, THREE.MathUtils.lerp(-0.15, -0.62, k)],
-        elbow: [THREE.MathUtils.lerp(0.55, 1.30, k), 0.06, 0.26],
-        hand: [-0.25, 0, 0.35]
-      }, 1);
-    } else if (t < 0.68) {
-      const k = easeInOut((t - 0.20) / 0.48);
-      this.setArmPose({
-        shoulder: [THREE.MathUtils.lerp(-1.10, 0.72, k), THREE.MathUtils.lerp(-0.12, 0.28, k), THREE.MathUtils.lerp(-0.62, 0.52, k)],
-        elbow: [THREE.MathUtils.lerp(1.30, -0.62, k), THREE.MathUtils.lerp(0.06, -0.10, k), THREE.MathUtils.lerp(0.26, -0.32, k)],
-        hand: [THREE.MathUtils.lerp(-0.25, 0.38, k), 0, THREE.MathUtils.lerp(0.35, -0.30, k)]
-      }, 1);
+      const animation = {
+        mode: 'slash',
+        t,
+        variant:
+          this.activeSlashVariant,
+        compact: false,
+        direction,
+        aimYaw:
+          angleDelta(
+            this.player.group.rotation.y,
+            Math.atan2(
+              -direction.x,
+              -direction.z
+            )
+          )
+      };
 
-      const swing = Math.sin(k * Math.PI);
-      this.slashArc.visible = true;
-      this.slashArc.position.set(0, 1.06, -0.50);
-      this.slashArc.rotation.set(Math.PI / 2, 0, THREE.MathUtils.lerp(-1.25, 0.95, k));
-      this.slashArc.scale.setScalar(0.92 + swing * 0.20);
-      this.slashArc.material.opacity = swing * 0.62;
+      this.player.setFangAnimation?.(
+        animation
+      );
 
-      if (!this.slashDidHit && k >= 0.34) {
-        this.slashDidHit = true;
-        this.performMeleeHit(this.cfg.meleeDamage, false);
-      }
+      // Apply after locomotion in the current frame, exactly like the throw IK
+      // layer. This removes the old one-frame-late Euler slash.
+      this.player.applyFangPose?.(
+        animation,
+        dt
+      );
+
+      this.slashArc.visible = false;
+
+      setFangGlow(
+        this.handFang,
+        slash.contactStrength *
+          0.16
+      );
     } else {
-      const k = easeOut((t - 0.68) / 0.32);
-      this.dampArmPose({
-        shoulder: [0.05, 0, 0],
-        elbow: [0.10, 0, 0],
-        hand: [0, 0, 0]
-      }, 18, dt);
-      this.slashArc.material.opacity *= 1 - Math.min(1, dt * 9);
-      this.player.body.rotation.z = THREE.MathUtils.lerp(this.player.body.rotation.z, 0, k);
+      // Primitive-character fallback keeps the old simple readable swing.
+      if (t < 0.20) {
+        const k =
+          easeOut(
+            t / 0.20
+          );
+
+        this.setArmPose(
+          {
+            shoulder: [
+              THREE.MathUtils.lerp(
+                -0.35,
+                -1.10,
+                k
+              ),
+              -0.12,
+              THREE.MathUtils.lerp(
+                -0.15,
+                -0.62,
+                k
+              )
+            ],
+            elbow: [
+              THREE.MathUtils.lerp(
+                0.55,
+                1.30,
+                k
+              ),
+              0.06,
+              0.26
+            ],
+            hand: [
+              -0.25,
+              0,
+              0.35
+            ]
+          },
+          1
+        );
+      } else if (t < 0.68) {
+        const k =
+          easeInOut(
+            (t - 0.20) /
+              0.48
+          );
+
+        this.setArmPose(
+          {
+            shoulder: [
+              THREE.MathUtils.lerp(
+                -1.10,
+                0.72,
+                k
+              ),
+              THREE.MathUtils.lerp(
+                -0.12,
+                0.28,
+                k
+              ),
+              THREE.MathUtils.lerp(
+                -0.62,
+                0.52,
+                k
+              )
+            ],
+            elbow: [
+              THREE.MathUtils.lerp(
+                1.30,
+                -0.62,
+                k
+              ),
+              THREE.MathUtils.lerp(
+                0.06,
+                -0.10,
+                k
+              ),
+              THREE.MathUtils.lerp(
+                0.26,
+                -0.32,
+                k
+              )
+            ],
+            hand: [
+              THREE.MathUtils.lerp(
+                -0.25,
+                0.38,
+                k
+              ),
+              0,
+              THREE.MathUtils.lerp(
+                0.35,
+                -0.30,
+                k
+              )
+            ]
+          },
+          1
+        );
+      } else {
+        const k =
+          easeOut(
+            (t - 0.68) /
+              0.32
+          );
+
+        this.dampArmPose(
+          {
+            shoulder: [
+              0.05,
+              0,
+              0
+            ],
+            elbow: [
+              0.10,
+              0,
+              0
+            ],
+            hand: [
+              0,
+              0,
+              0
+            ]
+          },
+          18,
+          dt
+        );
+
+        this.player.body.rotation.z =
+          THREE.MathUtils.lerp(
+            this.player.body.rotation.z,
+            0,
+            k
+          );
+      }
+
+      const swing =
+        slash.contactStrength;
+
+      this.slashArc.visible =
+        swing > 0.02;
+      this.slashArc.position.set(
+        0,
+        1.06,
+        -0.50
+      );
+      this.slashArc.rotation.set(
+        Math.PI / 2,
+        0,
+        THREE.MathUtils.lerp(
+          -0.92,
+          0.72,
+          THREE.MathUtils.clamp(
+            (
+              t - 0.24
+            ) /
+              0.38,
+            0,
+            1
+          )
+        )
+      );
+      this.slashArc.scale.setScalar(
+        0.72 +
+          swing * 0.10
+      );
+      this.slashArc.material.opacity =
+        swing * 0.26;
     }
 
-    if (t >= 1) this.finishHandAction();
+    // Check the target for the whole cutting interval, not at one arbitrary
+    // frame. Mark the slash consumed only after a real hit is found.
+    if (
+      !this.slashDidHit &&
+      slash.hitActive
+    ) {
+      this.slashDidHit =
+        this.performMeleeHit(
+          this.cfg.meleeDamage,
+          false
+        );
+    }
+
+    const wantsChain =
+      this.slashQueued ||
+      (
+        this.input.pointerLocked &&
+        this.input.mouseDown(0)
+      );
+
+    if (
+      wantsChain &&
+      t >=
+        (
+          this.cfg.meleeChainPoint ??
+          0.72
+        )
+    ) {
+      setFangGlow(
+        this.handFang,
+        0
+      );
+      this.beginSlash();
+      return;
+    }
+
+    if (t >= 1) {
+      setFangGlow(
+        this.handFang,
+        0
+      );
+      this.finishHandAction();
+    }
   }
 
   beginClaw() {
@@ -646,8 +1228,17 @@ export class TinFangSystem {
       if (flat.lengthSq() < 0.001) continue;
       flat.normalize();
 
-      const facing = forward.dot(flat);
-      if (facing < 0.42) continue;
+      const facing =
+        forward.dot(flat);
+      if (
+        facing <
+        (
+          this.cfg.meleeFacingDot ??
+          0.30
+        )
+      ) {
+        continue;
+      }
       if (!this.hasClearMeleeLine(origin, this.tmpA, distance)) continue;
 
       const score = distance - facing * 0.55;
@@ -657,15 +1248,23 @@ export class TinFangSystem {
       }
     }
 
-    if (!best) return;
+    if (!best) return false;
 
-    const result = this.targets.applyDamage(best, damage, 1);
+    const result =
+      this.targets.applyDamage(
+        best,
+        damage,
+        1
+      );
     if (result) {
       result.melee = true;
       result.claw = claw;
       this.onHit?.(result);
       this.audio?.playFang?.('hit');
+      return true;
     }
+
+    return false;
   }
 
   hasClearMeleeLine(origin, targetPos, targetDistance) {
@@ -1126,6 +1725,7 @@ export class TinFangSystem {
     this.removeProjectile();
     this.stuckPosition = null;
     this.state = 'READY';
+    this.equipped = false;
     this.sheath.visible = true;
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
@@ -1140,6 +1740,7 @@ export class TinFangSystem {
     this.removeProjectile();
     this.stuckPosition = null;
     this.state = 'LOST';
+    this.equipped = false;
     this.sheath.visible = true;
     this.armRig.visible = false;
     this.player.setFangArmOverride?.(false);
@@ -1264,6 +1865,7 @@ export class TinFangSystem {
 
     this.onState?.({
       state: this.state,
+      equipped: this.equipped,
       charge: this.chargeRatio,
       hasFang: this.hasFang,
       blocksWeapons: this.blocksWeapons,

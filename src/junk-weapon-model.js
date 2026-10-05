@@ -1,4 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import {
+  computePhysicalScale
+} from './weapon-physicality.js';
 
 // Procedural scavenged-weapon kit.
 // Art direction: welded plumbing, bent sheet metal, tape, exposed wire,
@@ -9,6 +12,53 @@ function applyWeaponVisualScale(
   baseScale,
   cfg
 ) {
+  const physical = cfg.physicalSizeM;
+
+  if (
+    physical &&
+    physical.width > 0 &&
+    physical.height > 0 &&
+    physical.length > 0
+  ) {
+    // Measure the finished procedural mesh before presentation scaling, then
+    // normalize X/Y/Z to explicit meter dimensions. Grip and muzzle sockets
+    // are children of the same group, so they stay registered to the mesh.
+    group.scale.set(1, 1, 1);
+    group.updateWorldMatrix(true, true);
+
+    const bounds = new THREE.Box3().setFromObject(group);
+    const size = bounds.getSize(new THREE.Vector3());
+
+    const heldScale = Math.max(0.0001, cfg.heldScale ?? baseScale);
+    const presentationScale =
+      Math.max(0.0001, baseScale) /
+      heldScale;
+
+    const exactScale =
+      computePhysicalScale(
+        {
+          width: size.x,
+          height: size.y,
+          length: size.z
+        },
+        physical,
+        presentationScale
+      );
+
+    group.scale.set(
+      exactScale.x,
+      exactScale.y,
+      exactScale.z
+    );
+
+    group.userData.massKg = cfg.massKg ?? null;
+    group.userData.physicalSizeM = { ...physical };
+    group.userData.presentationScale = presentationScale;
+    return;
+  }
+
+  // Backward-compatible fallback for any future weapon without explicit
+  // physical dimensions.
   group.scale.set(
     baseScale * (cfg.visualWidthScale ?? 1),
     baseScale * (cfg.visualHeightScale ?? 1),

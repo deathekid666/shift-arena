@@ -7,6 +7,14 @@ import { createCrouchPoseLayer } from './crouch-pose.js';
 import { createSlidePoseLayer } from './slide-pose.js';
 import { createJumpPoseLayer } from './jump-pose.js';
 import { createMeshyHumanoid } from './meshy-humanoid.js';
+import {
+  weaponRaiseBlend,
+  weaponTransitionSettle,
+  getWeaponTransitionProfile
+} from './weapon-transition.js';
+import {
+  isAuthoredSlideOwnershipActive
+} from './weapon-slide-ownership.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -1473,9 +1481,9 @@ function applyStablePelvis(character) {
 function updatePose(character, dt, state) {
   const { bones, baseRotations } = character;
   const combat = Boolean(state.combat);
-  // Throw IK is applied by Fang after camera update, before projectile release.
-  const fang = state.fangAnimation?.mode === 'slash' ? state.fangAnimation : null;
 
+  // Knife slash is applied later in the frame by the same world-space IK layer
+  // used for Fang aiming/throwing. Locomotion owns the base pose here.
   const locomotion = updateLocomotionLayer(character, dt, state);
   const { cycle, moveBlend, stateName, authored } = locomotion;
 
@@ -1499,10 +1507,15 @@ function updatePose(character, dt, state) {
   // weapon carry/aim owns the upper body with its own persistent filter while
   // authored locomotion continues to own the lower body. The authored slide
   // remains fully intact and is never overwritten by this layer.
+  const authoredSlideOwnsUpperBody =
+    isAuthoredSlideOwnershipActive(
+      state.sliding,
+      character.authoredLocomotion
+    );
+
   const stableWeaponUpperBody =
     state.weaponEquipped &&
-    !state.sliding &&
-    !fang;
+    !authoredSlideOwnsUpperBody;
 
   if (
     combat &&
@@ -1529,7 +1542,7 @@ function updatePose(character, dt, state) {
   } else {
     clearStableWeaponPose(bones);
 
-    if (!fang && !authored) {
+    if (!authored) {
     const armAmplitude =
       stateName === 'RUN' ? 0.58 :
       stateName === 'WALK' ? 0.36 :
@@ -1561,8 +1574,6 @@ function updatePose(character, dt, state) {
     dampBoneEuler(bones.rightHand, baseRotations, 0, 0, 0, 10, dt);
     }
   }
-
-  if (fang) applyRealFangPose(bones, baseRotations, fang, dt);
 
   if (!authored) {
     dampBoneEuler(
@@ -2577,20 +2588,20 @@ const WEAPON_POSE_PROFILES = {
     }
   },
   sniper: {
-    carryResponse: 18,
-    combatResponse: 22,
+    carryResponse: 16,
+    combatResponse: 19,
     aimPitchScale: 0.90,
     aimYawScale: 0.82,
     carryDelta: {
-      spine: [-0.013, 0, 0],
-      chest: [-0.017, 0, 0],
-      upperChest: [-0.012, 0, 0],
-      rightShoulder: [-0.020, -0.009, 0.018],
-      leftShoulder: [-0.017, 0.014, -0.017],
-      rightUpperArm: [-0.060, -0.012, 0.060],
-      rightLowerArm: [0.020, 0.004, 0.015],
-      leftUpperArm: [-0.100, 0.018, -0.025],
-      leftLowerArm: [0.100, -0.010, -0.010]
+      spine: [-0.024, 0, 0],
+      chest: [-0.034, 0, 0],
+      upperChest: [-0.026, 0, 0],
+      rightShoulder: [-0.027, -0.011, 0.030],
+      leftShoulder: [-0.024, 0.017, -0.030],
+      rightUpperArm: [-0.078, -0.015, 0.078],
+      rightLowerArm: [0.032, 0.006, 0.022],
+      leftUpperArm: [-0.122, 0.024, -0.048],
+      leftLowerArm: [0.122, -0.014, -0.018]
     },
     hipDelta: {
       spine: [-0.030, 0, 0],
@@ -2695,6 +2706,48 @@ function blendProfilePose(
   ];
 }
 
+function blendReadyWeaponPose(
+  profile,
+  bone,
+  ads,
+  shoulder
+) {
+  const carry =
+    profilePose(
+      profile,
+      'carry',
+      bone
+    );
+
+  const combat =
+    blendProfilePose(
+      profile,
+      bone,
+      ads
+    );
+
+  if (!carry) return combat;
+  if (!combat) return carry;
+
+  return [
+    THREE.MathUtils.lerp(
+      carry[0],
+      combat[0],
+      shoulder
+    ),
+    THREE.MathUtils.lerp(
+      carry[1],
+      combat[1],
+      shoulder
+    ),
+    THREE.MathUtils.lerp(
+      carry[2],
+      combat[2],
+      shoulder
+    )
+  ];
+}
+
 function applyProfileWeaponBone(
   bone,
   baseRotations,
@@ -2758,23 +2811,43 @@ function applyWeaponAimPose(
       1
     );
 
-  const shoulder =
+  const shoulderRaw =
     THREE.MathUtils.clamp(
       state.weaponShoulderBlend ?? 1,
       0,
       1
     );
 
+  const shoulder =
+    weaponRaiseBlend(
+      shoulderRaw
+    );
+
+  const transitionSettle =
+    weaponTransitionSettle(
+      shoulderRaw
+    );
+
+  const transitionProfile =
+    getWeaponTransitionProfile(
+      state.weaponPoseClass
+    );
+
   const response =
-    profile.combatResponse;
+    THREE.MathUtils.lerp(
+      profile.carryResponse,
+      profile.combatResponse,
+      shoulder
+    );
 
   applyProfileWeaponBone(
     bones.spine,
     baseRotations,
-    blendProfilePose(
+    blendReadyWeaponPose(
       profile,
       'spine',
-      ads
+      ads,
+      shoulder
     ),
     response * 0.82,
     dt,
@@ -2785,7 +2858,10 @@ function applyWeaponAimPose(
           0.18,
           ads
         ) *
-        shoulder,
+        shoulder -
+        transitionProfile.bodyPitch *
+          transitionSettle *
+          0.45,
       (
         yaw *
           THREE.MathUtils.lerp(
@@ -2803,10 +2879,11 @@ function applyWeaponAimPose(
   applyProfileWeaponBone(
     bones.chest,
     baseRotations,
-    blendProfilePose(
+    blendReadyWeaponPose(
       profile,
       'chest',
-      ads
+      ads,
+      shoulder
     ),
     response * 0.90,
     dt,
@@ -2817,7 +2894,10 @@ function applyWeaponAimPose(
           0.25,
           ads
         ) *
-        shoulder,
+        shoulder -
+        transitionProfile.bodyPitch *
+          transitionSettle *
+          0.80,
       (
         yaw *
           THREE.MathUtils.lerp(
@@ -2835,10 +2915,11 @@ function applyWeaponAimPose(
   applyProfileWeaponBone(
     bones.upperChest,
     baseRotations,
-    blendProfilePose(
+    blendReadyWeaponPose(
       profile,
       'upperChest',
-      ads
+      ads,
+      shoulder
     ),
     response * 0.94,
     dt,
@@ -2849,7 +2930,9 @@ function applyWeaponAimPose(
           0.22,
           ads
         ) *
-        shoulder,
+        shoulder -
+        transitionProfile.bodyPitch *
+          transitionSettle,
       (
         yaw *
           THREE.MathUtils.lerp(
@@ -2897,10 +2980,11 @@ function applyWeaponAimPose(
     applyProfileWeaponBone(
       bones[boneName],
       baseRotations,
-      blendProfilePose(
+      blendReadyWeaponPose(
         profile,
         boneName,
-        ads
+        ads,
+        shoulder
       ),
       response,
       dt
@@ -2997,6 +3081,112 @@ const IK_TMP = {
   desiredLocalQ: new THREE.Quaternion()
 };
 
+const WEAPON_BODY_REACTION_EULER =
+  new THREE.Euler();
+
+const WEAPON_BODY_REACTION_Q =
+  new THREE.Quaternion();
+
+function applyLateWeaponBodyReaction(
+  character,
+  gripPose
+) {
+  const pitch =
+    THREE.MathUtils.clamp(
+      gripPose?.naturalBodyPitch ?? 0,
+      -0.018,
+      0.018
+    );
+
+  const yaw =
+    THREE.MathUtils.clamp(
+      gripPose?.naturalBodyYaw ?? 0,
+      -0.022,
+      0.022
+    );
+
+  const roll =
+    THREE.MathUtils.clamp(
+      gripPose?.naturalBodyRoll ?? 0,
+      -0.018,
+      0.018
+    );
+
+  if (
+    Math.abs(pitch) +
+      Math.abs(yaw) +
+      Math.abs(roll) <
+    0.00002
+  ) {
+    return;
+  }
+
+  const { bones } = character;
+  const seen = new Set();
+
+  const apply = (
+    node,
+    pitchScale,
+    yawScale,
+    rollScale
+  ) => {
+    if (!node || seen.has(node)) return;
+    seen.add(node);
+
+    WEAPON_BODY_REACTION_EULER.set(
+      pitch * pitchScale,
+      yaw * yawScale,
+      roll * rollScale,
+      'XYZ'
+    );
+
+    WEAPON_BODY_REACTION_Q.setFromEuler(
+      WEAPON_BODY_REACTION_EULER
+    );
+
+    // updatePose reconstructs the upper body each frame, so this late local
+    // multiplication stays additive and cannot accumulate over time.
+    node.quaternion.multiply(
+      WEAPON_BODY_REACTION_Q
+    );
+  };
+
+  apply(
+    bones.spine,
+    0.16,
+    0.14,
+    0.10
+  );
+
+  apply(
+    bones.chest,
+    0.28,
+    0.26,
+    0.16
+  );
+
+  apply(
+    bones.upperChest,
+    0.42,
+    0.38,
+    0.24
+  );
+
+  apply(
+    bones.rightShoulder,
+    0.30,
+    0.44,
+    0.34
+  );
+
+  apply(
+    bones.leftShoulder,
+    0.26,
+    0.40,
+    0.30
+  );
+}
+
 const WEAPON_IK_TARGET_FILTER =
   new WeakMap();
 
@@ -3058,6 +3248,7 @@ function getWeaponIkTargetFilter(
   if (!state) {
     state = {
       initialized: false,
+      slideOwned: false,
       right: new THREE.Vector3(),
       left: new THREE.Vector3()
     };
@@ -3129,8 +3320,25 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       WEAPON_IK_TARGET_FILTER.get(
         character
       );
-    if (filter) filter.initialized = false;
+    if (filter) {
+      filter.initialized = false;
+      filter.slideOwned = false;
+    }
     return;
+  }
+
+  const slideOwned =
+    Boolean(
+      gripPose?.slideOwned
+    );
+
+  // Authored slide owns the right arm and upper body. No late carry reaction
+  // may be layered onto that pose.
+  if (!slideOwned) {
+    applyLateWeaponBodyReaction(
+      character,
+      gripPose
+    );
   }
 
   character.root.updateWorldMatrix(
@@ -3169,49 +3377,72 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       character
     );
 
-  if (!targetFilter.initialized) {
+  const ownershipChanged =
+    targetFilter.slideOwned !==
+    slideOwned;
+
+  if (
+    !targetFilter.initialized ||
+    ownershipChanged
+  ) {
+    // Rebase at state boundaries. Without this, the support-hand target keeps
+    // interpolating from the previous carry pose for a few frames and visibly
+    // drags sideways when the authored slide takes ownership.
     if (rightHandIK) {
       targetFilter.right.copy(
         gripPose.rightGrip
       );
     }
+
     targetFilter.left.copy(
       gripPose.leftGrip
     );
+
     targetFilter.initialized = true;
+    targetFilter.slideOwned =
+      slideOwned;
   }
 
-  if (rightHandIK) {
+  if (!slideOwned) {
+    if (rightHandIK) {
+      filterWeaponIkTarget(
+        targetFilter.right,
+        gripPose.rightGrip,
+        dt,
+        {
+          lambda:
+            THREE.MathUtils.lerp(
+              68,
+              78,
+              ads
+            ),
+          epsilon: 0.00004
+        }
+      );
+    }
+
     filterWeaponIkTarget(
-      targetFilter.right,
-      gripPose.rightGrip,
+      targetFilter.left,
+      gripPose.leftGrip,
       dt,
       {
         lambda:
           THREE.MathUtils.lerp(
-            68,
-            78,
+            64,
+            76,
             ads
           ),
         epsilon: 0.00004
       }
     );
+  } else {
+    // During authored slide the right hand is animation-owned and the left
+    // support hand must stay directly on the weapon socket. No carry-history
+    // smoothing is allowed to pull it to either side.
+    targetFilter.left.copy(
+      gripPose.leftGrip
+    );
   }
-
-  filterWeaponIkTarget(
-    targetFilter.left,
-    gripPose.leftGrip,
-    dt,
-    {
-      lambda:
-        THREE.MathUtils.lerp(
-          64,
-          76,
-          ads
-        ),
-      epsilon: 0.00004
-    }
-  );
 
   if (rightHandIK) {
     // Trigger/master hand: elbow stays bent and tucked instead of extending
@@ -3560,76 +3791,6 @@ function rotateBoneChildToward(
   );
 
   root.updateWorldMatrix(true, true);
-}
-
-function applyRealFangPose(bones, baseRotations, fang, dt) {
-  const mode = fang.mode ?? 'aim';
-  const t = THREE.MathUtils.clamp(fang.t ?? 0, 0, 1);
-
-  let upper;
-  let lower;
-  let hand;
-  let shoulder;
-  let chest;
-
-  if (mode === 'slash') {
-    const swing = easeInOut(t);
-    upper = [
-      THREE.MathUtils.lerp(-0.85, 0.52, swing),
-      THREE.MathUtils.lerp(-0.18, 0.28, swing),
-      THREE.MathUtils.lerp(0.92, 0.20, swing)
-    ];
-    lower = [
-      THREE.MathUtils.lerp(-1.05, -0.28, swing),
-      0,
-      THREE.MathUtils.lerp(0.20, -0.26, swing)
-    ];
-    hand = [
-      THREE.MathUtils.lerp(-0.22, 0.28, swing),
-      0,
-      THREE.MathUtils.lerp(0.18, -0.20, swing)
-    ];
-    shoulder = [-0.06, 0, 0.10];
-    chest = [0, THREE.MathUtils.lerp(0.10, -0.10, swing), 0];
-  } else {
-    return;
-  }
-
-  dampBoneEuler(
-    bones.rightShoulder,
-    baseRotations,
-    ...shoulder,
-    24,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightUpperArm,
-    baseRotations,
-    ...upper,
-    26,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightLowerArm,
-    baseRotations,
-    ...lower,
-    28,
-    dt
-  );
-  dampBoneEuler(
-    bones.rightHand,
-    baseRotations,
-    ...hand,
-    28,
-    dt
-  );
-  dampBoneEuler(
-    bones.upperChest ?? bones.chest,
-    baseRotations,
-    ...chest,
-    20,
-    dt
-  );
 }
 
 function easeOut(t) {

@@ -9,7 +9,7 @@ const ACTION_CODES = {
   reload: ['KeyR'],
   interact: ['KeyE'],
   armor: ['Digit3'],
-  melee: ['KeyV'],
+  knife: ['KeyV'],
   toggleBot: ['KeyB'],
   slot1: ['Digit1'],
   slot2: ['Digit2']

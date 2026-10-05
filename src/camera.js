@@ -23,6 +23,8 @@ export class ThirdPersonCamera {
     this.recoilMaxYaw = 0.12;
     this.lookX = 0;
     this.lookY = 0;
+    this.inputYawVelocity = 0;
+    this.inputPitchVelocity = 0;
     this.lookPrepared = false;
 
     this.raycaster = new THREE.Raycaster();
@@ -37,13 +39,39 @@ export class ThirdPersonCamera {
     const cfg = GAME_CONFIG.camera;
 
     const look = this.input.consumeLook();
-    this.yaw -= look.yaw * cfg.sensitivity;
-    this.pitch -= look.pitch * cfg.sensitivity;
+
+    const inputYawDelta =
+      -look.yaw * cfg.sensitivity;
+    const inputPitchDelta =
+      -look.pitch * cfg.sensitivity;
+
+    this.yaw += inputYawDelta;
+    this.pitch += inputPitchDelta;
     this.pitch = THREE.MathUtils.clamp(
       this.pitch,
       cfg.pitchMin,
       cfg.pitchMax
     );
+
+    const velocityDt =
+      Math.max(
+        1 / 240,
+        Math.min(dt, 0.05)
+      );
+
+    this.inputYawVelocity =
+      THREE.MathUtils.clamp(
+        inputYawDelta / velocityDt,
+        -7.5,
+        7.5
+      );
+
+    this.inputPitchVelocity =
+      THREE.MathUtils.clamp(
+        inputPitchDelta / velocityDt,
+        -7.5,
+        7.5
+      );
 
     this.lookX = THREE.MathUtils.damp(
       this.lookX,

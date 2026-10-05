@@ -2,6 +2,25 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 import { GAME_CONFIG, WEAPON_ORDER } from './config.js';
 import { buildJunkWeaponVisual } from './junk-weapon-model.js';
 import { WeaponAudio } from './audio.js';
+import {
+  weaponRaiseBlend,
+  weaponTransitionArc,
+  weaponTransitionSettle,
+  dampTransitionDirection,
+  getWeaponTransitionProfile
+} from './weapon-transition.js';
+import {
+  getWeaponHandlingMass,
+  getWeaponResponseScale
+} from './weapon-physicality.js';
+import {
+  createWeaponNaturalMotionState,
+  resetWeaponNaturalMotion,
+  stepWeaponNaturalMotion
+} from './weapon-natural-motion.js';
+import {
+  isAuthoredSlideOwnershipActive
+} from './weapon-slide-ownership.js';
 
 const SHOTGUN_PATTERN_10 = [
   [0.00, 0.00],
@@ -77,7 +96,11 @@ export class WeaponSystem {
       leftHandLambda: 30,
       adsBlend: 0,
       shoulderBlend: 0,
-      poseClass: 'ar'
+      poseClass: 'ar',
+      naturalBodyPitch: 0,
+      naturalBodyYaw: 0,
+      naturalBodyRoll: 0,
+      slideOwned: false
     };
 
     this.entries = WEAPON_ORDER.map((key) => {
@@ -109,7 +132,11 @@ export class WeaponSystem {
         bodyGripLocal: new THREE.Vector3(),
         slideCarryActive: false,
         bobTime: 0,
-        pumpSoundPlayed: true
+        pumpSoundPlayed: true,
+        transitionDirection: -1,
+        naturalMotion:
+          createWeaponNaturalMotionState(),
+        naturalOutput: null
       };
       return { key, cfg, model, state };
     });
@@ -251,6 +278,8 @@ export class WeaponSystem {
           magazine: entry.state.ammo,
           magazineSize: entry.cfg.magazineSize,
           reserve: this.ammoPool[entry.cfg.ammoType] ?? 0,
+          massKg: entry.cfg.massKg,
+          physicalSizeM: entry.cfg.physicalSizeM,
           color: entry.cfg.color
         };
       }),
@@ -310,8 +339,15 @@ export class WeaponSystem {
     );
   }
 
-  updateSelection() {
-    if (!this.blocked) this.processWeaponSwitch();
+  updateSelection(allowWhileBlocked = false) {
+    if (
+      this.blocked &&
+      !allowWhileBlocked
+    ) {
+      return false;
+    }
+
+    return this.processWeaponSwitch();
   }
 
   update(dt) {
@@ -335,10 +371,21 @@ export class WeaponSystem {
         s.dynamicBloom = 0;
       }
 
-      // Critically damped-ish weapon recoil spring. The gun physically kicks
-      // rearward then settles instead of teleporting to a Z offset.
-      const kickStiffness = 92 / Math.max(0.55, entry.cfg.mass);
-      const kickDamping = 18 / Math.max(0.72, Math.sqrt(entry.cfg.mass));
+      // Critically damped-ish weapon recoil spring. Physical kg is converted
+      // to a bounded handling mass so a 9.5 kg sniper genuinely feels heavier
+      // without turning the visual spring into slow-motion.
+      const handlingMass =
+        getWeaponHandlingMass(entry.cfg);
+      const handlingResponse =
+        getWeaponResponseScale(entry.cfg);
+      const kickStiffness =
+        92 / Math.max(0.55, handlingMass);
+      const kickDamping =
+        18 /
+        Math.max(
+          0.72,
+          Math.sqrt(handlingMass)
+        );
       s.visualKickVelocity += -s.visualKick * kickStiffness * dt;
       s.visualKickVelocity *= Math.exp(-kickDamping * dt);
       s.visualKick += s.visualKickVelocity * dt;
@@ -348,8 +395,11 @@ export class WeaponSystem {
       }
 
       const poseRecovery =
-        entry.cfg.weaponRecoilRecovery ??
-        Math.max(8, entry.cfg.recoilRecovery * 1.35);
+        (
+          entry.cfg.weaponRecoilRecovery ??
+          Math.max(8, entry.cfg.recoilRecovery * 1.35)
+        ) *
+        Math.pow(handlingResponse, 0.35);
 
       s.recoilPitch = THREE.MathUtils.damp(
         s.recoilPitch,
@@ -539,9 +589,17 @@ export class WeaponSystem {
       shoulderRequested;
 
     const shoulderTarget = shoulderRequested ? 1 : 0;
-    const shoulderResponse = shoulderRequested
-      ? (cfg.shoulderRaiseSpeed ?? 26)
-      : (cfg.shoulderLowerSpeed ?? 12);
+    const handlingMass =
+      getWeaponHandlingMass(cfg);
+    const handlingResponse =
+      getWeaponResponseScale(cfg);
+    const shoulderResponse =
+      (
+        shoulderRequested
+          ? (cfg.shoulderRaiseSpeed ?? 26)
+          : (cfg.shoulderLowerSpeed ?? 12)
+      ) *
+      handlingResponse;
 
     state.shoulderBlend = THREE.MathUtils.damp(
       state.shoulderBlend ?? 0,
@@ -558,9 +616,13 @@ export class WeaponSystem {
     }
 
     const adsTarget = this.aiming ? 1 : 0;
-    const adsResponse = this.aiming
-      ? (cfg.adsPoseInSpeed ?? 28)
-      : (cfg.adsPoseOutSpeed ?? 20);
+    const adsResponse =
+      (
+        this.aiming
+          ? (cfg.adsPoseInSpeed ?? 28)
+          : (cfg.adsPoseOutSpeed ?? 20)
+      ) *
+      handlingResponse;
 
     state.adsBlend = THREE.MathUtils.damp(
       state.adsBlend ?? 0,
@@ -577,11 +639,43 @@ export class WeaponSystem {
     }
 
     const shoulderBlend =
-      THREE.MathUtils.smoothstep(
-        state.shoulderBlend,
-        0,
-        1
+      weaponRaiseBlend(
+        state.shoulderBlend
       );
+
+    const transitionArc =
+      weaponTransitionArc(
+        state.shoulderBlend
+      );
+
+    const transitionSettle =
+      weaponTransitionSettle(
+        state.shoulderBlend
+      );
+
+    const transitionProfile =
+      getWeaponTransitionProfile(
+        this.poseClass
+      );
+
+    // Never hard-flip the raise/lower arc when the player releases input in
+    // the middle of the motion. Direction carries momentum for a few frames,
+    // producing a tiny anticipation on raise and a weighted hang before lower.
+    state.transitionDirection =
+      dampTransitionDirection(
+        state.transitionDirection,
+        shoulderRequested,
+        transitionProfile.directionResponse *
+          handlingResponse,
+        dt
+      );
+
+    const transitionDirection =
+      state.transitionDirection;
+
+    const directedArc =
+      transitionArc *
+      transitionDirection;
 
     const adsBlend =
       THREE.MathUtils.smoothstep(
@@ -654,14 +748,11 @@ export class WeaponSystem {
       this.player.vrmCharacter?.authoredLocomotion ??
       null;
 
-    const slideCarryActive = Boolean(
-      this.player.sliding ||
-      authoredLocomotion?.slideExitActive ||
-      (authoredLocomotion?.slideExitTail ?? 0) > 0.015 ||
-      authoredLocomotion?.state === 'SLIDE_START' ||
-      authoredLocomotion?.state === 'SLIDE_LOOP' ||
-      authoredLocomotion?.state === 'SLIDE_EXIT'
-    );
+    const slideCarryActive =
+      isAuthoredSlideOwnershipActive(
+        this.player.sliding,
+        authoredLocomotion
+      );
 
     // When authored slide recovery has completely finished, release hand
     // ownership and recapture the Fortnite body-space anchor from the now
@@ -686,6 +777,13 @@ export class WeaponSystem {
       cfg.masterHandCarry &&
       this.handMounted
     ) {
+      // Slide keeps the known-good authored-hand ownership. Procedural
+      // carry inertia is disabled here so it cannot fight the slide animation.
+      resetWeaponNaturalMotion(
+        state.naturalMotion
+      );
+      state.naturalOutput = null;
+
       const handWorld =
         this.player.getHandWorldPosition?.(
           'right',
@@ -759,7 +857,8 @@ export class WeaponSystem {
           cfg.supportHandIKLambda ?? 150,
           0,
           0,
-          0
+          0,
+          true
         );
 
         return;
@@ -794,11 +893,7 @@ export class WeaponSystem {
 
       if (chest && shoulder) {
         const readyToAim =
-          THREE.MathUtils.smoothstep(
-            shoulderBlend,
-            0,
-            1
-          );
+          shoulderBlend;
 
         // Capture a stable body-space anchor once. The old build sampled the
         // animated chest/shoulder every frame; any clip or IK micro-motion was
@@ -839,7 +934,7 @@ export class WeaponSystem {
 
         const posePitch =
           THREE.MathUtils.lerp(
-            -0.105,
+            cfg.carryPitch ?? -0.105,
             THREE.MathUtils.lerp(
               cfg.hipFireAimPitch ?? -0.045,
               cfg.adsAimPitch ?? -0.012,
@@ -848,9 +943,16 @@ export class WeaponSystem {
             readyToAim
           );
 
+        const poseYaw =
+          THREE.MathUtils.lerp(
+            cfg.carryYaw ?? 0,
+            0,
+            readyToAim
+          );
+
         const poseRoll =
           THREE.MathUtils.lerp(
-            -0.055,
+            cfg.carryRoll ?? -0.055,
             THREE.MathUtils.lerp(
               cfg.hipFireAimRoll ?? -0.030,
               cfg.adsAimRoll ?? -0.006,
@@ -859,14 +961,61 @@ export class WeaponSystem {
             readyToAim
           );
 
+        const naturalMotion =
+          stepWeaponNaturalMotion(
+            state.naturalMotion,
+            {
+              dt,
+              massKg: cfg.massKg,
+              lengthM:
+                cfg.physicalSizeM?.length,
+              lookYawVelocity:
+                this.cameraRig.inputYawVelocity,
+              lookPitchVelocity:
+                this.cameraRig.inputPitchVelocity,
+              localX:
+                this.player.localMotion?.x ?? 0,
+              localZ:
+                this.player.localMotion?.z ?? 0,
+              speed,
+              grounded:
+                this.player.grounded,
+              gaitPhase:
+                this.player.vrmCharacter?.locomotion?.phase,
+              adsBlend,
+              shoulderBlend,
+              bobBase: cfg.bob,
+              swayBase: cfg.sway,
+              scoped:
+                Boolean(cfg.scope)
+            }
+          );
+
+        state.naturalOutput =
+          naturalMotion;
+
         const aimCorrection =
           new THREE.Quaternion().setFromEuler(
             new THREE.Euler(
-              posePitch -
+              posePitch +
+                naturalMotion.pitch +
+                transitionProfile.pitch *
+                  directedArc +
+                transitionProfile.settlePitch *
+                  transitionSettle -
                 state.visualKick * 0.18 -
                 state.recoilPitch * 0.20,
-              state.recoilYaw * 0.18,
+              poseYaw +
+                naturalMotion.yaw +
+                state.recoilYaw * 0.18 +
+                transitionProfile.yaw *
+                  directedArc,
               poseRoll +
+                naturalMotion.roll +
+                transitionProfile.roll *
+                  directedArc +
+                transitionProfile.settleRoll *
+                  transitionSettle +
                 state.recoilRoll * 0.16,
               'YXZ'
             )
@@ -934,6 +1083,33 @@ export class WeaponSystem {
             readyToAim
           );
 
+        // Small class-specific transition arc. It is exactly zero at both
+        // endpoints, so existing carry/hip/ADS calibration remains unchanged.
+        this.tmpGripLocal.x +=
+          transitionProfile.right *
+          directedArc;
+        this.tmpGripLocal.y +=
+          transitionProfile.lift *
+            directedArc +
+          transitionProfile.settleLift *
+            transitionSettle;
+        this.tmpGripLocal.z +=
+          transitionProfile.forward *
+            directedArc +
+          transitionProfile.settleForward *
+            transitionSettle;
+
+        // Battlefield-style passive carry response: hands/body drive the
+        // target while the weapon's mass contributes restrained lag, step
+        // rhythm, acceleration reaction and breathing. IK follows this final
+        // weapon pose, so arms react as a unit rather than waving separately.
+        this.tmpGripLocal.x +=
+          naturalMotion.positionX;
+        this.tmpGripLocal.y +=
+          naturalMotion.positionY;
+        this.tmpGripLocal.z +=
+          naturalMotion.positionZ;
+
         // Convert the independent grip target into the weapon group's local
         // transform. rightGrip is the exact modeled pistol-grip pivot.
         this.tmpParentWorldQInv
@@ -964,8 +1140,9 @@ export class WeaponSystem {
               this.tmpGripOffset
             );
 
-        // Weapon target is already stabilized by the chest/aim layers. Use a
-        // rigid transform so there is no extra weapon lag between the hands.
+        // Keep the final attachment exact. The perceived weight now lives in
+        // the additive spring layer above, so the weapon never rubber-bands
+        // away from the IK hands or crosshair target.
         model.position.copy(
           targetPosition
         );
@@ -1064,25 +1241,25 @@ export class WeaponSystem {
         model.position.x = THREE.MathUtils.damp(
           model.position.x,
           targetPosition.x,
-          28 / cfg.mass,
+          28 / handlingMass,
           dt
         );
         model.position.y = THREE.MathUtils.damp(
           model.position.y,
           targetPosition.y,
-          28 / cfg.mass,
+          28 / handlingMass,
           dt
         );
         model.position.z = THREE.MathUtils.damp(
           model.position.z,
           targetPosition.z,
-          30 / cfg.mass,
+          30 / handlingMass,
           dt
         );
 
         model.quaternion.slerp(
           this.tmpDesiredLocalQ,
-          1 - Math.exp(-(24 / cfg.mass) * dt)
+          1 - Math.exp(-(24 / handlingMass) * dt)
         );
 
         model.updateWorldMatrix(true, true);
@@ -1146,25 +1323,25 @@ export class WeaponSystem {
       model.position.x = THREE.MathUtils.damp(
         model.position.x,
         targetPosition.x,
-        30 / cfg.mass,
+        30 / handlingMass,
         dt
       );
       model.position.y = THREE.MathUtils.damp(
         model.position.y,
         targetPosition.y,
-        30 / cfg.mass,
+        30 / handlingMass,
         dt
       );
       model.position.z = THREE.MathUtils.damp(
         model.position.z,
         targetPosition.z,
-        32 / cfg.mass,
+        32 / handlingMass,
         dt
       );
 
       model.quaternion.slerp(
         this.tmpDesiredLocalQ,
-        1 - Math.exp(-(26 / cfg.mass) * dt)
+        1 - Math.exp(-(26 / handlingMass) * dt)
       );
 
       model.updateWorldMatrix(true, true);
@@ -1176,12 +1353,12 @@ export class WeaponSystem {
     const targetY = 1.05 + bobY + swayY;
     const targetZ = -0.48 + state.visualKick;
 
-    model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 18 / cfg.mass, dt);
-    model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / cfg.mass, dt);
-    model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 22 / cfg.mass, dt);
-    model.rotation.x = THREE.MathUtils.damp(model.rotation.x, -0.04 - state.visualKick * 0.75, 18 / cfg.mass, dt);
-    model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 18 / cfg.mass, dt);
-    model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / cfg.mass, dt);
+    model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 18 / handlingMass, dt);
+    model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / handlingMass, dt);
+    model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 22 / handlingMass, dt);
+    model.rotation.x = THREE.MathUtils.damp(model.rotation.x, -0.04 - state.visualKick * 0.75, 18 / handlingMass, dt);
+    model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 18 / handlingMass, dt);
+    model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / handlingMass, dt);
 
     model.updateWorldMatrix(true, true);
     this.updateGripPose(false, false);
@@ -1193,7 +1370,8 @@ export class WeaponSystem {
     leftHandLambda = 30,
     adsBlend = 0,
     shoulderBlend = 0,
-    rightHandIKBlend = 0
+    rightHandIKBlend = 0,
+    slideOwned = false
   ) {
     const model = this.active.model;
     model.rightGrip.getWorldPosition(this.gripPose.rightGrip);
@@ -1262,6 +1440,18 @@ export class WeaponSystem {
       THREE.MathUtils.clamp(shoulderBlend, 0, 1);
     this.gripPose.poseClass =
       this.cfg.poseClass ?? 'ar';
+    this.gripPose.slideOwned =
+      Boolean(slideOwned);
+
+    const natural =
+      this.state.naturalOutput;
+
+    this.gripPose.naturalBodyPitch =
+      natural?.bodyPitch ?? 0;
+    this.gripPose.naturalBodyYaw =
+      natural?.bodyYaw ?? 0;
+    this.gripPose.naturalBodyRoll =
+      natural?.bodyRoll ?? 0;
   }
 
   getGripPose() {
@@ -1412,19 +1602,28 @@ export class WeaponSystem {
   processWeaponSwitch() {
     if (this.input.consume('slot1')) {
       this.equipSlot(0);
-      return;
+      return true;
     }
 
     if (this.input.consume('slot2')) {
       this.equipSlot(1);
-      return;
+      return true;
     }
 
-    const wheel = this.input.consumeWeaponWheel();
+    const wheel =
+      this.input.consumeWeaponWheel();
+
     if (wheel !== 0) {
       // With exactly two firearm slots, next/previous both switch to the other gun.
-      this.equipSlot(this.activeSlot === 0 ? 1 : 0);
+      this.equipSlot(
+        this.activeSlot === 0
+          ? 1
+          : 0
+      );
+      return true;
     }
+
+    return false;
   }
 
   equipSlot(index) {
@@ -1445,6 +1644,11 @@ export class WeaponSystem {
     nextState.bodyGripReady = false;
     nextState.bodyGripLocal.set(0, 0, 0);
     nextState.slideCarryActive = false;
+    nextState.transitionDirection = -1;
+    resetWeaponNaturalMotion(
+      nextState.naturalMotion
+    );
+    nextState.naturalOutput = null;
 
     this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
@@ -1478,6 +1682,11 @@ export class WeaponSystem {
     );
     newEntry.state.isReloading = false;
     newEntry.state.reloadTimer = 0;
+    newEntry.state.transitionDirection = -1;
+    resetWeaponNaturalMotion(
+      newEntry.state.naturalMotion
+    );
+    newEntry.state.naturalOutput = null;
     newEntry.model.group.visible = !this.visualHidden;
 
     this.emitSwitch();
@@ -1509,7 +1718,9 @@ export class WeaponSystem {
       fireRate: this.cfg.fireRate,
       reticle: this.cfg.reticle,
       scoped: Boolean(this.cfg.scope),
-      ammoType: this.cfg.ammoType
+      ammoType: this.cfg.ammoType,
+      massKg: this.cfg.massKg,
+      physicalSizeM: this.cfg.physicalSizeM
     });
   }
 
@@ -1549,6 +1760,10 @@ export class WeaponSystem {
       entry.state.bodyGripReady = false;
       entry.state.bodyGripLocal.set(0, 0, 0);
       entry.state.slideCarryActive = false;
+      resetWeaponNaturalMotion(
+        entry.state.naturalMotion
+      );
+      entry.state.naturalOutput = null;
       entry.state.raiseAnchorPosition.copy(
         entry.model.group.position
       );
@@ -1620,7 +1835,10 @@ export class WeaponSystem {
       (this.aiming
         ? (cfg.adsWeaponKickImpulse ?? 12.5)
         : (cfg.weaponKickImpulse ?? 17.0)) /
-      Math.max(0.72, cfg.mass);
+      Math.max(
+        0.72,
+        getWeaponHandlingMass(cfg)
+      );
 
     const posePitch =
       (cfg.weaponRecoilPitch ??

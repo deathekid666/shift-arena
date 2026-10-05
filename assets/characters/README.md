@@ -1,6 +1,6 @@
 # Roach Scout character preview
 
-This preview branch loads `roach-scout.glb` directly. The Mixamo skeleton is adapted to the existing normalized humanoid animation controller; gameplay physics and the Build010.27A weapon animation layers remain in place. This is a test asset, not a production-ready character.
+This preview branch loads `roach-scout.glb` directly. The Mixamo skeleton is adapted to the existing normalized humanoid animation controller; gameplay physics and the Build010.28I weapon animation layers remain in place. This is a test asset, not a production-ready character.
 
 ## Asset attribution
 Ember Antenna Scout, created by nlaassali1 with Meshy from the user-approved Scout reference. Generated under CC BY4.0: https://creativecommons.org/licenses/by/4.0/ . Service: https://www.meshy.ai/ . Original rigged export retained unchanged in this GLB; runtime changes normalize skin influences and establish the humanoid rest pose. The file includes Running and Walking; gameplay uses the existing animation library and pose layers.
