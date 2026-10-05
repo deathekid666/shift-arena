@@ -35,6 +35,36 @@ test('primary attack has three distinct slash variants', () => {
   assert.ok(c.blade.up < a.blade.up);
 });
 
+test('primary cuts travel visibly across the torso', () => {
+  const aWind = sampleKnifeSlash(0.16, 0);
+  const aFollow = sampleKnifeSlash(0.56, 0);
+  const bWind = sampleKnifeSlash(0.16, 1);
+  const bFollow = sampleKnifeSlash(0.56, 1);
+
+  assert.ok(aWind.hand.right - aFollow.hand.right > 0.95);
+  assert.ok(bFollow.hand.right - bWind.hand.right > 0.80);
+  assert.ok(Math.abs(sampleKnifeSlash(0.40, 0).blade.right) > 0.45);
+  assert.ok(Math.abs(sampleKnifeSlash(0.40, 1).blade.right) > 0.45);
+});
+
+test('third slash reads as a strong diagonal finisher', () => {
+  const wind = sampleKnifeSlash(0.16, 2);
+  const follow = sampleKnifeSlash(0.56, 2);
+
+  assert.ok(wind.hand.up - follow.hand.up > 0.75);
+  assert.ok(wind.hand.right - follow.hand.right > 0.80);
+});
+
+test('combo chain point lands exactly on ready pose', () => {
+  const ready = sampleKnifeReady(0);
+  for (let variant = 0; variant < 3; variant += 1) {
+    const chain = sampleKnifeSlash(0.72, variant);
+    assert.equal(chain.hand.right, ready.hand.right);
+    assert.equal(chain.hand.up, ready.hand.up);
+    assert.equal(chain.hand.forward, ready.hand.forward);
+  }
+});
+
 test('fast primary slash has a visual contact window', () => {
   assert.equal(sampleKnifeSlash(0.18, 0).hitActive, false);
   assert.equal(sampleKnifeSlash(0.30, 0).hitActive, true);
