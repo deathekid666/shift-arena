@@ -72,7 +72,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.25C · CTRL CROUCH RESTORED</div>
+    <div id="damage-test-hint">BUILD 010.25D · FULLSCREEN KEYBOARD LOCK</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
     <div id="jitter-lab" hidden>
@@ -126,7 +126,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.25C · CTRL CROUCH RESTORED</div>
+        <div class="build-tag">BUILD 010.25D · FULLSCREEN KEYBOARD LOCK</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
@@ -685,17 +685,82 @@ prewarmGameBeforeEntry().catch((error) => {
   button.textContent = 'RELOAD REQUIRED';
 });
 
+async function enterImmersiveArena() {
+  if (input.isTouch) {
+    input.lockPointer();
+    return;
+  }
+
+  let fullscreenActive =
+    Boolean(document.fullscreenElement);
+
+  if (
+    !fullscreenActive &&
+    document.documentElement.requestFullscreen
+  ) {
+    try {
+      await document.documentElement.requestFullscreen({
+        navigationUI: 'hide'
+      });
+      fullscreenActive =
+        Boolean(document.fullscreenElement);
+    } catch {
+      fullscreenActive = false;
+    }
+  }
+
+  // Pointer lock is still independent. If fullscreen was denied, this keeps
+  // the exact old browser-game behavior alive.
+  input.lockPointer();
+
+  const keyboardLocked =
+    fullscreenActive
+      ? await input.lockGameKey()
+      : false;
+
+  if (fullscreenActive && keyboardLocked) {
+    showToast('FULLSCREEN · CTRL+W PROTECTED');
+  } else if (!fullscreenActive) {
+    showToast('FULLSCREEN BLOCKED · C ALSO CROUCHES');
+  } else {
+    showToast('CTRL+W MAY BE RESERVED · C ALSO CROUCHES');
+  }
+}
+
+document.addEventListener(
+  'fullscreenchange',
+  () => {
+    if (!document.fullscreenElement) {
+      input.unlockGameKeys();
+      return;
+    }
+
+    // Some browsers recreate fullscreen state asynchronously. Re-requesting
+    // the narrow KeyW lock here is harmless and improves reliability.
+    input.lockGameKey();
+  }
+);
+
 button.addEventListener('click', () => {
   if (!startupReady || !opponentsChosen) return;
 
   applyOpponentSetup();
   weapon.unlockAudio();
   start.style.display = 'none';
-  input.lockPointer();
+
+  // Do not await this in the click handler. Arena entry remains immediate and
+  // failures in fullscreen / Keyboard Lock can never block gameplay.
+  enterImmersiveArena().catch(() => {
+    input.lockPointer();
+  });
 });
 renderer.domElement.addEventListener('click', () => {
   weapon.unlockAudio();
   input.lockPointer();
+
+  if (document.fullscreenElement) {
+    input.lockGameKey();
+  }
 });
 
 const stats = document.querySelector('#stats');

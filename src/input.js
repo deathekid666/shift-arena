@@ -42,8 +42,51 @@ export class InputController {
   }
 
   lockPointer() {
-    if (!this.isTouch && document.pointerLockElement !== this.canvas) {
-      this.canvas.requestPointerLock();
+    if (
+      this.isTouch ||
+      document.pointerLockElement === this.canvas
+    ) {
+      return;
+    }
+
+    try {
+      const result =
+        this.canvas.requestPointerLock();
+
+      if (result?.catch) {
+        result.catch(() => {});
+      }
+    } catch {
+      // Pointer lock remains best-effort. The next canvas click retries it.
+    }
+  }
+
+  async lockGameKey() {
+    if (
+      this.isTouch ||
+      !document.fullscreenElement ||
+      !navigator.keyboard?.lock
+    ) {
+      return false;
+    }
+
+    try {
+      // KeyW is the browser-reserved part of Ctrl+W. Locking only this key
+      // keeps the browser integration as narrow as possible.
+      await navigator.keyboard.lock([
+        'KeyW'
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  unlockGameKeys() {
+    try {
+      navigator.keyboard?.unlock?.();
+    } catch {
+      // Optional browser API; nothing to recover.
     }
   }
 
