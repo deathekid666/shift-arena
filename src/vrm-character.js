@@ -2419,23 +2419,330 @@ function applyCombatStrafeOrientationWarp(
   return warp;
 }
 
+const BASE_WEAPON_CARRY_POSE = {
+  spine: [-0.025, 0.000, 0.000],
+  chest: [-0.045, 0.000, 0.000],
+  upperChest: [-0.030, 0.000, 0.000],
+  neck: [-0.008, 0.000, 0.000],
+  head: [0.000, 0.000, 0.000],
+  rightShoulder: [-0.040, -0.025, 0.090],
+  leftShoulder: [-0.045, 0.030, -0.095],
+  rightUpperArm: [-0.540, -0.070, 0.620],
+  rightLowerArm: [-0.780, 0.030, 0.130],
+  leftUpperArm: [-0.660, 0.100, -0.600],
+  leftLowerArm: [-0.800, -0.040, -0.150],
+  rightHand: [-0.055, -0.012, 0.025],
+  leftHand: [-0.035, 0.010, -0.018]
+};
+
+const BASE_WEAPON_HIP_POSE = {
+  spine: [0, 0, 0],
+  chest: [0, 0, 0],
+  upperChest: [0, 0, 0],
+  rightShoulder: [-0.045, -0.030, 0.095],
+  leftShoulder: [-0.050, 0.035, -0.100],
+  rightUpperArm: [-0.580, -0.080, 0.660],
+  rightLowerArm: [-0.820, 0.030, 0.140],
+  leftUpperArm: [-0.700, 0.110, -0.640],
+  leftLowerArm: [-0.840, -0.040, -0.160],
+  rightHand: [-0.060, -0.020, 0.030],
+  leftHand: [-0.040, 0.012, -0.020]
+};
+
+const BASE_WEAPON_ADS_POSE = {
+  spine: [0, 0, 0],
+  chest: [0, 0, 0],
+  upperChest: [0, 0, 0],
+  rightShoulder: [-0.070, -0.045, 0.120],
+  leftShoulder: [-0.080, 0.055, -0.130],
+  rightUpperArm: [-0.640, -0.100, 0.720],
+  rightLowerArm: [-0.900, 0.030, 0.170],
+  leftUpperArm: [-0.760, 0.110, -0.700],
+  leftLowerArm: [-0.920, -0.040, -0.180],
+  rightHand: [-0.100, -0.020, 0.050],
+  leftHand: [-0.070, 0.012, -0.030]
+};
+
+const WEAPON_POSE_PROFILES = {
+  ar: {
+    carryResponse: 24,
+    combatResponse: 28,
+    aimPitchScale: 1.00,
+    aimYawScale: 1.00,
+    carryDelta: {},
+    hipDelta: {
+      spine: [-0.018, 0, 0],
+      chest: [-0.030, 0, 0],
+      upperChest: [-0.020, 0, 0]
+    },
+    adsDelta: {
+      spine: [-0.008, 0, 0],
+      chest: [-0.014, 0, 0],
+      upperChest: [-0.009, 0, 0]
+    },
+    ik: {
+      rightPoleHip: [0.170, 0.160, 0.055],
+      rightPoleAds: [0.120, 0.130, 0.040],
+      leftPoleHip: [-0.200, 0.180, 0.080],
+      leftPoleAds: [-0.140, 0.220, 0.105]
+    }
+  },
+  smg: {
+    carryResponse: 29,
+    combatResponse: 33,
+    aimPitchScale: 0.92,
+    aimYawScale: 1.08,
+    carryDelta: {
+      spine: [0.007, 0, 0],
+      chest: [0.013, 0, 0],
+      upperChest: [0.010, 0, 0],
+      rightShoulder: [0.008, 0.007, -0.018],
+      leftShoulder: [0.009, -0.006, 0.021],
+      rightUpperArm: [0.040, 0.015, -0.100],
+      rightLowerArm: [-0.060, -0.005, -0.025],
+      leftUpperArm: [0.070, -0.015, 0.100],
+      leftLowerArm: [-0.060, 0.010, 0.030]
+    },
+    hipDelta: {
+      spine: [-0.012, 0, 0],
+      chest: [-0.022, 0, 0],
+      upperChest: [-0.014, 0, 0],
+      rightShoulder: [0.007, 0.008, -0.017],
+      leftShoulder: [0.008, -0.007, 0.019],
+      rightUpperArm: [0.040, 0.015, -0.095],
+      rightLowerArm: [-0.060, -0.005, -0.025],
+      leftUpperArm: [0.070, -0.015, 0.095],
+      leftLowerArm: [-0.060, 0.008, 0.030]
+    },
+    adsDelta: {
+      spine: [-0.004, 0, 0],
+      chest: [-0.009, 0, 0],
+      upperChest: [-0.006, 0, 0],
+      rightShoulder: [0.018, 0.013, -0.030],
+      leftShoulder: [0.020, -0.014, 0.034],
+      rightUpperArm: [0.050, 0.022, -0.110],
+      rightLowerArm: [-0.040, -0.004, -0.035],
+      leftUpperArm: [0.080, -0.014, 0.110],
+      leftLowerArm: [-0.035, 0.006, 0.035]
+    },
+    ik: {
+      rightPoleHip: [0.145, 0.145, 0.045],
+      rightPoleAds: [0.100, 0.120, 0.034],
+      leftPoleHip: [-0.165, 0.165, 0.062],
+      leftPoleAds: [-0.115, 0.190, 0.078]
+    }
+  },
+  shotgun: {
+    carryResponse: 20,
+    combatResponse: 24,
+    aimPitchScale: 1.04,
+    aimYawScale: 0.92,
+    carryDelta: {
+      spine: [-0.010, 0, 0],
+      chest: [-0.015, 0, 0],
+      upperChest: [-0.010, 0, 0],
+      rightShoulder: [-0.012, -0.005, 0.028],
+      leftShoulder: [-0.015, 0.012, -0.033],
+      rightUpperArm: [-0.030, -0.005, 0.100],
+      rightLowerArm: [0.040, 0.005, 0.020],
+      leftUpperArm: [-0.080, 0.020, -0.120],
+      leftLowerArm: [0.090, -0.015, -0.025]
+    },
+    hipDelta: {
+      spine: [-0.026, 0, 0],
+      chest: [-0.045, 0, 0],
+      upperChest: [-0.030, 0, 0],
+      rightShoulder: [-0.013, -0.006, 0.033],
+      leftShoulder: [-0.018, 0.015, -0.042],
+      rightUpperArm: [-0.035, -0.006, 0.110],
+      rightLowerArm: [0.045, 0.006, 0.025],
+      leftUpperArm: [-0.090, 0.022, -0.130],
+      leftLowerArm: [0.100, -0.018, -0.030]
+    },
+    adsDelta: {
+      spine: [-0.012, 0, 0],
+      chest: [-0.020, 0, 0],
+      upperChest: [-0.013, 0, 0],
+      rightShoulder: [-0.010, -0.006, 0.025],
+      leftShoulder: [-0.012, 0.010, -0.025],
+      rightUpperArm: [-0.030, -0.005, 0.090],
+      rightLowerArm: [0.050, 0.008, 0.020],
+      leftUpperArm: [-0.090, 0.022, -0.120],
+      leftLowerArm: [0.110, -0.020, -0.030]
+    },
+    ik: {
+      rightPoleHip: [0.205, 0.175, 0.070],
+      rightPoleAds: [0.150, 0.145, 0.052],
+      leftPoleHip: [-0.245, 0.205, 0.115],
+      leftPoleAds: [-0.185, 0.245, 0.145]
+    }
+  },
+  sniper: {
+    carryResponse: 18,
+    combatResponse: 22,
+    aimPitchScale: 0.90,
+    aimYawScale: 0.82,
+    carryDelta: {
+      spine: [-0.013, 0, 0],
+      chest: [-0.017, 0, 0],
+      upperChest: [-0.012, 0, 0],
+      rightShoulder: [-0.020, -0.009, 0.018],
+      leftShoulder: [-0.017, 0.014, -0.017],
+      rightUpperArm: [-0.060, -0.012, 0.060],
+      rightLowerArm: [0.020, 0.004, 0.015],
+      leftUpperArm: [-0.100, 0.018, -0.025],
+      leftLowerArm: [0.100, -0.010, -0.010]
+    },
+    hipDelta: {
+      spine: [-0.030, 0, 0],
+      chest: [-0.050, 0, 0],
+      upperChest: [-0.034, 0, 0],
+      rightShoulder: [-0.020, -0.010, 0.020],
+      leftShoulder: [-0.020, 0.015, -0.022],
+      rightUpperArm: [-0.050, -0.010, 0.050],
+      rightLowerArm: [0.030, 0.005, 0.015],
+      leftUpperArm: [-0.100, 0.018, -0.020],
+      leftLowerArm: [0.110, -0.012, -0.010]
+    },
+    adsDelta: {
+      spine: [-0.008, 0, 0],
+      chest: [-0.014, 0, 0],
+      upperChest: [-0.009, 0, 0],
+      rightShoulder: [-0.018, -0.012, 0.015],
+      leftShoulder: [-0.014, 0.011, -0.012],
+      rightUpperArm: [-0.060, -0.015, 0.050],
+      rightLowerArm: [0.040, 0.008, 0.010],
+      leftUpperArm: [-0.120, 0.022, -0.030],
+      leftLowerArm: [0.130, -0.016, -0.015]
+    },
+    ik: {
+      rightPoleHip: [0.180, 0.170, 0.072],
+      rightPoleAds: [0.125, 0.140, 0.055],
+      leftPoleHip: [-0.220, 0.195, 0.125],
+      leftPoleAds: [-0.165, 0.230, 0.160]
+    }
+  }
+};
+
+function getWeaponPoseProfile(poseClass = 'ar') {
+  return (
+    WEAPON_POSE_PROFILES[poseClass] ??
+    WEAPON_POSE_PROFILES.ar
+  );
+}
+
+function profilePose(
+  profile,
+  section,
+  bone
+) {
+  const base =
+    section === 'carry'
+      ? BASE_WEAPON_CARRY_POSE[bone]
+      : section === 'ads'
+        ? BASE_WEAPON_ADS_POSE[bone]
+        : BASE_WEAPON_HIP_POSE[bone];
+
+  if (!base) return null;
+
+  const delta =
+    profile?.[`${section}Delta`]?.[bone] ??
+    [0, 0, 0];
+
+  return [
+    base[0] + delta[0],
+    base[1] + delta[1],
+    base[2] + delta[2]
+  ];
+}
+
+function blendProfilePose(
+  profile,
+  bone,
+  ads
+) {
+  const hip =
+    profilePose(
+      profile,
+      'hip',
+      bone
+    );
+
+  const aimed =
+    profilePose(
+      profile,
+      'ads',
+      bone
+    );
+
+  if (!hip || !aimed) return null;
+
+  return [
+    THREE.MathUtils.lerp(
+      hip[0],
+      aimed[0],
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      hip[1],
+      aimed[1],
+      ads
+    ),
+    THREE.MathUtils.lerp(
+      hip[2],
+      aimed[2],
+      ads
+    )
+  ];
+}
+
+function applyProfileWeaponBone(
+  bone,
+  baseRotations,
+  pose,
+  lambda,
+  dt,
+  additive = null
+) {
+  if (!pose) return;
+
+  stableWeaponBoneEuler(
+    bone,
+    baseRotations,
+    pose[0] + (additive?.[0] ?? 0),
+    pose[1] + (additive?.[1] ?? 0),
+    pose[2] + (additive?.[2] ?? 0),
+    lambda,
+    dt
+  );
+}
+
 function applyWeaponAimPose(
   bones,
   baseRotations,
   state,
   dt
 ) {
-  const pitch = THREE.MathUtils.clamp(
-    state.aimPitch ?? 0,
-    -0.68,
-    0.86
-  );
+  const profile =
+    getWeaponPoseProfile(
+      state.weaponPoseClass
+    );
 
-  const yaw = THREE.MathUtils.clamp(
-    state.aimYawOffset ?? 0,
-    -0.78,
-    0.78
-  );
+  const pitch =
+    THREE.MathUtils.clamp(
+      state.aimPitch ?? 0,
+      -0.68,
+      0.86
+    ) *
+    profile.aimPitchScale;
+
+  const yaw =
+    THREE.MathUtils.clamp(
+      state.aimYawOffset ?? 0,
+      -0.78,
+      0.78
+    ) *
+    profile.aimYawScale;
 
   const strafeCounter =
     THREE.MathUtils.clamp(
@@ -2444,95 +2751,118 @@ function applyWeaponAimPose(
       1.08
     );
 
-  const ads = THREE.MathUtils.clamp(
-    state.weaponAimBlend ??
-      (state.aiming ? 1 : 0),
-    0,
-    1
-  );
+  const ads =
+    THREE.MathUtils.clamp(
+      state.weaponAimBlend ??
+        (state.aiming ? 1 : 0),
+      0,
+      1
+    );
 
-  const shoulder = THREE.MathUtils.clamp(
-    state.weaponShoulderBlend ?? 1,
-    0,
-    1
-  );
+  const shoulder =
+    THREE.MathUtils.clamp(
+      state.weaponShoulderBlend ?? 1,
+      0,
+      1
+    );
 
-  // Additive aim-offset layer. Horizontal extremes stay deliberately limited;
-  // player root rotation handles most yaw while moving, matching Epic's
-  // guidance for weapon aim offsets.
-  stableWeaponBoneEuler(
+  const response =
+    profile.combatResponse;
+
+  applyProfileWeaponBone(
     bones.spine,
     baseRotations,
-    -pitch *
-      THREE.MathUtils.lerp(
-        0.12,
-        0.18,
-        ads
-      ) *
-      shoulder,
-    (
-      yaw *
+    blendProfilePose(
+      profile,
+      'spine',
+      ads
+    ),
+    response * 0.82,
+    dt,
+    [
+      -pitch *
         THREE.MathUtils.lerp(
           0.12,
           0.18,
           ads
-        ) -
-      strafeCounter * 0.42
-    ) *
-      shoulder,
-    -yaw * 0.012 * shoulder,
-    22,
-    dt
+        ) *
+        shoulder,
+      (
+        yaw *
+          THREE.MathUtils.lerp(
+            0.12,
+            0.18,
+            ads
+          ) -
+        strafeCounter * 0.42
+      ) *
+        shoulder,
+      -yaw * 0.012 * shoulder
+    ]
   );
 
-  stableWeaponBoneEuler(
+  applyProfileWeaponBone(
     bones.chest,
     baseRotations,
-    -pitch *
-      THREE.MathUtils.lerp(
-        0.18,
-        0.25,
-        ads
-      ) *
-      shoulder,
-    (
-      yaw *
+    blendProfilePose(
+      profile,
+      'chest',
+      ads
+    ),
+    response * 0.90,
+    dt,
+    [
+      -pitch *
         THREE.MathUtils.lerp(
           0.18,
-          0.24,
+          0.25,
           ads
-        ) -
-      strafeCounter * 0.36
-    ) *
-      shoulder,
-    -yaw * 0.018 * shoulder,
-    24,
-    dt
+        ) *
+        shoulder,
+      (
+        yaw *
+          THREE.MathUtils.lerp(
+            0.18,
+            0.24,
+            ads
+          ) -
+        strafeCounter * 0.36
+      ) *
+        shoulder,
+      -yaw * 0.018 * shoulder
+    ]
   );
 
-  stableWeaponBoneEuler(
+  applyProfileWeaponBone(
     bones.upperChest,
     baseRotations,
-    -pitch *
-      THREE.MathUtils.lerp(
-        0.16,
-        0.22,
-        ads
-      ) *
-      shoulder,
-    (
-      yaw *
+    blendProfilePose(
+      profile,
+      'upperChest',
+      ads
+    ),
+    response * 0.94,
+    dt,
+    [
+      -pitch *
         THREE.MathUtils.lerp(
           0.16,
           0.22,
           ads
-        ) -
-      strafeCounter * 0.22
-    ) *
-      shoulder,
-    0,
-    25,
-    dt
+        ) *
+        shoulder,
+      (
+        yaw *
+          THREE.MathUtils.lerp(
+            0.16,
+            0.22,
+            ads
+          ) -
+        strafeCounter * 0.22
+      ) *
+        shoulder,
+      0
+    ]
   );
 
   stableWeaponBoneEuler(
@@ -2541,7 +2871,7 @@ function applyWeaponAimPose(
     -pitch * 0.07 * shoulder,
     yaw * 0.045 * shoulder,
     0,
-    28,
+    response,
     dt
   );
 
@@ -2551,167 +2881,32 @@ function applyWeaponAimPose(
     -pitch * 0.055 * shoulder,
     yaw * 0.035 * shoulder,
     0,
-    30,
+    response * 1.05,
     dt
   );
 
-  // Stable rifle-ready BASE pose. IK runs after this and only performs the
-  // final hand placement; authored locomotion cannot leave either arm hanging.
-  stableWeaponBoneEuler(
-    bones.rightShoulder,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.045,
-      -0.070,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      -0.030,
-      -0.045,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      0.095,
-      0.120,
-      ads
-    ),
-    26,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftShoulder,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.050,
-      -0.080,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      0.035,
-      0.055,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      -0.100,
-      -0.130,
-      ads
-    ),
-    26,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.rightUpperArm,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.58,
-      -0.64,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      -0.08,
-      -0.10,
-      ads
-    ),
-    THREE.MathUtils.lerp(
-      0.66,
-      0.72,
-      ads
-    ),
-    28,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.rightLowerArm,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.82,
-      -0.90,
-      ads
-    ),
-    0.03,
-    THREE.MathUtils.lerp(
-      0.14,
-      0.17,
-      ads
-    ),
-    30,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftUpperArm,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.70,
-      -0.76,
-      ads
-    ),
-    0.11,
-    THREE.MathUtils.lerp(
-      -0.64,
-      -0.70,
-      ads
-    ),
-    28,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftLowerArm,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.84,
-      -0.92,
-      ads
-    ),
-    -0.04,
-    THREE.MathUtils.lerp(
-      -0.16,
-      -0.18,
-      ads
-    ),
-    30,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.rightHand,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.06,
-      -0.10,
-      ads
-    ),
-    -0.02,
-    THREE.MathUtils.lerp(
-      0.03,
-      0.05,
-      ads
-    ),
-    30,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftHand,
-    baseRotations,
-    THREE.MathUtils.lerp(
-      -0.04,
-      -0.07,
-      ads
-    ),
-    0.012,
-    THREE.MathUtils.lerp(
-      -0.02,
-      -0.03,
-      ads
-    ),
-    30,
-    dt
-  );
+  for (const boneName of [
+    'rightShoulder',
+    'leftShoulder',
+    'rightUpperArm',
+    'rightLowerArm',
+    'leftUpperArm',
+    'leftLowerArm',
+    'rightHand',
+    'leftHand'
+  ]) {
+    applyProfileWeaponBone(
+      bones[boneName],
+      baseRotations,
+      blendProfilePose(
+        profile,
+        boneName,
+        ads
+      ),
+      response,
+      dt
+    );
+  }
 }
 
 function applyWeaponCarryPose(
@@ -2720,10 +2915,16 @@ function applyWeaponCarryPose(
   state,
   dt
 ) {
-  const speed = Math.max(
-    0,
-    state?.speed ?? 0
-  );
+  const profile =
+    getWeaponPoseProfile(
+      state.weaponPoseClass
+    );
+
+  const speed =
+    Math.max(
+      0,
+      state?.speed ?? 0
+    );
 
   const moving =
     THREE.MathUtils.clamp(
@@ -2735,136 +2936,41 @@ function applyWeaponCarryPose(
   const moveLean =
     moving * 0.016;
 
-  stableWeaponBoneEuler(
-    bones.spine,
-    baseRotations,
-    -0.025 - moveLean * 0.25,
-    0,
-    0,
-    18,
-    dt
-  );
+  for (const boneName of [
+    'spine',
+    'chest',
+    'upperChest',
+    'neck',
+    'head',
+    'rightShoulder',
+    'leftShoulder',
+    'rightUpperArm',
+    'rightLowerArm',
+    'leftUpperArm',
+    'leftLowerArm',
+    'rightHand',
+    'leftHand'
+  ]) {
+    const additive =
+      boneName === 'spine'
+        ? [-moveLean * 0.25, 0, 0]
+        : boneName === 'chest'
+          ? [-moveLean * 0.35, 0, 0]
+          : null;
 
-  stableWeaponBoneEuler(
-    bones.chest,
-    baseRotations,
-    -0.045 - moveLean * 0.35,
-    0,
-    0,
-    20,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.upperChest,
-    baseRotations,
-    -0.030,
-    0,
-    0,
-    21,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.neck,
-    baseRotations,
-    -0.008,
-    0,
-    0,
-    20,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.head,
-    baseRotations,
-    0,
-    0,
-    0,
-    22,
-    dt
-  );
-
-  // Chest-ready two-hand rifle pose, intentionally close to the hip-fire base.
-  stableWeaponBoneEuler(
-    bones.rightShoulder,
-    baseRotations,
-    -0.040,
-    -0.025,
-    0.090,
-    24,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftShoulder,
-    baseRotations,
-    -0.045,
-    0.030,
-    -0.095,
-    24,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.rightUpperArm,
-    baseRotations,
-    -0.54,
-    -0.07,
-    0.62,
-    26,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.rightLowerArm,
-    baseRotations,
-    -0.78,
-    0.03,
-    0.13,
-    28,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftUpperArm,
-    baseRotations,
-    -0.66,
-    0.10,
-    -0.60,
-    26,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftLowerArm,
-    baseRotations,
-    -0.80,
-    -0.04,
-    -0.15,
-    28,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.rightHand,
-    baseRotations,
-    -0.055,
-    -0.012,
-    0.025,
-    28,
-    dt
-  );
-
-  stableWeaponBoneEuler(
-    bones.leftHand,
-    baseRotations,
-    -0.035,
-    0.010,
-    -0.018,
-    28,
-    dt
-  );
+    applyProfileWeaponBone(
+      bones[boneName],
+      baseRotations,
+      profilePose(
+        profile,
+        'carry',
+        boneName
+      ),
+      profile.carryResponse,
+      dt,
+      additive
+    );
+  }
 }
 
 const IK_TMP = {
@@ -3054,6 +3160,11 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       1
     );
 
+  const ikProfile =
+    getWeaponPoseProfile(
+      gripPose.poseClass
+    ).ik;
+
   const targetFilter =
     getWeaponIkTargetFilter(
       character
@@ -3115,24 +3226,24 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
       .addScaledVector(
         IK_TMP.right,
         THREE.MathUtils.lerp(
-          0.17,
-          0.12,
+          ikProfile.rightPoleHip[0],
+          ikProfile.rightPoleAds[0],
           ads
         )
       )
       .addScaledVector(
         IK_TMP.down,
         THREE.MathUtils.lerp(
-          0.16,
-          0.13,
+          ikProfile.rightPoleHip[1],
+          ikProfile.rightPoleAds[1],
           ads
         )
       )
       .addScaledVector(
         IK_TMP.forward,
         THREE.MathUtils.lerp(
-          0.055,
-          0.040,
+          ikProfile.rightPoleHip[2],
+          ikProfile.rightPoleAds[2],
           ads
         )
       );
@@ -3170,24 +3281,24 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     .addScaledVector(
       IK_TMP.right,
       THREE.MathUtils.lerp(
-        -0.20,
-        -0.14,
+        ikProfile.leftPoleHip[0],
+        ikProfile.leftPoleAds[0],
         ads
       )
     )
     .addScaledVector(
       IK_TMP.down,
       THREE.MathUtils.lerp(
-        0.18,
-        0.22,
+        ikProfile.leftPoleHip[1],
+        ikProfile.leftPoleAds[1],
         ads
       )
     )
     .addScaledVector(
       IK_TMP.forward,
       THREE.MathUtils.lerp(
-        0.080,
-        0.105,
+        ikProfile.leftPoleHip[2],
+        ikProfile.leftPoleAds[2],
         ads
       )
     );

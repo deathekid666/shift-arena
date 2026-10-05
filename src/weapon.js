@@ -76,7 +76,8 @@ export class WeaponSystem {
       rightHandIKBlend: 0,
       leftHandLambda: 30,
       adsBlend: 0,
-      shoulderBlend: 0
+      shoulderBlend: 0,
+      poseClass: 'ar'
     };
 
     this.entries = WEAPON_ORDER.map((key) => {
@@ -143,6 +144,7 @@ export class WeaponSystem {
   get reserveAmmo() { return this.ammoPool[this.cfg.ammoType] ?? 0; }
   get isReloading() { return this.state.isReloading; }
   get weaponKey() { return this.loadout[this.activeSlot]; }
+  get poseClass() { return this.cfg.poseClass ?? 'ar'; }
   get reticleType() { return this.cfg.reticle; }
   get scoped() { return Boolean(this.cfg.scope && this.aiming); }
   get adsFov() { return this.cfg.adsFov; }
@@ -1258,6 +1260,8 @@ export class WeaponSystem {
       THREE.MathUtils.clamp(adsBlend, 0, 1);
     this.gripPose.shoulderBlend =
       THREE.MathUtils.clamp(shoulderBlend, 0, 1);
+    this.gripPose.poseClass =
+      this.cfg.poseClass ?? 'ar';
   }
 
   getGripPose() {

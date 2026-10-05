@@ -105,7 +105,8 @@ export class PlayerController {
     aimPitch = 0,
     weaponAiming = false,
     weaponAimBlend = 0,
-    weaponShoulderBlend = 0
+    weaponShoulderBlend = 0,
+    weaponPoseClass = 'ar'
   ) {
     const cfg = GAME_CONFIG.movement;
     const wasGrounded = this.grounded;
@@ -718,6 +719,10 @@ export class PlayerController {
         this.weaponVisualActive
           ? THREE.MathUtils.clamp(weaponShoulderBlend, 0, 1)
           : 0,
+      weaponPoseClass:
+        this.weaponVisualActive
+          ? weaponPoseClass
+          : 'ar',
       aimPitch: this.aimPitch,
       aimYawOffset: this.aimYawOffset,
       turnInPlaceActive:

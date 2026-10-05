@@ -88,6 +88,7 @@ export const GAME_CONFIG = {
       stanceAdsX: -0.006,
       stanceAdsY: -0.010,
       stanceAdsZ: -0.185,
+      poseClass: 'ar',
 
       // Same stable shooter hierarchy used by the other hero weapons:
       // right/master hand owns the AR, left hand follows the front support point.
@@ -236,6 +237,7 @@ export const GAME_CONFIG = {
       stanceAdsX: -0.004,
       stanceAdsY: -0.016,
       stanceAdsZ: -0.196,
+      poseClass: 'shotgun',
 
       // Stable shooter hierarchy: right/master hand owns the weapon,
       // left/support hand follows the pump grip with IK.
@@ -384,6 +386,7 @@ export const GAME_CONFIG = {
       stanceAdsX: -0.010,
       stanceAdsY: -0.024,
       stanceAdsZ: -0.232,
+      poseClass: 'sniper',
       masterHandCarry: true,
       supportHandIKLambda: 96,
       rightGripX: 0,
@@ -469,6 +472,7 @@ export const GAME_CONFIG = {
       stanceAdsX: 0.002,
       stanceAdsY: -0.004,
       stanceAdsZ: -0.152,
+      poseClass: 'smg',
 
       // Stable hero-weapon rig: right/master hand owns the compact SMG,
       // left/support hand follows the front of the dispenser body.
