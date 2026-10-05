@@ -327,8 +327,9 @@ export function createFangPoseLayer(character) {
       worldQ
     );
 
-    const weight =
-      pose.attackWeight ?? 1;
+    // READY and SLASH are both full melee poses. Fading the layer toward
+    // locomotion at the start/end of a slash caused the visible arm snap.
+    const weight = 1;
 
     for (const node of nodes) {
       const base =
