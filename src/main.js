@@ -72,7 +72,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">PREVIEW · ROACH SCOUT · BASE 010.28I</div>
+    <div id="damage-test-hint">BUILD 010.29 · ROACH SCOUT</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
     <div id="jitter-lab" hidden>
@@ -126,7 +126,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">PREVIEW · ROACH SCOUT · BASE 010.28I</div>
+        <div class="build-tag">BUILD 010.29 · ROACH SCOUT</div>
         <h1>SHIFT Arena</h1>
         <p>Roach Scout character preview. Choose opponents, then test movement, jumping and weapons.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
