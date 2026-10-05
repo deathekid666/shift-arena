@@ -424,3 +424,15 @@ was 0.566 world units versus 0.288 for standing.
 - The inertial follow switches back to exact rigid alignment at the fully shouldered endpoint, so firing/crosshair accuracy is not delayed.
 - Sniper upper-body pose response is deliberately slower and its carry pose engages more spine/chest/shoulder effort.
 - Known-good slide ownership remains rigid and explicitly resets the heavy follow state on slide exit.
+
+
+## Build 010.27F — kinetic weapon motion
+- Replaced the exaggerated "heavy = slow animation" approach with a Battlefield-inspired layered response model.
+- Research basis: Battlefield 6's 2026 Kinesthetic Combat Systems presentation emphasizes connected movement/aim/firing feedback, realistic limb motion and visual line-of-sight; BFV/BF1 community comparisons consistently identify passive weapon sway, step-linked motion and smooth transitions as core to their weightier feel.
+- Added a renderer-independent damped-spring weapon motion layer with look-velocity lag, acceleration/deceleration reaction, asymmetric two-harmonic step motion and tiny deterministic breathing drift.
+- Mass and weapon length control spring response and rotational leverage. Heavy/long weapons keep passive follow-through longer; compact weapons settle faster.
+- The sniper remains slower to shoulder than the AR, but no longer looks like a globally slowed animation.
+- Scoped ADS suppresses almost all procedural drift so sight alignment remains readable and accurate.
+- Removed the 010.27E whole-gun transition chase that could read as rubbery/floaty. Final weapon-to-hand attachment is exact again; only the additive physical offsets carry inertia.
+- Reduced the exaggerated sniper carry droop and torso deformation from 010.27E. Weight now comes primarily from passive response, not a caricatured pose.
+- Known-good slide ownership remains untouched and explicitly clears the natural-motion history while sliding.

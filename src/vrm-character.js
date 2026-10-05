@@ -2583,20 +2583,20 @@ const WEAPON_POSE_PROFILES = {
     }
   },
   sniper: {
-    carryResponse: 13,
-    combatResponse: 16,
+    carryResponse: 16,
+    combatResponse: 19,
     aimPitchScale: 0.90,
     aimYawScale: 0.82,
     carryDelta: {
-      spine: [-0.034, 0, 0],
-      chest: [-0.052, 0, 0],
-      upperChest: [-0.040, 0, 0],
-      rightShoulder: [-0.034, -0.014, 0.040],
-      leftShoulder: [-0.030, 0.020, -0.042],
-      rightUpperArm: [-0.095, -0.018, 0.105],
-      rightLowerArm: [0.045, 0.008, 0.028],
-      leftUpperArm: [-0.145, 0.030, -0.070],
-      leftLowerArm: [0.145, -0.018, -0.024]
+      spine: [-0.024, 0, 0],
+      chest: [-0.034, 0, 0],
+      upperChest: [-0.026, 0, 0],
+      rightShoulder: [-0.027, -0.011, 0.030],
+      leftShoulder: [-0.024, 0.017, -0.030],
+      rightUpperArm: [-0.078, -0.015, 0.078],
+      rightLowerArm: [0.032, 0.006, 0.022],
+      leftUpperArm: [-0.122, 0.024, -0.048],
+      leftLowerArm: [0.122, -0.014, -0.018]
     },
     hipDelta: {
       spine: [-0.030, 0, 0],

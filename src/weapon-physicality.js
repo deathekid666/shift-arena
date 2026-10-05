@@ -34,37 +34,18 @@ export function getWeaponHandlingMass(cfg = {}) {
 }
 
 export function responseScaleFromKg(massKg) {
-  // Weight must be readable in third person, not merely measurable in data.
-  // An inverse-mass response makes a 9.5 kg precision rifle roughly half as
-  // responsive as an AR while keeping compact weapons quick.
+  // Heavier weapons are slower to shoulder, but mass should not look like
+  // slow-motion animation. Most of the perceived weight is supplied by the
+  // passive spring/inertia layer in weapon-natural-motion.js.
   return 1 /
-    handlingMassFromKg(massKg);
-}
-
-export function followResponseFromKg(massKg) {
-  const handlingMass =
-    handlingMassFromKg(massKg);
-
-  // This spring is used only while raising/lowering the weapon. At the fully
-  // shouldered firing endpoint the weapon remains exact to the crosshair.
-  return Math.min(
-    48,
-    Math.max(
-      9,
-      40 /
-        (handlingMass * handlingMass)
-    )
-  );
+    Math.pow(
+      handlingMassFromKg(massKg),
+      0.65
+    );
 }
 
 export function getWeaponResponseScale(cfg = {}) {
   return responseScaleFromKg(
-    getWeaponMassKg(cfg)
-  );
-}
-
-export function getWeaponFollowResponse(cfg = {}) {
-  return followResponseFromKg(
     getWeaponMassKg(cfg)
   );
 }

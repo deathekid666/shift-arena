@@ -6,7 +6,6 @@ import {
   getWeaponMassKg,
   handlingMassFromKg,
   responseScaleFromKg,
-  followResponseFromKg,
   getWeaponPhysicalSize,
   computePhysicalScale
 } from '../src/weapon-physicality.js';
@@ -69,14 +68,9 @@ test('bounding-box scaling lands exactly on configured dimensions', () => {
 });
 
 
-test('heavy sniper response is clearly separated from AR response', () => {
+test('heavy sniper shoulders slower without becoming slow-motion', () => {
   const ar = responseScaleFromKg(3.5);
   const sniper = responseScaleFromKg(9.5);
-  assert.ok(sniper < ar * 0.65);
-});
-
-test('transition follow is visibly slower for sniper than AR', () => {
-  const ar = followResponseFromKg(3.5);
-  const sniper = followResponseFromKg(9.5);
-  assert.ok(sniper < ar * 0.45);
+  assert.ok(sniper < ar * 0.80);
+  assert.ok(sniper > ar * 0.60);
 });

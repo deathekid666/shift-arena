@@ -11,9 +11,13 @@ import {
 } from './weapon-transition.js';
 import {
   getWeaponHandlingMass,
-  getWeaponResponseScale,
-  getWeaponFollowResponse
+  getWeaponResponseScale
 } from './weapon-physicality.js';
+import {
+  createWeaponNaturalMotionState,
+  resetWeaponNaturalMotion,
+  stepWeaponNaturalMotion
+} from './weapon-natural-motion.js';
 
 const SHOTGUN_PATTERN_10 = [
   [0.00, 0.00],
@@ -123,7 +127,8 @@ export class WeaponSystem {
         bobTime: 0,
         pumpSoundPlayed: true,
         transitionDirection: -1,
-        poseFollowReady: false
+        naturalMotion:
+          createWeaponNaturalMotionState()
       };
       return { key, cfg, model, state };
     });
@@ -746,7 +751,6 @@ export class WeaponSystem {
       !slideCarryActive
     ) {
       state.bodyGripReady = false;
-      state.poseFollowReady = false;
     }
 
     state.slideCarryActive =
@@ -761,9 +765,12 @@ export class WeaponSystem {
       cfg.masterHandCarry &&
       this.handMounted
     ) {
-      // Slide keeps the known-good authored-hand ownership. Heavy transition
-      // follow is reinitialized after the slide instead of chasing the hand.
-      state.poseFollowReady = false;
+      // Slide keeps the known-good authored-hand ownership. Procedural
+      // carry inertia is disabled here so it cannot fight the slide animation.
+      resetWeaponNaturalMotion(
+        state.naturalMotion
+      );
+
       const handWorld =
         this.player.getHandWorldPosition?.(
           'right',
@@ -940,10 +947,35 @@ export class WeaponSystem {
             readyToAim
           );
 
+        const naturalMotion =
+          stepWeaponNaturalMotion(
+            state.naturalMotion,
+            {
+              dt,
+              massKg: cfg.massKg,
+              lengthM:
+                cfg.physicalSizeM?.length,
+              lookX:
+                this.cameraRig.lookX,
+              lookY:
+                this.cameraRig.lookY,
+              speed,
+              grounded:
+                this.player.grounded,
+              adsBlend,
+              shoulderBlend,
+              bobBase: cfg.bob,
+              swayBase: cfg.sway,
+              scoped:
+                Boolean(cfg.scope)
+            }
+          );
+
         const aimCorrection =
           new THREE.Quaternion().setFromEuler(
             new THREE.Euler(
               posePitch +
+                naturalMotion.pitch +
                 transitionProfile.pitch *
                   directedArc +
                 transitionProfile.settlePitch *
@@ -951,10 +983,12 @@ export class WeaponSystem {
                 state.visualKick * 0.18 -
                 state.recoilPitch * 0.20,
               poseYaw +
+                naturalMotion.yaw +
                 state.recoilYaw * 0.18 +
                 transitionProfile.yaw *
                   directedArc,
               poseRoll +
+                naturalMotion.roll +
                 transitionProfile.roll *
                   directedArc +
                 transitionProfile.settleRoll *
@@ -1042,6 +1076,17 @@ export class WeaponSystem {
           transitionProfile.settleForward *
             transitionSettle;
 
+        // Battlefield-style passive carry response: hands/body drive the
+        // target while the weapon's mass contributes restrained lag, step
+        // rhythm, acceleration reaction and breathing. IK follows this final
+        // weapon pose, so arms react as a unit rather than waving separately.
+        this.tmpGripLocal.x +=
+          naturalMotion.positionX;
+        this.tmpGripLocal.y +=
+          naturalMotion.positionY;
+        this.tmpGripLocal.z +=
+          naturalMotion.positionZ;
+
         // Convert the independent grip target into the weapon group's local
         // transform. rightGrip is the exact modeled pistol-grip pivot.
         this.tmpParentWorldQInv
@@ -1072,60 +1117,15 @@ export class WeaponSystem {
               this.tmpGripOffset
             );
 
-        // The stable body-space target lets us add physical inertia without
-        // recreating the old hand/weapon feedback loop. While the weapon is
-        // raising/lowering, heavier guns chase the target more slowly. Once
-        // shouldered (or fully lowered), the transform becomes exact again so
-        // crosshair alignment and carry endpoints remain deterministic.
-        const transitionActive =
-          state.shoulderBlend > 0.006 &&
-          state.shoulderBlend < 0.994;
-
-        if (
-          !state.poseFollowReady ||
-          !transitionActive
-        ) {
-          model.position.copy(
-            targetPosition
-          );
-          model.quaternion.copy(
-            this.tmpDesiredLocalQ
-          );
-          state.poseFollowReady = true;
-        } else {
-          const followResponse =
-            getWeaponFollowResponse(cfg);
-
-          model.position.x =
-            THREE.MathUtils.damp(
-              model.position.x,
-              targetPosition.x,
-              followResponse,
-              dt
-            );
-          model.position.y =
-            THREE.MathUtils.damp(
-              model.position.y,
-              targetPosition.y,
-              followResponse,
-              dt
-            );
-          model.position.z =
-            THREE.MathUtils.damp(
-              model.position.z,
-              targetPosition.z,
-              followResponse,
-              dt
-            );
-
-          model.quaternion.slerp(
-            this.tmpDesiredLocalQ,
-            1 -
-              Math.exp(
-                -followResponse * dt
-              )
-          );
-        }
+        // Keep the final attachment exact. The perceived weight now lives in
+        // the additive spring layer above, so the weapon never rubber-bands
+        // away from the IK hands or crosshair target.
+        model.position.copy(
+          targetPosition
+        );
+        model.quaternion.copy(
+          this.tmpDesiredLocalQ
+        );
 
         model.updateWorldMatrix(
           true,
@@ -1600,7 +1600,9 @@ export class WeaponSystem {
     nextState.bodyGripLocal.set(0, 0, 0);
     nextState.slideCarryActive = false;
     nextState.transitionDirection = -1;
-    nextState.poseFollowReady = false;
+    resetWeaponNaturalMotion(
+      nextState.naturalMotion
+    );
 
     this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
@@ -1635,7 +1637,9 @@ export class WeaponSystem {
     newEntry.state.isReloading = false;
     newEntry.state.reloadTimer = 0;
     newEntry.state.transitionDirection = -1;
-    newEntry.state.poseFollowReady = false;
+    resetWeaponNaturalMotion(
+      newEntry.state.naturalMotion
+    );
     newEntry.model.group.visible = !this.visualHidden;
 
     this.emitSwitch();
@@ -1709,7 +1713,9 @@ export class WeaponSystem {
       entry.state.bodyGripReady = false;
       entry.state.bodyGripLocal.set(0, 0, 0);
       entry.state.slideCarryActive = false;
-      entry.state.poseFollowReady = false;
+      resetWeaponNaturalMotion(
+        entry.state.naturalMotion
+      );
       entry.state.raiseAnchorPosition.copy(
         entry.model.group.position
       );
