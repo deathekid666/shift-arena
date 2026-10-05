@@ -6,13 +6,14 @@ import {
   sampleKnifeSlash
 } from '../src/knife-slash-motion.js';
 
-test('knife ready stance is a low one-hand carry outside the torso', () => {
+test('knife ready stance is bladed, outside the torso and forward-gripped', () => {
   const ready = sampleKnifeReady(0);
-  assert.ok(ready.hand.right > 0.28);
+  assert.ok(ready.hand.right > 0.32);
   assert.ok(ready.hand.up < -0.22);
-  assert.ok(ready.hand.forward < 0.20);
-  assert.ok(ready.blade.forward > 0.95);
-  assert.ok(ready.blade.up < 0);
+  assert.ok(ready.hand.forward < 0.22);
+  assert.ok(Math.abs(ready.chest.y) > 0.08);
+  assert.ok(ready.blade.forward > 0.97);
+  assert.ok(ready.blade.up > 0);
 });
 
 test('knife sprint stance lowers and moves farther outside the torso', () => {
@@ -21,6 +22,7 @@ test('knife sprint stance lowers and moves farther outside the torso', () => {
   assert.ok(sprint.hand.right > ready.hand.right);
   assert.ok(sprint.hand.up < ready.hand.up);
   assert.ok(sprint.hand.forward < ready.hand.forward);
+  assert.ok(sprint.blade.forward > 0.95);
 });
 
 test('primary attack has three distinct slash variants', () => {
