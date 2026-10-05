@@ -394,7 +394,7 @@ export function createFangPoseLayer(character) {
       fang.mode === 'ready'
         ? 1 - smooth(sprint)
         : fang.mode === 'slash'
-          ? 0.86
+          ? 0.42
           : 0;
 
     if (guardBlend <= 0.001) {
@@ -416,37 +416,38 @@ export function createFangPoseLayer(character) {
       leftUpperLength +
       leftLowerLength;
 
-    // Hand sits in front of the left upper ribs, slightly toward center.
-    // The elbow stays outside the silhouette instead of collapsing across
-    // the chest, which avoids the old two-handed-rifle read.
+    // The free hand stays clearly separate from the weapon hand: lower than
+    // the face, still on the left half of the body, and only slightly forward.
+    // This matches a natural guard/counterbalance instead of forming a fake
+    // two-handed grip in the middle of the chest.
     const guardTarget =
       leftShoulder.clone()
         .addScaledVector(
           right,
-          leftReach * 0.22
+          leftReach * 0.06
         )
         .addScaledVector(
           UP,
-          leftReach * 0.10
+          -leftReach * 0.16
         )
         .addScaledVector(
           horizontal,
-          leftReach * 0.34
+          leftReach * 0.26
         );
 
     const guardPole =
       leftShoulder.clone()
         .addScaledVector(
           right,
-          -leftReach * 0.56
+          -leftReach * 0.68
         )
         .addScaledVector(
           UP,
-          leftReach * 0.06
+          -leftReach * 0.10
         )
         .addScaledVector(
           horizontal,
-          leftReach * 0.16
+          leftReach * 0.06
         );
 
     for (const node of [
