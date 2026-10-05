@@ -34,13 +34,37 @@ export function getWeaponHandlingMass(cfg = {}) {
 }
 
 export function responseScaleFromKg(massKg) {
-  return 1 / Math.sqrt(
-    handlingMassFromKg(massKg)
+  // Weight must be readable in third person, not merely measurable in data.
+  // An inverse-mass response makes a 9.5 kg precision rifle roughly half as
+  // responsive as an AR while keeping compact weapons quick.
+  return 1 /
+    handlingMassFromKg(massKg);
+}
+
+export function followResponseFromKg(massKg) {
+  const handlingMass =
+    handlingMassFromKg(massKg);
+
+  // This spring is used only while raising/lowering the weapon. At the fully
+  // shouldered firing endpoint the weapon remains exact to the crosshair.
+  return Math.min(
+    48,
+    Math.max(
+      9,
+      40 /
+        (handlingMass * handlingMass)
+    )
   );
 }
 
 export function getWeaponResponseScale(cfg = {}) {
   return responseScaleFromKg(
+    getWeaponMassKg(cfg)
+  );
+}
+
+export function getWeaponFollowResponse(cfg = {}) {
+  return followResponseFromKg(
     getWeaponMassKg(cfg)
   );
 }

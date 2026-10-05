@@ -11,7 +11,8 @@ import {
 } from './weapon-transition.js';
 import {
   getWeaponHandlingMass,
-  getWeaponResponseScale
+  getWeaponResponseScale,
+  getWeaponFollowResponse
 } from './weapon-physicality.js';
 
 const SHOTGUN_PATTERN_10 = [
@@ -121,7 +122,8 @@ export class WeaponSystem {
         slideCarryActive: false,
         bobTime: 0,
         pumpSoundPlayed: true,
-        transitionDirection: -1
+        transitionDirection: -1,
+        poseFollowReady: false
       };
       return { key, cfg, model, state };
     });
@@ -744,6 +746,7 @@ export class WeaponSystem {
       !slideCarryActive
     ) {
       state.bodyGripReady = false;
+      state.poseFollowReady = false;
     }
 
     state.slideCarryActive =
@@ -758,6 +761,9 @@ export class WeaponSystem {
       cfg.masterHandCarry &&
       this.handMounted
     ) {
+      // Slide keeps the known-good authored-hand ownership. Heavy transition
+      // follow is reinitialized after the slide instead of chasing the hand.
+      state.poseFollowReady = false;
       const handWorld =
         this.player.getHandWorldPosition?.(
           'right',
@@ -907,7 +913,7 @@ export class WeaponSystem {
 
         const posePitch =
           THREE.MathUtils.lerp(
-            -0.105,
+            cfg.carryPitch ?? -0.105,
             THREE.MathUtils.lerp(
               cfg.hipFireAimPitch ?? -0.045,
               cfg.adsAimPitch ?? -0.012,
@@ -916,9 +922,16 @@ export class WeaponSystem {
             readyToAim
           );
 
+        const poseYaw =
+          THREE.MathUtils.lerp(
+            cfg.carryYaw ?? 0,
+            0,
+            readyToAim
+          );
+
         const poseRoll =
           THREE.MathUtils.lerp(
-            -0.055,
+            cfg.carryRoll ?? -0.055,
             THREE.MathUtils.lerp(
               cfg.hipFireAimRoll ?? -0.030,
               cfg.adsAimRoll ?? -0.006,
@@ -937,7 +950,8 @@ export class WeaponSystem {
                   transitionSettle -
                 state.visualKick * 0.18 -
                 state.recoilPitch * 0.20,
-              state.recoilYaw * 0.18 +
+              poseYaw +
+                state.recoilYaw * 0.18 +
                 transitionProfile.yaw *
                   directedArc,
               poseRoll +
@@ -1058,14 +1072,60 @@ export class WeaponSystem {
               this.tmpGripOffset
             );
 
-        // Weapon target is already stabilized by the chest/aim layers. Use a
-        // rigid transform so there is no extra weapon lag between the hands.
-        model.position.copy(
-          targetPosition
-        );
-        model.quaternion.copy(
-          this.tmpDesiredLocalQ
-        );
+        // The stable body-space target lets us add physical inertia without
+        // recreating the old hand/weapon feedback loop. While the weapon is
+        // raising/lowering, heavier guns chase the target more slowly. Once
+        // shouldered (or fully lowered), the transform becomes exact again so
+        // crosshair alignment and carry endpoints remain deterministic.
+        const transitionActive =
+          state.shoulderBlend > 0.006 &&
+          state.shoulderBlend < 0.994;
+
+        if (
+          !state.poseFollowReady ||
+          !transitionActive
+        ) {
+          model.position.copy(
+            targetPosition
+          );
+          model.quaternion.copy(
+            this.tmpDesiredLocalQ
+          );
+          state.poseFollowReady = true;
+        } else {
+          const followResponse =
+            getWeaponFollowResponse(cfg);
+
+          model.position.x =
+            THREE.MathUtils.damp(
+              model.position.x,
+              targetPosition.x,
+              followResponse,
+              dt
+            );
+          model.position.y =
+            THREE.MathUtils.damp(
+              model.position.y,
+              targetPosition.y,
+              followResponse,
+              dt
+            );
+          model.position.z =
+            THREE.MathUtils.damp(
+              model.position.z,
+              targetPosition.z,
+              followResponse,
+              dt
+            );
+
+          model.quaternion.slerp(
+            this.tmpDesiredLocalQ,
+            1 -
+              Math.exp(
+                -followResponse * dt
+              )
+          );
+        }
 
         model.updateWorldMatrix(
           true,
@@ -1540,6 +1600,7 @@ export class WeaponSystem {
     nextState.bodyGripLocal.set(0, 0, 0);
     nextState.slideCarryActive = false;
     nextState.transitionDirection = -1;
+    nextState.poseFollowReady = false;
 
     this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
@@ -1574,6 +1635,7 @@ export class WeaponSystem {
     newEntry.state.isReloading = false;
     newEntry.state.reloadTimer = 0;
     newEntry.state.transitionDirection = -1;
+    newEntry.state.poseFollowReady = false;
     newEntry.model.group.visible = !this.visualHidden;
 
     this.emitSwitch();
@@ -1647,6 +1709,7 @@ export class WeaponSystem {
       entry.state.bodyGripReady = false;
       entry.state.bodyGripLocal.set(0, 0, 0);
       entry.state.slideCarryActive = false;
+      entry.state.poseFollowReady = false;
       entry.state.raiseAnchorPosition.copy(
         entry.model.group.position
       );

@@ -413,3 +413,14 @@ was 0.566 world units versus 0.288 for standing.
 - Mass now affects shoulder raise/lower response, ADS pose response, mid-transition direction reversal, weapon recoil spring settling and fallback weapon transform inertia.
 - Heavy weapons therefore feel slower and more planted; the SMG is visibly quicker. Player movement speed is intentionally unchanged, matching the Fortnite/Lyra style of weapon-specific upper-body handling rather than weapon-weight movement penalties.
 - Existing slide ownership, crouch, jump, hit logic, damage values, ammunition and final two-hand IK were not changed.
+
+
+## Build 010.27E — heavy sniper handling
+- Fixed the reason Build 010.27D looked too similar: the primary master-hand weapon path still hard-coded the same carry pitch/roll for every firearm, so class-specific carry orientation values were being ignored.
+- The main weapon path now respects per-weapon carry pitch, yaw and roll.
+- The 9.5 kg Marksman Sniper now rests lower and more downward-angled across the torso, with stronger shoulder/arm load than the 3.5 kg AR.
+- Reworked kg response from inverse-square-root to inverse-mass handling so heavy weapons separate visually instead of differing by only a few frames.
+- Added transition-only inertial follow from the stable body-space weapon target. The AR remains responsive; the sniper visibly trails and settles while raising/lowering.
+- The inertial follow switches back to exact rigid alignment at the fully shouldered endpoint, so firing/crosshair accuracy is not delayed.
+- Sniper upper-body pose response is deliberately slower and its carry pose engages more spine/chest/shoulder effort.
+- Known-good slide ownership remains rigid and explicitly resets the heavy follow state on slide exit.
