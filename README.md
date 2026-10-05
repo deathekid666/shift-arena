@@ -402,3 +402,14 @@ was 0.566 world units versus 0.288 for standing.
 - Added class-specific motion weight. SMG changes direction fastest; AR stays balanced; shotgun and sniper retain visibly heavier follow-through.
 - Upper chest/spine now participate in the same settle timing so the character does not look like rigid arms moving a prop independently of the torso.
 - Slide, crouch, jump, recoil endpoints, ADS calibration and final two-hand IK are unchanged.
+
+
+## Build 010.27D — physical weapon size + weight
+- Added explicit physical mass in kilograms and explicit rendered dimensions in meters for every firearm.
+- Current class calibration: Tape-Rattler SMG 2.8 kg / 0.66 m, Staple-Slinger AR 3.5 kg / 0.84 m, Bug-Sprayer Shotgun 3.8 kg / 1.03 m, Marksman Sniper 9.5 kg / 1.14 m.
+- Procedural weapon meshes are now measured after construction and normalized to their configured world-space width/height/length through a dependency-free, tested bounding-box scale calculation. This fixes the old problem where a nominal SMG could render almost rifle-length because each handmade mesh had a different native bounding box.
+- Pickup models preserve their intentional larger presentation ratio, while held weapons use the physical dimensions exactly.
+- Replaced the old dimensionless mass tuning with a bounded kg-to-handling conversion.
+- Mass now affects shoulder raise/lower response, ADS pose response, mid-transition direction reversal, weapon recoil spring settling and fallback weapon transform inertia.
+- Heavy weapons therefore feel slower and more planted; the SMG is visibly quicker. Player movement speed is intentionally unchanged, matching the Fortnite/Lyra style of weapon-specific upper-body handling rather than weapon-weight movement penalties.
+- Existing slide ownership, crouch, jump, hit logic, damage values, ammunition and final two-hand IK were not changed.

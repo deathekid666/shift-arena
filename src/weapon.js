@@ -9,6 +9,10 @@ import {
   dampTransitionDirection,
   getWeaponTransitionProfile
 } from './weapon-transition.js';
+import {
+  getWeaponHandlingMass,
+  getWeaponResponseScale
+} from './weapon-physicality.js';
 
 const SHOTGUN_PATTERN_10 = [
   [0.00, 0.00],
@@ -259,6 +263,8 @@ export class WeaponSystem {
           magazine: entry.state.ammo,
           magazineSize: entry.cfg.magazineSize,
           reserve: this.ammoPool[entry.cfg.ammoType] ?? 0,
+          massKg: entry.cfg.massKg,
+          physicalSizeM: entry.cfg.physicalSizeM,
           color: entry.cfg.color
         };
       }),
@@ -343,10 +349,21 @@ export class WeaponSystem {
         s.dynamicBloom = 0;
       }
 
-      // Critically damped-ish weapon recoil spring. The gun physically kicks
-      // rearward then settles instead of teleporting to a Z offset.
-      const kickStiffness = 92 / Math.max(0.55, entry.cfg.mass);
-      const kickDamping = 18 / Math.max(0.72, Math.sqrt(entry.cfg.mass));
+      // Critically damped-ish weapon recoil spring. Physical kg is converted
+      // to a bounded handling mass so a 9.5 kg sniper genuinely feels heavier
+      // without turning the visual spring into slow-motion.
+      const handlingMass =
+        getWeaponHandlingMass(entry.cfg);
+      const handlingResponse =
+        getWeaponResponseScale(entry.cfg);
+      const kickStiffness =
+        92 / Math.max(0.55, handlingMass);
+      const kickDamping =
+        18 /
+        Math.max(
+          0.72,
+          Math.sqrt(handlingMass)
+        );
       s.visualKickVelocity += -s.visualKick * kickStiffness * dt;
       s.visualKickVelocity *= Math.exp(-kickDamping * dt);
       s.visualKick += s.visualKickVelocity * dt;
@@ -356,8 +373,11 @@ export class WeaponSystem {
       }
 
       const poseRecovery =
-        entry.cfg.weaponRecoilRecovery ??
-        Math.max(8, entry.cfg.recoilRecovery * 1.35);
+        (
+          entry.cfg.weaponRecoilRecovery ??
+          Math.max(8, entry.cfg.recoilRecovery * 1.35)
+        ) *
+        Math.pow(handlingResponse, 0.35);
 
       s.recoilPitch = THREE.MathUtils.damp(
         s.recoilPitch,
@@ -547,9 +567,17 @@ export class WeaponSystem {
       shoulderRequested;
 
     const shoulderTarget = shoulderRequested ? 1 : 0;
-    const shoulderResponse = shoulderRequested
-      ? (cfg.shoulderRaiseSpeed ?? 26)
-      : (cfg.shoulderLowerSpeed ?? 12);
+    const handlingMass =
+      getWeaponHandlingMass(cfg);
+    const handlingResponse =
+      getWeaponResponseScale(cfg);
+    const shoulderResponse =
+      (
+        shoulderRequested
+          ? (cfg.shoulderRaiseSpeed ?? 26)
+          : (cfg.shoulderLowerSpeed ?? 12)
+      ) *
+      handlingResponse;
 
     state.shoulderBlend = THREE.MathUtils.damp(
       state.shoulderBlend ?? 0,
@@ -566,9 +594,13 @@ export class WeaponSystem {
     }
 
     const adsTarget = this.aiming ? 1 : 0;
-    const adsResponse = this.aiming
-      ? (cfg.adsPoseInSpeed ?? 28)
-      : (cfg.adsPoseOutSpeed ?? 20);
+    const adsResponse =
+      (
+        this.aiming
+          ? (cfg.adsPoseInSpeed ?? 28)
+          : (cfg.adsPoseOutSpeed ?? 20)
+      ) *
+      handlingResponse;
 
     state.adsBlend = THREE.MathUtils.damp(
       state.adsBlend ?? 0,
@@ -611,7 +643,8 @@ export class WeaponSystem {
       dampTransitionDirection(
         state.transitionDirection,
         shoulderRequested,
-        transitionProfile.directionResponse,
+        transitionProfile.directionResponse *
+          handlingResponse,
         dt
       );
 
@@ -1125,25 +1158,25 @@ export class WeaponSystem {
         model.position.x = THREE.MathUtils.damp(
           model.position.x,
           targetPosition.x,
-          28 / cfg.mass,
+          28 / handlingMass,
           dt
         );
         model.position.y = THREE.MathUtils.damp(
           model.position.y,
           targetPosition.y,
-          28 / cfg.mass,
+          28 / handlingMass,
           dt
         );
         model.position.z = THREE.MathUtils.damp(
           model.position.z,
           targetPosition.z,
-          30 / cfg.mass,
+          30 / handlingMass,
           dt
         );
 
         model.quaternion.slerp(
           this.tmpDesiredLocalQ,
-          1 - Math.exp(-(24 / cfg.mass) * dt)
+          1 - Math.exp(-(24 / handlingMass) * dt)
         );
 
         model.updateWorldMatrix(true, true);
@@ -1207,25 +1240,25 @@ export class WeaponSystem {
       model.position.x = THREE.MathUtils.damp(
         model.position.x,
         targetPosition.x,
-        30 / cfg.mass,
+        30 / handlingMass,
         dt
       );
       model.position.y = THREE.MathUtils.damp(
         model.position.y,
         targetPosition.y,
-        30 / cfg.mass,
+        30 / handlingMass,
         dt
       );
       model.position.z = THREE.MathUtils.damp(
         model.position.z,
         targetPosition.z,
-        32 / cfg.mass,
+        32 / handlingMass,
         dt
       );
 
       model.quaternion.slerp(
         this.tmpDesiredLocalQ,
-        1 - Math.exp(-(26 / cfg.mass) * dt)
+        1 - Math.exp(-(26 / handlingMass) * dt)
       );
 
       model.updateWorldMatrix(true, true);
@@ -1237,12 +1270,12 @@ export class WeaponSystem {
     const targetY = 1.05 + bobY + swayY;
     const targetZ = -0.48 + state.visualKick;
 
-    model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 18 / cfg.mass, dt);
-    model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / cfg.mass, dt);
-    model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 22 / cfg.mass, dt);
-    model.rotation.x = THREE.MathUtils.damp(model.rotation.x, -0.04 - state.visualKick * 0.75, 18 / cfg.mass, dt);
-    model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 18 / cfg.mass, dt);
-    model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / cfg.mass, dt);
+    model.position.x = THREE.MathUtils.damp(model.position.x, targetX, 18 / handlingMass, dt);
+    model.position.y = THREE.MathUtils.damp(model.position.y, targetY, 18 / handlingMass, dt);
+    model.position.z = THREE.MathUtils.damp(model.position.z, targetZ, 22 / handlingMass, dt);
+    model.rotation.x = THREE.MathUtils.damp(model.rotation.x, -0.04 - state.visualKick * 0.75, 18 / handlingMass, dt);
+    model.rotation.y = THREE.MathUtils.damp(model.rotation.y, 0, 18 / handlingMass, dt);
+    model.rotation.z = THREE.MathUtils.damp(model.rotation.z, -swayX * 0.9, 16 / handlingMass, dt);
 
     model.updateWorldMatrix(true, true);
     this.updateGripPose(false, false);
@@ -1572,7 +1605,9 @@ export class WeaponSystem {
       fireRate: this.cfg.fireRate,
       reticle: this.cfg.reticle,
       scoped: Boolean(this.cfg.scope),
-      ammoType: this.cfg.ammoType
+      ammoType: this.cfg.ammoType,
+      massKg: this.cfg.massKg,
+      physicalSizeM: this.cfg.physicalSizeM
     });
   }
 
@@ -1683,7 +1718,10 @@ export class WeaponSystem {
       (this.aiming
         ? (cfg.adsWeaponKickImpulse ?? 12.5)
         : (cfg.weaponKickImpulse ?? 17.0)) /
-      Math.max(0.72, cfg.mass);
+      Math.max(
+        0.72,
+        getWeaponHandlingMass(cfg)
+      );
 
     const posePitch =
       (cfg.weaponRecoilPitch ??
