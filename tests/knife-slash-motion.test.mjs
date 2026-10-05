@@ -6,16 +6,19 @@ import {
   sampleKnifeSlash
 } from '../src/knife-slash-motion.js';
 
-test('knife ready stance stays above the hanging leg pose', () => {
+test('knife ready stance is a low one-hand carry outside the torso', () => {
   const ready = sampleKnifeReady(0);
-  assert.ok(ready.hand.up > -0.16);
-  assert.ok(ready.hand.forward > 0.20);
-  assert.ok(ready.blade.forward > 0.90);
+  assert.ok(ready.hand.right > 0.28);
+  assert.ok(ready.hand.up < -0.22);
+  assert.ok(ready.hand.forward < 0.20);
+  assert.ok(ready.blade.forward > 0.95);
+  assert.ok(ready.blade.up < 0);
 });
 
-test('knife sprint stance lowers but remains controlled', () => {
+test('knife sprint stance lowers and moves farther outside the torso', () => {
   const ready = sampleKnifeReady(0);
   const sprint = sampleKnifeReady(1);
+  assert.ok(sprint.hand.right > ready.hand.right);
   assert.ok(sprint.hand.up < ready.hand.up);
   assert.ok(sprint.hand.forward < ready.hand.forward);
 });
