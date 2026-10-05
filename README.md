@@ -436,3 +436,16 @@ was 0.566 world units versus 0.288 for standing.
 - Removed the 010.27E whole-gun transition chase that could read as rubbery/floaty. Final weapon-to-hand attachment is exact again; only the additive physical offsets carry inertia.
 - Reduced the exaggerated sniper carry droop and torso deformation from 010.27E. Weight now comes primarily from passive response, not a caricatured pose.
 - Known-good slide ownership remains untouched and explicitly clears the natural-motion history while sliding.
+
+
+## Build 010.27G — connected weapon motion
+- Reworked the kinetic layer after checking Battlefield's official gunplay/movement notes, Battlefield V weapon-type animation notes, and open-source spring-driven FPS rigs instead of continuing to tune arbitrary offsets.
+- Camera-driven weapon inertia now consumes look angular velocity in radians/second rather than already-damped raw mouse deltas. Recoil is excluded from that input so it is not applied twice.
+- Local X/Z acceleration now drives small opposite-direction mass reaction. Starting, braking and strafing therefore move the gun for physical reasons instead of from a generic bob curve.
+- Step response is synchronized to the actual VRM locomotion phase. The weapon no longer runs its own independent gait clock when an authored phase is available.
+- Vertical step motion is deliberately restrained; Battlefield update history explicitly includes toning down weapon movement around ADS and smoothing camera/weapon stance transitions.
+- The same passive motion propagates a smaller late additive reaction through spine/chest/upper-chest/clavicles before final two-hand IK. The body and weapon therefore react as one connected system rather than the hands chasing a moving prop.
+- Final weapon transform stays exact to the stable body-space target; final hand IK stays exact to the weapon grips.
+- Magnified sniper ADS suppresses almost all passive drift. Hip/carry retains the most weight expression.
+- Added tests for 30/60/120 FPS consistency, gait-phase sync, acceleration reaction, ADS suppression and heavy follow-through.
+- Slide remains on the confirmed-good authored-hand ownership path and clears procedural motion while active.

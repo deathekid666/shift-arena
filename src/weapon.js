@@ -93,7 +93,10 @@ export class WeaponSystem {
       leftHandLambda: 30,
       adsBlend: 0,
       shoulderBlend: 0,
-      poseClass: 'ar'
+      poseClass: 'ar',
+      naturalBodyPitch: 0,
+      naturalBodyYaw: 0,
+      naturalBodyRoll: 0
     };
 
     this.entries = WEAPON_ORDER.map((key) => {
@@ -128,7 +131,8 @@ export class WeaponSystem {
         pumpSoundPlayed: true,
         transitionDirection: -1,
         naturalMotion:
-          createWeaponNaturalMotionState()
+          createWeaponNaturalMotionState(),
+        naturalOutput: null
       };
       return { key, cfg, model, state };
     });
@@ -770,6 +774,7 @@ export class WeaponSystem {
       resetWeaponNaturalMotion(
         state.naturalMotion
       );
+      state.naturalOutput = null;
 
       const handWorld =
         this.player.getHandWorldPosition?.(
@@ -955,13 +960,19 @@ export class WeaponSystem {
               massKg: cfg.massKg,
               lengthM:
                 cfg.physicalSizeM?.length,
-              lookX:
-                this.cameraRig.lookX,
-              lookY:
-                this.cameraRig.lookY,
+              lookYawVelocity:
+                this.cameraRig.inputYawVelocity,
+              lookPitchVelocity:
+                this.cameraRig.inputPitchVelocity,
+              localX:
+                this.player.localMotion?.x ?? 0,
+              localZ:
+                this.player.localMotion?.z ?? 0,
               speed,
               grounded:
                 this.player.grounded,
+              gaitPhase:
+                this.player.vrmCharacter?.locomotion?.phase,
               adsBlend,
               shoulderBlend,
               bobBase: cfg.bob,
@@ -970,6 +981,9 @@ export class WeaponSystem {
                 Boolean(cfg.scope)
             }
           );
+
+        state.naturalOutput =
+          naturalMotion;
 
         const aimCorrection =
           new THREE.Quaternion().setFromEuler(
@@ -1416,6 +1430,16 @@ export class WeaponSystem {
       THREE.MathUtils.clamp(shoulderBlend, 0, 1);
     this.gripPose.poseClass =
       this.cfg.poseClass ?? 'ar';
+
+    const natural =
+      this.state.naturalOutput;
+
+    this.gripPose.naturalBodyPitch =
+      natural?.bodyPitch ?? 0;
+    this.gripPose.naturalBodyYaw =
+      natural?.bodyYaw ?? 0;
+    this.gripPose.naturalBodyRoll =
+      natural?.bodyRoll ?? 0;
   }
 
   getGripPose() {
@@ -1603,6 +1627,7 @@ export class WeaponSystem {
     resetWeaponNaturalMotion(
       nextState.naturalMotion
     );
+    nextState.naturalOutput = null;
 
     this.active.model.group.visible = !this.visualHidden;
     this.emitSwitch();
@@ -1640,6 +1665,7 @@ export class WeaponSystem {
     resetWeaponNaturalMotion(
       newEntry.state.naturalMotion
     );
+    newEntry.state.naturalOutput = null;
     newEntry.model.group.visible = !this.visualHidden;
 
     this.emitSwitch();
@@ -1716,6 +1742,7 @@ export class WeaponSystem {
       resetWeaponNaturalMotion(
         entry.state.naturalMotion
       );
+      entry.state.naturalOutput = null;
       entry.state.raiseAnchorPosition.copy(
         entry.model.group.position
       );

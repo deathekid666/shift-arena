@@ -3076,6 +3076,112 @@ const IK_TMP = {
   desiredLocalQ: new THREE.Quaternion()
 };
 
+const WEAPON_BODY_REACTION_EULER =
+  new THREE.Euler();
+
+const WEAPON_BODY_REACTION_Q =
+  new THREE.Quaternion();
+
+function applyLateWeaponBodyReaction(
+  character,
+  gripPose
+) {
+  const pitch =
+    THREE.MathUtils.clamp(
+      gripPose?.naturalBodyPitch ?? 0,
+      -0.018,
+      0.018
+    );
+
+  const yaw =
+    THREE.MathUtils.clamp(
+      gripPose?.naturalBodyYaw ?? 0,
+      -0.022,
+      0.022
+    );
+
+  const roll =
+    THREE.MathUtils.clamp(
+      gripPose?.naturalBodyRoll ?? 0,
+      -0.018,
+      0.018
+    );
+
+  if (
+    Math.abs(pitch) +
+      Math.abs(yaw) +
+      Math.abs(roll) <
+    0.00002
+  ) {
+    return;
+  }
+
+  const { bones } = character;
+  const seen = new Set();
+
+  const apply = (
+    node,
+    pitchScale,
+    yawScale,
+    rollScale
+  ) => {
+    if (!node || seen.has(node)) return;
+    seen.add(node);
+
+    WEAPON_BODY_REACTION_EULER.set(
+      pitch * pitchScale,
+      yaw * yawScale,
+      roll * rollScale,
+      'XYZ'
+    );
+
+    WEAPON_BODY_REACTION_Q.setFromEuler(
+      WEAPON_BODY_REACTION_EULER
+    );
+
+    // updatePose reconstructs the upper body each frame, so this late local
+    // multiplication stays additive and cannot accumulate over time.
+    node.quaternion.multiply(
+      WEAPON_BODY_REACTION_Q
+    );
+  };
+
+  apply(
+    bones.spine,
+    0.16,
+    0.14,
+    0.10
+  );
+
+  apply(
+    bones.chest,
+    0.28,
+    0.26,
+    0.16
+  );
+
+  apply(
+    bones.upperChest,
+    0.42,
+    0.38,
+    0.24
+  );
+
+  apply(
+    bones.rightShoulder,
+    0.30,
+    0.44,
+    0.34
+  );
+
+  apply(
+    bones.leftShoulder,
+    0.26,
+    0.40,
+    0.30
+  );
+}
+
 const WEAPON_IK_TARGET_FILTER =
   new WeakMap();
 
@@ -3211,6 +3317,11 @@ function applyTwoHandWeaponIK(character, gripPose, dt) {
     if (filter) filter.initialized = false;
     return;
   }
+
+  applyLateWeaponBodyReaction(
+    character,
+    gripPose
+  );
 
   character.root.updateWorldMatrix(
     true,
