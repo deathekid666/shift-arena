@@ -3,6 +3,7 @@ import {
   sampleKnifeReady,
   sampleKnifeSlash
 } from './knife-slash-motion.js';
+import { KNIFE_HAND_GRIP } from './knife-grip.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const smooth = (v) => { const t = THREE.MathUtils.clamp(v, 0, 1); return t * t * (3 - 2 * t); };
@@ -125,7 +126,13 @@ export function createFangPoseLayer(character) {
     const worldQ = new THREE.Quaternion().setFromRotationMatrix(
       new THREE.Matrix4().makeBasis(bladeRight, bladeUp, blade.clone().negate())
     );
-    const gripInverse = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.10, 0, Math.PI * 0.52)).invert();
+    const gripInverse = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        KNIFE_HAND_GRIP.rotation.x,
+        KNIFE_HAND_GRIP.rotation.y,
+        KNIFE_HAND_GRIP.rotation.z
+      )
+    ).invert();
     worldQ.multiply(gripInverse);
     setWorldQuaternion(b.rightHand, worldQ);
     // Fade to the current locomotion pose, not a frozen idle at throw end.
@@ -314,9 +321,9 @@ export function createFangPoseLayer(character) {
       new THREE.Quaternion()
         .setFromEuler(
           new THREE.Euler(
-            -0.10,
-            0,
-            Math.PI * 0.52
+            KNIFE_HAND_GRIP.rotation.x,
+            KNIFE_HAND_GRIP.rotation.y,
+            KNIFE_HAND_GRIP.rotation.z
           )
         )
         .invert();
