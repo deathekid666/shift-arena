@@ -48,26 +48,26 @@ function mixPose(from, to, t) {
 }
 
 const READY = {
-  // Third-person knife carry: keep the weapon clearly in one hand, outside
-  // the torso silhouette. The elbow stays soft and the blade points forward
-  // with a slight downward cant instead of lying across the chest like a gun.
-  hand: { right: 0.32, up: -0.30, forward: 0.16 },
-  pole: { right: 0.66, up: -0.08, forward: 0.10 },
-  chest: { x: 0.005, y: -0.015, z: 0 },
-  shoulder: { x: 0.010, y: 0.015, z: -0.075 },
-  blade: { right: -0.06, up: -0.20, forward: 0.98 },
-  edgeRoll: -0.04
+  // Anatomical forward-grip knife stance: weapon hand sits just outside the
+  // right ribs, elbow bent, torso slightly bladed, blade projecting from the
+  // fist instead of crossing the sternum like a firearm.
+  hand: { right: 0.36, up: -0.28, forward: 0.19 },
+  pole: { right: 0.68, up: -0.02, forward: 0.13 },
+  chest: { x: 0.008, y: -0.12, z: -0.015 },
+  shoulder: { x: 0.015, y: -0.025, z: -0.085 },
+  blade: { right: -0.03, up: 0.15, forward: 0.988 },
+  edgeRoll: -0.02
 };
 
 const SPRINT = {
-  // Running lowers the knife beside the right hip while keeping the same
-  // forward hammer grip. It must never migrate back into a rifle-ready pose.
-  hand: { right: 0.36, up: -0.46, forward: 0.05 },
-  pole: { right: 0.70, up: -0.22, forward: -0.02 },
-  chest: { x: 0.025, y: -0.005, z: 0 },
-  shoulder: { x: 0.035, y: 0.015, z: -0.105 },
-  blade: { right: -0.02, up: -0.38, forward: 0.92 },
-  edgeRoll: -0.06
+  // Sprint carry drops the weapon beside the right hip. The free arm is
+  // released back to locomotion so running still looks like running.
+  hand: { right: 0.39, up: -0.48, forward: 0.02 },
+  pole: { right: 0.72, up: -0.24, forward: -0.03 },
+  chest: { x: 0.025, y: -0.025, z: 0 },
+  shoulder: { x: 0.040, y: 0.010, z: -0.11 },
+  blade: { right: -0.02, up: -0.24, forward: 0.97 },
+  edgeRoll: -0.04
 };
 
 const SWINGS = [
