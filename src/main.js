@@ -72,7 +72,7 @@ root.innerHTML = `
       <span>Respawning in <b id="respawn-countdown">2.5</b>s</span>
     </div>
 
-    <div id="damage-test-hint">BUILD 010.25D · FULLSCREEN KEYBOARD LOCK</div>
+    <div id="damage-test-hint">BUILD 010.25E · ESC RESUME FULLSCREEN</div>
     <div id="bot-debug">BOT <b id="bot-state">IDLE</b> · SH <b id="bot-shield">100</b> · HP <b id="bot-health">100</b></div>
     <div id="stats"></div>
     <div id="jitter-lab" hidden>
@@ -126,7 +126,7 @@ root.innerHTML = `
 
     <div id="start">
       <div id="start-card">
-        <div class="build-tag">BUILD 010.25D · FULLSCREEN KEYBOARD LOCK</div>
+        <div class="build-tag">BUILD 010.25E · ESC RESUME FULLSCREEN</div>
         <h1>SHIFT Arena</h1>
         <p>SHIFT now checks for the production Roach Scout asset first: local VRM, then local rigged GLB, then the temporary development VRM. A standard Mixamo/Meshy-style humanoid GLB can drive the existing gun, Fang and pose systems without another character-code rewrite.</p>
         <div id="character-load-status" style="margin:10px 0 14px;font-size:12px;letter-spacing:.08em;opacity:.82">MAIN CHARACTER · LOADING AUTOMATICALLY…</div>
@@ -172,6 +172,15 @@ root.innerHTML = `
         </div>
 
         <button id="enter-arena" type="button" disabled>ENTER LOADOUT TEST</button>
+      </div>
+    </div>
+
+    <div id="resume-overlay" hidden>
+      <div id="resume-card">
+        <span>ARENA INPUT RELEASED</span>
+        <strong>CLICK TO RESUME</strong>
+        <small>Restores fullscreen · mouse lock · Ctrl+W protection</small>
+        <button id="resume-arena" type="button">RESUME FULLSCREEN</button>
       </div>
     </div>
   </div>`;
@@ -232,6 +241,10 @@ const opponentOptions =
   document.querySelector('#opponent-options');
 const opponentChoiceStatus =
   document.querySelector('#opponent-choice-status');
+const resumeOverlay =
+  document.querySelector('#resume-overlay');
+const resumeButton =
+  document.querySelector('#resume-arena');
 const botCountButtons = [
   ...document.querySelectorAll('[data-bot-count]')
 ];
@@ -685,17 +698,64 @@ prewarmGameBeforeEntry().catch((error) => {
   button.textContent = 'RELOAD REQUIRED';
 });
 
-async function enterImmersiveArena() {
-  if (input.isTouch) {
-    input.lockPointer();
+let arenaEntered = false;
+let immersiveResumeBusy = false;
+
+function updateResumeOverlay() {
+  if (
+    !arenaEntered ||
+    input.isTouch
+  ) {
+    resumeOverlay.hidden = true;
     return;
   }
+
+  const fullscreenAvailable =
+    Boolean(
+      document.fullscreenEnabled &&
+      document.documentElement.requestFullscreen
+    );
+
+  const needsFullscreen =
+    fullscreenAvailable &&
+    !document.fullscreenElement;
+
+  const needsPointer =
+    document.pointerLockElement !==
+      renderer.domElement;
+
+  const needsResume =
+    needsFullscreen || needsPointer;
+
+  resumeOverlay.hidden =
+    !needsResume;
+
+  resumeButton.textContent =
+    needsFullscreen
+      ? 'RESUME FULLSCREEN'
+      : 'RESUME GAME';
+}
+
+async function enterImmersiveArena({
+  quiet = false
+} = {}) {
+  if (input.isTouch) {
+    input.lockPointer();
+    updateResumeOverlay();
+    return;
+  }
+
+  // Browser-game order matters: request Pointer Lock from the active click
+  // BEFORE requestFullscreen(), because fullscreen can consume transient user
+  // activation in browsers that enforce the Pointer Lock spec strictly.
+  input.lockPointer();
 
   let fullscreenActive =
     Boolean(document.fullscreenElement);
 
   if (
     !fullscreenActive &&
+    document.fullscreenEnabled &&
     document.documentElement.requestFullscreen
   ) {
     try {
@@ -709,21 +769,46 @@ async function enterImmersiveArena() {
     }
   }
 
-  // Pointer lock is still independent. If fullscreen was denied, this keeps
-  // the exact old browser-game behavior alive.
-  input.lockPointer();
-
   const keyboardLocked =
     fullscreenActive
       ? await input.lockGameKey()
       : false;
 
+  updateResumeOverlay();
+
+  if (quiet) return;
+
   if (fullscreenActive && keyboardLocked) {
     showToast('FULLSCREEN · CTRL+W PROTECTED');
   } else if (!fullscreenActive) {
-    showToast('FULLSCREEN BLOCKED · C ALSO CROUCHES');
+    showToast('FULLSCREEN BLOCKED · CLICK RESUME TO RETRY');
   } else {
     showToast('CTRL+W MAY BE RESERVED · C ALSO CROUCHES');
+  }
+}
+
+async function resumeImmersiveArena() {
+  if (
+    immersiveResumeBusy ||
+    input.isTouch
+  ) {
+    return;
+  }
+
+  immersiveResumeBusy = true;
+  resumeButton.disabled = true;
+  resumeButton.textContent = 'RESTORING…';
+
+  try {
+    // This function is called directly from the resume button click, providing
+    // the fresh user activation browsers require after Esc.
+    await enterImmersiveArena({
+      quiet: true
+    });
+  } finally {
+    immersiveResumeBusy = false;
+    resumeButton.disabled = false;
+    updateResumeOverlay();
   }
 }
 
@@ -732,12 +817,31 @@ document.addEventListener(
   () => {
     if (!document.fullscreenElement) {
       input.unlockGameKeys();
-      return;
+    } else {
+      // Reapply the narrow KeyW lock after a successful fullscreen transition.
+      input.lockGameKey();
     }
 
-    // Some browsers recreate fullscreen state asynchronously. Re-requesting
-    // the narrow KeyW lock here is harmless and improves reliability.
-    input.lockGameKey();
+    updateResumeOverlay();
+  }
+);
+
+document.addEventListener(
+  'pointerlockchange',
+  () => {
+    updateResumeOverlay();
+  }
+);
+
+resumeButton.addEventListener(
+  'click',
+  (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    resumeImmersiveArena().catch(() => {
+      updateResumeOverlay();
+    });
   }
 );
 
@@ -746,16 +850,37 @@ button.addEventListener('click', () => {
 
   applyOpponentSetup();
   weapon.unlockAudio();
+  arenaEntered = true;
   start.style.display = 'none';
+  resumeOverlay.hidden = true;
 
-  // Do not await this in the click handler. Arena entry remains immediate and
-  // failures in fullscreen / Keyboard Lock can never block gameplay.
+  // Arena entry remains immediate. Fullscreen, keyboard lock and pointer lock
+  // are all best-effort enhancements around the already-running match.
   enterImmersiveArena().catch(() => {
     input.lockPointer();
+    updateResumeOverlay();
   });
 });
 renderer.domElement.addEventListener('click', () => {
   weapon.unlockAudio();
+
+  if (
+    arenaEntered &&
+    !input.isTouch &&
+    (
+      !document.fullscreenElement ||
+      document.pointerLockElement !== renderer.domElement
+    )
+  ) {
+    enterImmersiveArena({
+      quiet: true
+    }).catch(() => {
+      input.lockPointer();
+      updateResumeOverlay();
+    });
+    return;
+  }
+
   input.lockPointer();
 
   if (document.fullscreenElement) {
