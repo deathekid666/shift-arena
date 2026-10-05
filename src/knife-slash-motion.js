@@ -67,84 +67,88 @@ const SPRINT = {
 
 const SWINGS = [
   {
+    // Primary 1: strong right-to-left cut. The hand crosses the torso instead
+    // of merely reaching forward, and the blade stays readable from behind.
     windup: {
-      hand: { right: 0.43, up: 0.25, forward: 0.08 },
-      pole: { right: 0.73, up: 0.36, forward: 0.03 },
-      chest: { x: -0.02, y: 0.085, z: 0.025 },
-      shoulder: { x: -0.05, y: -0.05, z: 0.12 },
-      blade: { right: 0.26, up: 0.24, forward: 0.93 },
-      edgeRoll: 0.18
-    },
-    contact: {
-      hand: { right: -0.04, up: 0.02, forward: 0.71 },
-      pole: { right: 0.31, up: 0.18, forward: 0.51 },
-      chest: { x: -0.01, y: -0.12, z: -0.02 },
-      shoulder: { x: 0.01, y: 0.08, z: -0.06 },
-      blade: { right: -0.35, up: -0.12, forward: 0.93 },
-      edgeRoll: -0.16
-    },
-    follow: {
-      hand: { right: -0.34, up: -0.12, forward: 0.51 },
-      pole: { right: 0.03, up: 0.03, forward: 0.53 },
-      chest: { x: 0.01, y: -0.17, z: -0.03 },
-      shoulder: { x: 0.03, y: 0.11, z: -0.09 },
-      blade: { right: -0.55, up: -0.27, forward: 0.79 },
-      edgeRoll: -0.25
-    }
-  },
-  {
-    windup: {
-      hand: { right: -0.18, up: 0.18, forward: 0.30 },
-      pole: { right: 0.18, up: 0.31, forward: 0.42 },
-      chest: { x: -0.01, y: -0.085, z: -0.02 },
-      shoulder: { x: -0.02, y: 0.09, z: -0.05 },
-      blade: { right: -0.42, up: 0.10, forward: 0.90 },
-      edgeRoll: -0.20
-    },
-    contact: {
-      hand: { right: 0.12, up: 0.01, forward: 0.72 },
-      pole: { right: 0.47, up: 0.17, forward: 0.47 },
-      chest: { x: -0.01, y: 0.105, z: 0.02 },
-      shoulder: { x: 0.01, y: -0.07, z: 0.07 },
-      blade: { right: 0.29, up: -0.12, forward: 0.95 },
-      edgeRoll: 0.15
-    },
-    follow: {
-      hand: { right: 0.37, up: -0.10, forward: 0.48 },
-      pole: { right: 0.69, up: 0.02, forward: 0.30 },
-      chest: { x: 0.01, y: 0.15, z: 0.03 },
-      shoulder: { x: 0.03, y: -0.10, z: 0.10 },
-      blade: { right: 0.50, up: -0.25, forward: 0.83 },
-      edgeRoll: 0.23
-    }
-  },
-  {
-    windup: {
-      hand: { right: 0.33, up: 0.38, forward: 0.06 },
-      pole: { right: 0.66, up: 0.52, forward: 0.02 },
-      chest: { x: -0.025, y: 0.07, z: 0.035 },
-      shoulder: { x: -0.07, y: -0.04, z: 0.14 },
-      blade: { right: 0.23, up: 0.39, forward: 0.89 },
+      hand: { right: 0.58, up: 0.20, forward: 0.10 },
+      pole: { right: 0.78, up: 0.42, forward: 0.02 },
+      chest: { x: -0.025, y: 0.16, z: 0.035 },
+      shoulder: { x: -0.055, y: -0.09, z: 0.16 },
+      blade: { right: 0.56, up: 0.16, forward: 0.81 },
       edgeRoll: 0.22
     },
     contact: {
-      hand: { right: -0.03, up: -0.01, forward: 0.72 },
-      pole: { right: 0.30, up: 0.15, forward: 0.53 },
-      chest: { x: 0.00, y: -0.11, z: -0.025 },
-      shoulder: { x: 0.03, y: 0.08, z: -0.07 },
-      blade: { right: -0.29, up: -0.28, forward: 0.91 },
-      edgeRoll: -0.17
+      hand: { right: -0.12, up: -0.02, forward: 0.66 },
+      pole: { right: 0.24, up: 0.16, forward: 0.47 },
+      chest: { x: -0.01, y: -0.18, z: -0.025 },
+      shoulder: { x: 0.015, y: 0.11, z: -0.085 },
+      blade: { right: -0.56, up: -0.14, forward: 0.82 },
+      edgeRoll: -0.20
     },
     follow: {
-      hand: { right: -0.29, up: -0.22, forward: 0.49 },
-      pole: { right: 0.06, up: -0.02, forward: 0.48 },
-      chest: { x: 0.02, y: -0.15, z: -0.04 },
-      shoulder: { x: 0.04, y: 0.10, z: -0.10 },
-      blade: { right: -0.47, up: -0.46, forward: 0.76 },
-      edgeRoll: -0.27
+      hand: { right: -0.50, up: -0.14, forward: 0.42 },
+      pole: { right: -0.04, up: 0.02, forward: 0.43 },
+      chest: { x: 0.015, y: -0.28, z: -0.045 },
+      shoulder: { x: 0.035, y: 0.15, z: -0.12 },
+      blade: { right: -0.72, up: -0.22, forward: 0.66 },
+      edgeRoll: -0.30
+    }
+  },
+  {
+    // Primary 2: return cut, left-to-right, mirroring the readable screen arc.
+    windup: {
+      hand: { right: -0.42, up: 0.14, forward: 0.28 },
+      pole: { right: 0.04, up: 0.30, forward: 0.42 },
+      chest: { x: -0.015, y: -0.15, z: -0.025 },
+      shoulder: { x: -0.035, y: 0.10, z: -0.08 },
+      blade: { right: -0.56, up: 0.14, forward: 0.82 },
+      edgeRoll: -0.22
+    },
+    contact: {
+      hand: { right: 0.14, up: -0.02, forward: 0.67 },
+      pole: { right: 0.48, up: 0.16, forward: 0.45 },
+      chest: { x: -0.01, y: 0.17, z: 0.025 },
+      shoulder: { x: 0.015, y: -0.10, z: 0.085 },
+      blade: { right: 0.56, up: -0.14, forward: 0.82 },
+      edgeRoll: 0.20
+    },
+    follow: {
+      hand: { right: 0.50, up: -0.13, forward: 0.42 },
+      pole: { right: 0.80, up: 0.02, forward: 0.28 },
+      chest: { x: 0.015, y: 0.27, z: 0.045 },
+      shoulder: { x: 0.035, y: -0.15, z: 0.12 },
+      blade: { right: 0.72, up: -0.22, forward: 0.66 },
+      edgeRoll: 0.30
+    }
+  },
+  {
+    // Primary 3: high-right to low-left diagonal finisher.
+    windup: {
+      hand: { right: 0.48, up: 0.43, forward: 0.10 },
+      pole: { right: 0.76, up: 0.57, forward: 0.01 },
+      chest: { x: -0.04, y: 0.13, z: 0.055 },
+      shoulder: { x: -0.085, y: -0.07, z: 0.18 },
+      blade: { right: 0.36, up: 0.50, forward: 0.78 },
+      edgeRoll: 0.28
+    },
+    contact: {
+      hand: { right: -0.10, up: -0.13, forward: 0.66 },
+      pole: { right: 0.24, up: 0.10, forward: 0.49 },
+      chest: { x: 0.01, y: -0.18, z: -0.05 },
+      shoulder: { x: 0.04, y: 0.11, z: -0.10 },
+      blade: { right: -0.40, up: -0.44, forward: 0.80 },
+      edgeRoll: -0.24
+    },
+    follow: {
+      hand: { right: -0.43, up: -0.38, forward: 0.36 },
+      pole: { right: -0.02, up: -0.12, forward: 0.39 },
+      chest: { x: 0.035, y: -0.26, z: -0.075 },
+      shoulder: { x: 0.06, y: 0.15, z: -0.14 },
+      blade: { right: -0.58, up: -0.55, forward: 0.60 },
+      edgeRoll: -0.34
     }
   }
-];
+]
 
 export function sampleKnifeReady(sprintBlend = 0) {
   return {
