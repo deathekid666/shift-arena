@@ -6,6 +6,7 @@ import { createFangPoseLayer } from './fang-pose.js';
 import { createCrouchPoseLayer } from './crouch-pose.js';
 import { createSlidePoseLayer } from './slide-pose.js';
 import { createJumpPoseLayer } from './jump-pose.js';
+import { createMeshyHumanoid } from './meshy-humanoid.js';
 
 // Temporary development avatar used only to validate the real VRM pipeline.
 // Source: norio/vrm-game-starter (their README states the bundled VRoid sample
@@ -19,14 +20,12 @@ export const DEVELOPMENT_VRM_URL =
   'https://cdn.jsdelivr.net/gh/norio/vrm-game-starter@b14c236fd8150855348ad085b7820c298eac4b30/src/assets/sample2.vrm';
 
 export async function loadRoachScoutVrmBase() {
-  // Fast-start path: the repository currently has no local roach-scout.vrm
-  // or roach-scout.glb, so probing those URLs only adds two failed requests.
-  // Load the actual working main character immediately.
-  const avatar = await loadVrmAvatar(DEVELOPMENT_VRM_URL);
-  avatar.sourceUrl = DEVELOPMENT_VRM_URL;
-  avatar.finalAsset = false;
+  // Preview branch: load the generated Scout through the normalized humanoid adapter.
+  const avatar = await loadVrmAvatar(FINAL_GLB_URL);
+  avatar.sourceUrl = FINAL_GLB_URL;
+  avatar.finalAsset = true;
   avatar.activeMainCharacter = true;
-  avatar.assetType = 'vrm';
+  avatar.assetType = 'glb';
   return avatar;
 }
 
@@ -35,7 +34,7 @@ async function loadVrmAvatar(url) {
   loader.register((parser) => new VRMLoaderPlugin(parser));
 
   const gltf = await loader.loadAsync(url);
-  const vrm = gltf.userData.vrm;
+  const vrm = url === FINAL_GLB_URL ? createMeshyHumanoid(gltf.scene) : gltf.userData.vrm;
   if (!vrm) throw new Error(`No VRM metadata in ${url}`);
 
   if (vrm.meta?.metaVersion === '0') VRMUtils.rotateVRM0(vrm);
@@ -50,7 +49,7 @@ async function loadVrmAvatar(url) {
 
   prepareAvatar(vrm.scene);
 
-  const isFinal = url === FINAL_VRM_URL;
+  const isFinal = url === FINAL_VRM_URL || url === FINAL_GLB_URL;
   if (!isFinal) retintAvatar(vrm.scene);
 
   fitAvatar(vrm.scene, modelRoot, 1.72);
